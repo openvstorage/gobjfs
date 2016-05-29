@@ -1,0 +1,61 @@
+# This file can be directly executed ! 
+
+# On a new machine
+sudo apt-get install g++-5 cmake git xfsprogs sysstat gdb
+
+# Packages to install
+
+sudo apt-get install libaio1 libaio1-dbg libaio-dev
+sudo apt-get install libz-dev libbz2-dev
+sudo apt-get install libboost-all-dev libgoogle-glog-dev
+
+# Install google test
+cd ~
+git clone  https://github.com/google/googletest
+(cd googletest; mkdir build; cd build; cmake ..; sudo make install)
+cd -
+
+#========================
+
+# Build gobjfs
+
+(cd gobjfs; mkdir build; cd build; cmake ..; make)
+
+#========================
+
+# To run clang static analyzer
+
+sudo apt-add-repository "deb http://llvm.org/apt/trusty/llvm-toolchain-trusty-3.8 main"
+sudo apt-get update
+sudo apt-get install clang-3.8 lldb-3.8
+
+
+(cd gobjfs; cd build; \
+  cmake -DCMAKE_C_COMPILER=/usr/lib/llvm-3.8/libexec/ccc-analyzer \
+    -DCMAKE_CXX_COMPILER=/usr/lib/llvm-3.8/libexec/c++-analyzer ..; \
+  scan-build make)
+
+
+#=========================
+
+To run address sanitizer
+
+(cd gobjfs; cd build; cmake -DCMAKE_BUILD_TYPE=ASan; make)
+
+#=========================
+
+To run cppcheck
+
+sudo apt-get install cppcheck
+
+(cd gobjfs; cd build; make cppcheck)
+
+#========================
+
+To run clang-format
+
+sudo apt-add-repository "deb http://llvm.org/apt/trusty/llvm-toolchain-trusty-3.8 main"
+sudo apt-get update
+sudo apt-get install clang-format-3.8
+
+(cd gobjfs; cd build; make clangformat)
