@@ -23,8 +23,11 @@ but WITHOUT ANY WARRANTY of any kind.
 #include <stdlib.h>
 #include <sys/uio.h>
 
-struct IOExecFileHandleInt;
-typedef IOExecFileHandleInt *IOExecFileHandle;
+struct IOExecServiceInt;
+typedef IOExecServiceInt *IOExecServiceHandle;
+
+struct IOExecFileInt;
+typedef IOExecFileInt *IOExecFileHandle;
 
 struct gIOExecFragment {
   gCompletionID completionId; // Caller specifies completionID
@@ -70,25 +73,25 @@ void gIOStatusBatchFree(gIOStatusBatch *ptr);
 
 // ========================================
 
-int32_t IOExecFileServiceInit(const char *configFileName);
+IOExecServiceHandle IOExecFileServiceInit(const char *configFileName);
 
-int32_t IOExecFileServiceDestroy();
+int32_t IOExecFileServiceDestroy(IOExecServiceHandle);
 
-IOExecFileHandle IOExecFileOpen(const char *filename, int32_t flags);
+IOExecFileHandle IOExecFileOpen(IOExecServiceHandle serviceHandle, const char *filename, int32_t flags);
 
 int32_t IOExecFileClose(IOExecFileHandle FileHandle);
 
 struct IOExecEventFdInt;
 typedef IOExecEventFdInt *IOExecEventFdHandle;
 
-IOExecEventFdHandle IOExecEventFdOpen();
+IOExecEventFdHandle IOExecEventFdOpen(IOExecServiceHandle serviceHandle);
 
 int32_t IOExecEventFdClose(IOExecEventFdHandle eventFdHandle);
 
 int IOExecEventFdGetReadFd(IOExecEventFdHandle eventFdPtr);
 
 // hidden API to retrieve number of configured IOExecutors
-int32_t IOExecGetNumExecutors();
+int32_t IOExecGetNumExecutors(IOExecServiceHandle serviceHandle);
 
 /**
  * @param fileHandle file returned by IOExecFileOpen
@@ -111,10 +114,10 @@ int32_t IOExecFileRead(IOExecFileHandle fileHandle, const gIOBatch *pIOBatch,
 /**
  *
  */
-int32_t IOExecFileDelete(const char *filename, gCompletionID completionId,
+int32_t IOExecFileDelete(IOExecServiceHandle serviceHandle, const char *filename, gCompletionID completionId,
                          IOExecEventFdHandle eventFdHandle);
 
-int32_t IOExecFileDeleteSync(const char *filename);
+int32_t IOExecFileDeleteSync(IOExecServiceHandle serviceHandle, const char *filename);
 
 // C API
 #ifdef __cplusplus
@@ -123,18 +126,11 @@ int32_t IOExecFileDeleteSync(const char *filename);
 #define EXTERNC
 #endif
 
-struct gobjfs_handle {
-  int fd;
-  int core;
-};
+typedef IOExecServiceInt *service_handle_t;
 
-typedef gobjfs_handle *handle_t;
+typedef IOExecFileInt *handle_t;
 
-struct gobjfs_eventfd_handle {
-  int fd[2];
-};
-
-typedef gobjfs_eventfd_handle *event_t;
+typedef IOExecEventFdInt *event_t;
 
 typedef gIOBatch batch_t;
 
@@ -144,19 +140,19 @@ typedef void *status_t;
 
 EXTERNC {
 
-  int32_t gobjfs_ioexecfile_service_init(const char *);
+  service_handle_t gobjfs_ioexecfile_service_init(const char *);
 
-  int32_t gobjfs_ioexecfile_service_destroy();
+  int32_t gobjfs_ioexecfile_service_destroy(service_handle_t);
 
-  handle_t gobjfs_ioexecfile_file_open(const char *, int);
+  handle_t gobjfs_ioexecfile_file_open(service_handle_t, const char *, int);
 
   int32_t gobjfs_ioexecfile_file_write(handle_t, const batch_t *, event_t evfd);
   int32_t gobjfs_ioexecfile_file_read(handle_t, batch_t *, event_t evfd);
-  int32_t gobjfs_ioexecfile_file_delete(const char *, completion_id_t, event_t);
+  int32_t gobjfs_ioexecfile_file_delete(service_handle_t, const char *, completion_id_t, event_t);
 
   int32_t gobjfs_ioexecfile_file_close(handle_t);
 
-  event_t gobjfs_ioexecfile_event_fd_open();
+  event_t gobjfs_ioexecfile_event_fd_open(service_handle_t);
   int32_t gobjfs_ioexecfile_event_fd_close(event_t);
   int gobjfs_ioexecfile_event_fd_get_read_fd(event_t);
 

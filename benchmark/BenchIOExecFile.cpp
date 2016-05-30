@@ -123,6 +123,7 @@ static Config config;
 #define FOURMB (4 << 20)
 
 struct FixedSizeFileManager {
+  IOExecServiceHandle serviceHandle;
   std::mutex mutex;
   std::vector<std::string> Directory;
   std::vector<std::string> DirNameVector;
@@ -135,7 +136,8 @@ struct FixedSizeFileManager {
   uint32_t FileSize = FOURMB;
   uint64_t maxFiles_ = 300000;
 
-  void init(uint32_t MaxFiles, bool newInstance) {
+  void init(IOExecServiceHandle serviceHandle, uint32_t MaxFiles, bool newInstance) {
+    serviceHandle = serviceHandle;
     maxFiles_ = MaxFiles;
 
     if (!newInstance) {
@@ -217,7 +219,7 @@ struct FixedSizeFileManager {
     retFilenum = FilesCtr++;
     auto str = getFilename(retFilenum);
 
-    handle = IOExecFileOpen(str.c_str(), O_RDWR | O_SYNC | O_CREAT);
+    handle = IOExecFileOpen(serviceHandle, str.c_str(), O_RDWR | O_SYNC | O_CREAT);
     if (handle != nullptr) {
       std::unique_lock<std::mutex> lck(mutex);
       Directory.push_back(str);
@@ -240,7 +242,7 @@ struct FixedSizeFileManager {
 
     try {
       auto str = Directory.at(index);
-      handle = IOExecFileOpen(str.c_str(), O_RDWR);
+      handle = IOExecFileOpen(serviceHandle, str.c_str(), O_RDWR);
     } catch (std::exception &e) {
       LOG(ERROR) << "bad index " << index << " dirsize=" << dirSize;
     }
@@ -273,7 +275,7 @@ struct FixedSizeFileManager {
       Directory.pop_back();
     }
 
-    ret = IOExecFileDeleteSync(fname.c_str());
+    ret = IOExecFileDeleteSync(serviceHandle, fname.c_str());
     if (ret == 0) {
       deleteCount++;
     }
@@ -293,6 +295,7 @@ std::atomic<uint64_t> totalIOPs{0};
 class StatusExt;
 
 struct ThreadCtx {
+  IOExecServiceHandle serviceHandle;
   uint32_t minFiles;
   uint32_t maxFiles;
   uint32_t maxBlocks;
@@ -434,7 +437,7 @@ static void doRandomReadWrite(ThreadCtx *ctx) {
   int epollfd = epoll_create1(0);
   assert(epollfd >= 0);
 
-  IOExecEventFdHandle evHandle = IOExecEventFdOpen();
+  IOExecEventFdHandle evHandle = IOExecEventFdOpen(ctx->serviceHandle);
   if (evHandle == nullptr) {
     LOG(ERROR) << "eventfd open failed";
     return;
@@ -636,14 +639,14 @@ int main(int argc, char *argv[]) {
 
   config.readConfig("./benchioexec.conf");
 
-  IOExecFileServiceInit("./gioexecfile.conf");
+  auto serviceHandle = IOExecFileServiceInit("./gioexecfile.conf");
 
   gMempool_init(config.alignSize);
 
   objpool =
       gobjfs::MempoolFactory::createObjectMempool("object", sizeof(StatusExt));
 
-  fileMgr.init(config.maxFiles, config.newInstance);
+  fileMgr.init(serviceHandle, config.maxFiles, config.newInstance);
 
   gobjfs::os::CpuStats startCpuStats;
   startCpuStats.getProcessStats();
@@ -654,6 +657,7 @@ int main(int argc, char *argv[]) {
 
   for (decltype(config.maxThr) thr = 0; thr < config.maxThr; thr++) {
     ThreadCtx *ctx = new ThreadCtx;
+    ctx->serviceHandle = serviceHandle;
     ctx->maxBlocks = config.maxBlocks;
     ctx->perThreadIO = config.perThreadIO;
     ctx->writePercent = config.writePercent;
@@ -684,7 +688,7 @@ int main(int argc, char *argv[]) {
   {
     std::ostringstream s;
 
-    s << "num_ioexec=" << IOExecGetNumExecutors()
+    s << "num_ioexec=" << IOExecGetNumExecutors(serviceHandle)
       << ":num_threads=" << config.maxThr
       << ":write_perc=" << config.writePercent
       << ":write_scale=" << config.totalReadWriteScale << ":iops=" << totalIOPs
@@ -700,12 +704,12 @@ int main(int argc, char *argv[]) {
     std::ostringstream s;
     // Print in csv format for easier input to excel
     s << config.writePercent << "," << config.totalReadWriteScale << ","
-      << IOExecGetNumExecutors() << "," << config.maxThr << "," << totalIOPs
+      << IOExecGetNumExecutors(serviceHandle) << "," << config.maxThr << "," << totalIOPs
       << "," << totalWriteLatency.mean() << "," << totalReadLatency.mean()
       << "," << totalDeleteLatency.mean() << ","
       << endCpuStats.getCpuUtilization();
 
     std::cout << s.str() << std::endl;
   }
-  IOExecFileServiceDestroy();
+  IOExecFileServiceDestroy(serviceHandle);
 }

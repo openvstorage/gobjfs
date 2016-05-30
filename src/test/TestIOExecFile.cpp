@@ -74,16 +74,16 @@ static void run_verifyIO() {
   gMempool_init(ALIGNSIZE);
 
   // figure out how to provide the path to config file in a test
-  IOExecFileServiceInit("../../../src/gioexecfile.conf");
+  auto serviceHandle = IOExecFileServiceInit("../../../src/gioexecfile.conf");
 
   IOExecFileHandle handle;
-  handle = IOExecFileOpen("/tmp/abc", O_RDWR | O_CREAT);
+  handle = IOExecFileOpen(serviceHandle, "/tmp/abc", O_RDWR | O_CREAT);
   if (handle == nullptr) {
     LOG(ERROR) << "IOExecFileOpen Failed";
     return;
   }
 
-  auto evHandle = IOExecEventFdOpen();
+  auto evHandle = IOExecEventFdOpen(serviceHandle);
   if (evHandle == nullptr) {
     LOG(ERROR) << "getEventFd failed";
     return;
@@ -144,7 +144,7 @@ static void run_verifyIO() {
 
   IOExecEventFdClose(evHandle);
 
-  IOExecFileServiceDestroy();
+  IOExecFileServiceDestroy(serviceHandle);
 }
 
 TEST(IOExecFile, OneFileReadWrite) { run_verifyIO(); }
