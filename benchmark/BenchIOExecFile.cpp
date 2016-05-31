@@ -38,6 +38,10 @@ but WITHOUT ANY WARRANTY of any kind.
 #include <sys/epoll.h>
 #include <sys/stat.h>
 #include <sys/time.h> // gettimeofday
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#include <string.h> //basename
+#endif
 #include <sys/types.h>
 #include <unistd.h>
 
@@ -53,6 +57,7 @@ struct Config {
   uint32_t maxFiles = 1000;
   uint32_t maxBlocks = 10000;
   uint64_t perThreadIO = 10000;
+  bool     doMemCheck = false;
   uint32_t maxThr = 1;
   uint32_t writePercent = 0;
   uint32_t totalReadWriteScale = 2000;
@@ -70,6 +75,7 @@ struct Config {
         "number of [blocksize] blocks in file")(
         "per_thread_max_io", value<uint64_t>(&perThreadIO)->required(),
         "number of ops to execute")(
+        "do_mem_check", value<bool>(&doMemCheck)->required(), "compare read buffer")(
         "max_threads", value<uint32_t>(&maxThr)->required(), "max threads")(
         "write_percent", value<uint32_t>(&writePercent)->required(),
         "percent of total read write scale")(
@@ -126,7 +132,6 @@ struct FixedSizeFileManager {
   IOExecServiceHandle serviceHandle;
   std::mutex mutex;
   std::vector<std::string> Directory;
-  std::vector<std::string> DirNameVector;
 
   std::atomic<uint64_t> FilesCtr{0};
 
@@ -170,7 +175,8 @@ struct FixedSizeFileManager {
 #endif
               && (entryp->d_name[0] != '.')) {
             Directory.push_back(dirString + entryp->d_name);
-            parseFileName(entryp->d_name, max);
+            auto ret = parseFileName(entryp->d_name, max);
+            if (ret != 0) { LOG(FATAL) << "parse failed"; }
             maxCtr = max;
           }
         } while ((ret == 0) && (result != nullptr));
@@ -209,7 +215,7 @@ struct FixedSizeFileManager {
     return config.dirPrefix[fileNum % numDir] + buildFileName(fileNum);
   }
 
-  int createFile(IOExecFileHandle &handle, uint32_t &retFilenum) {
+  int createFile(IOExecFileHandle &handle, uint64_t &retFilenum) {
     int ret = 0;
 
     if (Directory.size() > maxFiles_) {
@@ -229,7 +235,7 @@ struct FixedSizeFileManager {
     return ret;
   }
 
-  IOExecFileHandle openFile(uint32_t index) {
+  IOExecFileHandle openFile(uint32_t index, uint64_t* actualNumber) {
     IOExecFileHandle handle = nullptr;
 
     const size_t dirSize = Directory.size();
@@ -243,6 +249,11 @@ struct FixedSizeFileManager {
     try {
       auto str = Directory.at(index);
       handle = IOExecFileOpen(serviceHandle, str.c_str(), O_RDWR);
+      if (config.doMemCheck && actualNumber) {
+        auto filename = basename(str.c_str());
+        auto ret = parseFileName(filename, *actualNumber);
+        if (ret != 0) { LOG(FATAL) << "parse failed"; }
+      }
     } catch (std::exception &e) {
       LOG(ERROR) << "bad index " << index << " dirsize=" << dirSize;
     }
@@ -335,7 +346,8 @@ struct StatusExt {
     tid = gettid();
   }
 
-  uint32_t filenum{0};
+  uint32_t dirIndex{0}; 
+  uint64_t actualFilenum{0};
   uint32_t tid{0};
   gIOBatch *batch{nullptr};
   IOExecFileHandle handle{nullptr};
@@ -385,6 +397,25 @@ static int wait_for_iocompletion(int epollfd, int efd, ThreadCtx *ctx) {
               ctx->totalWriteLatency = ext->timer.elapsedMicroseconds();
               ctr++;
             } else if (ext->isRead()) {
+              if (config.doMemCheck) { 
+                gIOExecFragment& frag = ext->batch->array[0];
+                char* buf = frag.addr;
+                const char expChar = 'a' + (ext->actualFilenum % 26);
+                bool failed = false;
+                uint32_t bufOffset = 0;
+                for (uint32_t bufOffset = 0; bufOffset < frag.size; bufOffset++) {
+                  if (buf[bufOffset] != expChar) {
+                    failed = true;
+                    break;  
+                  }
+                }
+                if (failed) {
+                  LOG(ERROR) << "Comparison failed at file=" << ext->dirIndex 
+                    << " offset=" << bufOffset
+                    << " expchar=" << expChar 
+                    << " actual=" << buf[bufOffset];
+                }
+              }
               ctx->totalReadLatency = ext->timer.elapsedMicroseconds();
               ctr++;
             } else {
@@ -505,8 +536,8 @@ static void doRandomReadWrite(ThreadCtx *ctx) {
 
     if (ReadsAreEnabled && (num >= readThreshold)) {
       // its a read
-      ext->filenum = filenumGen(seedGen);
-      handle = fileMgr.openFile(ext->filenum);
+      ext->dirIndex = filenumGen(seedGen);
+      handle = fileMgr.openFile(ext->dirIndex, &ext->actualFilenum);
       if (handle) {
         ext->op = StatusExt::Read;
         ext->handle = handle;
@@ -516,8 +547,8 @@ static void doRandomReadWrite(ThreadCtx *ctx) {
       }
     } else if (DeletesAreEnabled && (num >= deleteThreshold)) {
       // its a delete
-      auto filenum = filenumGen(seedGen);
-      ret = fileMgr.deleteFile(filenum);
+      auto dirIndex = filenumGen(seedGen);
+      ret = fileMgr.deleteFile(dirIndex);
       if (ret == 0) {
         uint64_t deleteTime = ext->timer.elapsedMicroseconds();
         ctx->totalDeleteLatency = deleteTime;
@@ -529,7 +560,7 @@ static void doRandomReadWrite(ThreadCtx *ctx) {
 
     } else {
       // its a create
-      ret = fileMgr.createFile(handle, ext->filenum);
+      ret = fileMgr.createFile(handle, ext->actualFilenum);
       if (ret != 0) {
         delete ext;
         continue;
@@ -575,16 +606,17 @@ static void doRandomReadWrite(ThreadCtx *ctx) {
       if (ext->isWrite()) {
         frag.offset = 0;
         frag.size = config.blockSize * config.maxBlocks;
-        // memset(frag.addr, 'a' + (blockNum % 26), frag.size);
+        frag.addr = (caddr_t)gMempool_alloc(frag.size);
+        memset(frag.addr, 'a' + (ext->actualFilenum % 26), frag.size);
       } else if (ext->isRead()) {
         uint64_t blockNum = blockGenerator(seedGen);
         frag.offset = blockNum * config.blockSize;
         frag.size = config.blockSize;
+        frag.addr = (caddr_t)gMempool_alloc(frag.size);
       } else {
         LOG(FATAL) << "unknown op";
       }
 
-      frag.addr = (caddr_t)gMempool_alloc(frag.size);
       assert(frag.addr != nullptr);
     }
 
