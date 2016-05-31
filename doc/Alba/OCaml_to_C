@@ -1,0 +1,46 @@
+
+(These are notes from Romain Slootmaekers)
+
+There are 3 flavours of interaction between OCaml and C
+
+(1) you need to interact with something that lives on the C heap.
+
+If the compiler understands if (like for example an int, long, double or an
+  array of (int,long,float,....)
+
+there is 0 cost in setting/getting. Codewise, you see it as an ocaml function
+call, but the compiler inlines, and generates trivial assembly.
+
+an example is to put an int32 into a char, or to read 4 bytes from a char as an
+int.
+
+(2) if the compiler does not understand it, and you need to wrap a C function, 
+
+there's a bit of a setup cost. Typically some massaging of the parameters.
+
+For example, in ocaml an int is actually an int63 (sacrificied a bit for the gc), 
+and there's a shift that needs to be done to translate the ocaml int into an
+int64.
+
+https://github.com/openvstorage/alba/blob/master/ocaml/src/tools/alba_crc32c_stubs.c#L152
+
+That cost is low. But, the compiler cannot inline the calls as it's a seperate 
+object file, and you have the overhead of a C function call. 
+
+Also, it's possible that you need to explain to the GC that it can (or cannot)
+run during the execution of the C code,
+
+(3) if the data is in an ocaml datastructure that C does not understand, fe an
+  ocaml list,
+
+then you need to translate this,
+
+an example is:
+
+https://github.com/toolslive/ordma/blob/master/ordma_engine.c#L51
+
+where the fdset is built from an ocaml list
+
+https://github.com/toolslive/ordma/blob/master/ordma_engine.c#L18
+
+since the translation is done in C, the call to the translation can be inlined.

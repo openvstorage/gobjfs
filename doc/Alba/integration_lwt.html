@@ -1,0 +1,348 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+"http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en">
+<head>
+<title>integration_lwt</title>
+<!-- 2016-04-13 Wed 11:01 -->
+<meta  http-equiv="Content-Type" content="text/html;charset=utf-8" />
+<meta  name="generator" content="Org-mode" />
+<meta  name="author" content="romain" />
+<style type="text/css">
+ <!--/*--><![CDATA[/*><!--*/
+  .title  { text-align: center; }
+  .todo   { font-family: monospace; color: red; }
+  .done   { color: green; }
+  .tag    { background-color: #eee; font-family: monospace;
+            padding: 2px; font-size: 80%; font-weight: normal; }
+  .timestamp { color: #bebebe; }
+  .timestamp-kwd { color: #5f9ea0; }
+  .right  { margin-left: auto; margin-right: 0px;  text-align: right; }
+  .left   { margin-left: 0px;  margin-right: auto; text-align: left; }
+  .center { margin-left: auto; margin-right: auto; text-align: center; }
+  .underline { text-decoration: underline; }
+  #postamble p, #preamble p { font-size: 90%; margin: .2em; }
+  p.verse { margin-left: 3%; }
+  pre {
+    border: 1px solid #ccc;
+    box-shadow: 3px 3px 3px #eee;
+    padding: 8pt;
+    font-family: monospace;
+    overflow: auto;
+    margin: 1.2em;
+  }
+  pre.src {
+    position: relative;
+    overflow: visible;
+    padding-top: 1.2em;
+  }
+  pre.src:before {
+    display: none;
+    position: absolute;
+    background-color: white;
+    top: -10px;
+    right: 10px;
+    padding: 3px;
+    border: 1px solid black;
+  }
+  pre.src:hover:before { display: inline;}
+  pre.src-sh:before    { content: 'sh'; }
+  pre.src-bash:before  { content: 'sh'; }
+  pre.src-emacs-lisp:before { content: 'Emacs Lisp'; }
+  pre.src-R:before     { content: 'R'; }
+  pre.src-perl:before  { content: 'Perl'; }
+  pre.src-java:before  { content: 'Java'; }
+  pre.src-sql:before   { content: 'SQL'; }
+
+  table { border-collapse:collapse; }
+  caption.t-above { caption-side: top; }
+  caption.t-bottom { caption-side: bottom; }
+  td, th { vertical-align:top;  }
+  th.right  { text-align: center;  }
+  th.left   { text-align: center;   }
+  th.center { text-align: center; }
+  td.right  { text-align: right;  }
+  td.left   { text-align: left;   }
+  td.center { text-align: center; }
+  dt { font-weight: bold; }
+  .footpara:nth-child(2) { display: inline; }
+  .footpara { display: block; }
+  .footdef  { margin-bottom: 1em; }
+  .figure { padding: 1em; }
+  .figure p { text-align: center; }
+  .inlinetask {
+    padding: 10px;
+    border: 2px solid gray;
+    margin: 10px;
+    background: #ffffcc;
+  }
+  #org-div-home-and-up
+   { text-align: right; font-size: 70%; white-space: nowrap; }
+  textarea { overflow-x: auto; }
+  .linenr { font-size: smaller }
+  .code-highlighted { background-color: #ffff00; }
+  .org-info-js_info-navigation { border-style: none; }
+  #org-info-js_console-label
+    { font-size: 10px; font-weight: bold; white-space: nowrap; }
+  .org-info-js_search-highlight
+    { background-color: #ffff00; color: #000000; font-weight: bold; }
+  /*]]>*/-->
+</style>
+<script type="text/javascript">
+/*
+@licstart  The following is the entire license notice for the
+JavaScript code in this tag.
+
+Copyright (C) 2012-2013 Free Software Foundation, Inc.
+
+The JavaScript code in this tag is free software: you can
+redistribute it and/or modify it under the terms of the GNU
+General Public License (GNU GPL) as published by the Free Software
+Foundation, either version 3 of the License, or (at your option)
+any later version.  The code is distributed WITHOUT ANY WARRANTY;
+without even the implied warranty of MERCHANTABILITY or FITNESS
+FOR A PARTICULAR PURPOSE.  See the GNU GPL for more details.
+
+As additional permission under GNU GPL version 3 section 7, you
+may distribute non-source (e.g., minimized or compacted) forms of
+that code without the copy of the GNU GPL normally required by
+section 4, provided you include this license notice and a URL
+through which recipients can access the Corresponding Source.
+
+
+@licend  The above is the entire license notice
+for the JavaScript code in this tag.
+*/
+<!--/*--><![CDATA[/*><!--*/
+ function CodeHighlightOn(elem, id)
+ {
+   var target = document.getElementById(id);
+   if(null != target) {
+     elem.cacheClassElem = elem.className;
+     elem.cacheClassTarget = target.className;
+     target.className = "code-highlighted";
+     elem.className   = "code-highlighted";
+   }
+ }
+ function CodeHighlightOff(elem, id)
+ {
+   var target = document.getElementById(id);
+   if(elem.cacheClassElem)
+     elem.className = elem.cacheClassElem;
+   if(elem.cacheClassTarget)
+     target.className = elem.cacheClassTarget;
+ }
+/*]]>*///-->
+</script>
+</head>
+<body>
+<div id="content">
+<h1 class="title">integration_lwt</h1>
+<div id="table-of-contents">
+<h2>Table of Contents</h2>
+<div id="text-table-of-contents">
+<ul>
+<li><a href="#sec-1">1. What happens when you do a read ?</a></li>
+<li><a href="#sec-2">2. Lwt<sub>main</sub>.run **</a></li>
+</ul>
+</div>
+</div>
+<div id="outline-container-sec-1" class="outline-2">
+<h2 id="sec-1"><span class="section-number-2">1</span> What happens when you do a read ?</h2>
+<div class="outline-text-2" id="text-1">
+<div class="org-src-container">
+
+<pre class="src src-ocaml">let main () =
+    let t =
+        ...
+        Lwt_unix.openfile ... &gt;&gt;= fun fd -&gt;
+        ...
+        Lwt_unix.read fd buf pos len &gt;&gt;= fun bytes_read -&gt;
+        ...
+    in
+    Lwt_main.run t
+</pre>
+</div>
+
+<p>
+<a href="https://github.com/ocsigen/lwt/blob/master/src/unix/lwt_unix.ml#L622">implementation of Lwt<sub>unix</sub>.read</a>
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-ocaml">let read ch buf pos len =
+  if pos &lt; 0 || len &lt; 0 || pos &gt; Bytes.length buf - len then
+    invalid_arg "Lwt_unix.read"
+  else
+    Lazy.force ch.blocking &gt;&gt;= function
+      | true -&gt;
+          wait_read ch &gt;&gt;= fun () -&gt;
+          run_job (read_job ch.fd buf pos len)
+      | false -&gt;
+          wrap_syscall Read ch (fun () -&gt; stub_read ch.fd buf pos len)
+</pre>
+</div>
+
+<pre class="example">
+external stub_read : Unix.file_descr -&gt; Bytes.t -&gt; int -&gt; int -&gt; int = "lwt_unix_read"
+</pre>
+
+<p>
+<a href="https://github.com/ocsigen/lwt/blob/master/src/unix/lwt_unix_unix.c#L109">Lwt<sub>unix</sub><sub>unic</sub>.c : lwt<sub>unix</sub><sub>read</sub></a>
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-c">CAMLprim value lwt_unix_read(value val_fd, value val_buf, value val_ofs, value val_len)
+{
+  long ret;
+  ret = read(Int_val(val_fd), &amp;Byte(String_val(val_buf), Long_val(val_ofs)), Long_val(val_len));
+  if (ret == -1) uerror("read", Nothing);
+  return Val_long(ret);
+}
+</pre>
+</div>
+
+<p>
+<a href="https://github.com/ocsigen/lwt/blob/master/src/unix/lwt_unix.ml#L544">Lwt<sub>unix</sub>.wrap<sub>syscall</sub></a>
+</p>
+
+<pre class="example">
+let wrap_syscall event ch action =
+  check_descriptor ch;
+  Lazy.force ch.blocking &gt;&gt;= fun blocking -&gt;
+  try
+    if not blocking || (event = Read &amp;&amp; unix_readable ch.fd) || (event = Write &amp;&amp; unix_writable ch.fd) then
+      Lwt.return (action ())
+    else
+      register_action event ch action
+  with
+    | Retry
+    | Unix.Unix_error((Unix.EAGAIN | Unix.EWOULDBLOCK | Unix.EINTR), _, _)
+    | Sys_blocked_io -&gt;
+        (* The action could not be completed immediately, register it: *)
+        register_action event ch action
+    | Retry_read -&gt;
+        register_action Read ch action
+    | Retry_write -&gt;
+        register_action Write ch action
+    | e -&gt;
+        Lwt.fail e
+</pre>
+
+<p>
+<a href="https://github.com/ocsigen/lwt/blob/master/src/unix/lwt_unix.ml#L527">Lwt<sub>unix</sub>.register<sub>action</sub></a>
+</p>
+
+<pre class="example">
+let register_action event ch action =
+  let waiter, wakener = Lwt.task () in
+  match event with
+    | Read -&gt;
+        let node = ref dummy in
+        node := Lwt_sequence.add_r (fun () -&gt; retry_syscall node Read ch wakener action) ch.hooks_readable;
+        Lwt.on_cancel waiter (fun () -&gt; Lwt_sequence.remove !node; stop_events ch);
+        register_readable ch;
+        waiter
+    | Write -&gt;
+        let node = ref dummy in
+        node := Lwt_sequence.add_r (fun () -&gt; retry_syscall node Write ch wakener action) ch.hooks_writable;
+        Lwt.on_cancel waiter (fun () -&gt; Lwt_sequence.remove !node; stop_events ch);
+        register_writable ch;
+        waiter
+</pre>
+
+<p>
+<a href="https://github.com/ocsigen/lwt/blob/master/src/unix/lwt_unix.ml#L473">Lwt<sub>unix</sub>.register<sub>readable</sub></a>
+</p>
+
+<pre class="example">
+let register_readable ch =
+  if ch.event_readable = None then
+    ch.event_readable &lt;- Some(Lwt_engine.on_readable ch.fd (fun _ -&gt; Lwt_sequence.iter_l (fun f -&gt; f ()) ch.hooks_readable))
+</pre>
+
+<p>
+<a href="https://github.com/ocsigen/lwt/blob/master/src/unix/lwt_engine.ml#L394">Lwt<sub>engine</sub>.on<sub>readable</sub></a>
+</p>
+
+<pre class="example">
+let on_readable fd f = !current#on_readable fd f
+</pre>
+
+<p>
+<a href="https://github.com/ocsigen/lwt/blob/master/src/unix/lwt_engine.ml#L87">on<sub>readable</sub> method in abstract engine</a>
+</p>
+<pre class="example">
+method on_readable fd f =
+    let ev = ref _fake_event in
+    let g () = f ev in
+    let stop = self#register_readable fd g in
+    ev := { stop = stop; node = cast_node (Lwt_sequence.add_r (fd, f, g, ev) readables) };
+    ev
+</pre>
+
+<p>
+<a href="https://github.com/ocsigen/lwt/blob/master/src/unix/lwt_engine.ml#L267">register<sub>readable</sub> method (poll/select based)</a>
+</p>
+
+<pre class="example">
+method private register_readable fd f =
+   let actions =
+     try
+       Fd_map.find fd wait_readable
+     with Not_found -&gt;
+       let actions = Lwt_sequence.create () in
+       wait_readable &lt;- Fd_map.add fd actions wait_readable;
+       actions
+   in
+   let node = Lwt_sequence.add_l f actions in
+   lazy(Lwt_sequence.remove node;
+        if Lwt_sequence.is_empty actions then wait_readable &lt;- Fd_map.remove fd wait_readable)
+</pre>
+</div>
+</div>
+
+<div id="outline-container-sec-2" class="outline-2">
+<h2 id="sec-2"><span class="section-number-2">2</span> Lwt<sub>main</sub>.run **</h2>
+<div class="outline-text-2" id="text-2">
+<p>
+ends up <a href="https://github.com/ocsigen/lwt/blob/master/src/unix/lwt_main.ml#L41">calling Lwt<sub>engine</sub>.iter</a>
+repeatedly
+</p>
+
+<p>
+<a href="https://github.com/ocsigen/lwt/blob/master/src/unix/lwt_engine.ml#L334">poll<sub>based</sub> engine's iter method</a>
+</p>
+<pre class="example">
+method iter block =
+   ...
+   let fds =
+     try
+       self#poll fds timeout
+     with
+       | Unix.Unix_error (Unix.EINTR, _, _) -&gt;
+           []
+       | Unix.Unix_error (Unix.EBADF, _, _) -&gt;
+           (* Keeps only bad file descriptors. Actions registered on
+              them have to handle the error: *)
+           List.filter (fun (fd, _, _) -&gt; bad_fd fd) fds
+   in
+   (* Restart threads waiting on a file descriptors: *)
+   List.iter
+     (fun (fd, readable, writable) -&gt;
+        if readable then invoke_actions fd wait_readable;
+        if writable then invoke_actions fd wait_writable)
+     fds
+</pre>
+</div>
+</div>
+</div>
+<div id="postamble" class="status">
+<p class="author">Author: romain</p>
+<p class="date">Created: 2016-04-13 Wed 11:01</p>
+<p class="creator"><a href="http://www.gnu.org/software/emacs/">Emacs</a> 24.5.1 (<a href="http://orgmode.org">Org</a> mode 8.2.10)</p>
+<p class="validation"><a href="http://validator.w3.org/check?uri=referer">Validate</a></p>
+</div>
+</body>
+</html>

@@ -1,0 +1,27 @@
+
+Benchmark run on 2-3 May to compare gobjfs vs ioexecfile
+Run on packet.net machine
+with Samsung PM1725 SSD (1.5TB)
+
+benchmark/createMount.sh used to create mount point for IOExecFile
+benchmark/ioexecbench.sh used to run IOExecFile bench
+benchmark/objfsbench.sh used to run ObjFS bench
+
+Files in this dir
+
+benchioexec.conf - used and modified for IOExecFile run
+
+benchObjectFSWriter.conf - passed as param to BenchObjectFSRW
+
+createMount.sh - used to create mountpoint for BenchIOExecFile
+
+gioexecfile.conf.bak - template for ioexecbench.sh
+
+noopenclose_ioexecfile.out - output of run where BenchIOExecFile used cached file
+handles
+
+with5percwrites_ioexecfile.out - output of run where BenchIOExecFile had
+writePercent set to 5 (to simulate real workload)
+
+withopenclose_ioexecfile.out - output of run where BenchIOExecFile opened and close file handle on every read
+
