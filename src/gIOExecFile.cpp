@@ -390,6 +390,10 @@ int32_t IOExecFileDelete(IOExecServiceHandle serviceHandle, const char *filename
   job->completionFd_ = eventFdHandle->fd[1];
   job->canBeFreed_ = true; // free job after completion
   int retcode = serviceHandle->ioexecVec[0]->submitTask(job, true);
+  if (retcode != 0) {
+    LOG(WARNING) << "delete job not submitted due to overflow";
+    delete job; // if not submitted
+  }
   return retcode;
 }
 

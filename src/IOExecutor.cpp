@@ -134,15 +134,6 @@ void IOExecutor::Config::print() const {
 
 void IOExecutor::Statistics::incrementOps(FilerJob *job) {
 
-  if (job->op_ == FileOp::Delete) {
-    numDeletes_++;
-    return;
-  } else if (job->op_ == FileOp::Sync) {
-    return;
-  }
-
-  assert(job->size_);
-
   waitTime_ = job->waitTime();
   serviceTime_ = job->serviceTime();
 
@@ -150,11 +141,15 @@ void IOExecutor::Statistics::incrementOps(FilerJob *job) {
   serviceHist_ = job->serviceTime();
 
   if (job->op_ == FileOp::Write) {
+    assert(job->size_);
     numWrites_++;
     bytesWritten_ += job->size_;
   } else if (job->op_ == FileOp::Read) {
+    assert(job->size_);
     numReads_++;
     bytesRead_ += job->size_;
+  } else if (job->op_ == FileOp::Delete) {
+    numDeletes_++;
   }
 
   numCompleted_++;
@@ -513,6 +508,7 @@ int32_t IOExecutor::ProcessFdQueue() {
     bool gotJob = fdQueue_.consume_one([&](FilerJob *job) {
 
       if (job->op_ == FileOp::Delete) {
+        job->setWaitTime();
         int retcode = ::unlink(job->fileName_.c_str());
         job->retcode_ = (retcode == 0) ? 0 : -errno;
         if (retcode != 0) {
