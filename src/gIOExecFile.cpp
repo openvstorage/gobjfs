@@ -81,6 +81,7 @@ void gIOStatusBatchFree(gIOStatusBatch *ptr) { free(ptr); }
 
 // ==============================
 
+/* internal representation of FileHandle */ 
 struct IOExecFileInt {
   IOExecServiceHandle serviceHandle;
   int fd{-1};
@@ -103,6 +104,7 @@ using gobjfs::IOExecutor;
 using gobjfs::FilerJob;
 using gobjfs::FileOp;
 
+/* internal representation of EventFdHandle */ 
 struct IOExecEventFdInt {
   int fd[2]{-1, -1};
 
@@ -119,6 +121,7 @@ struct IOExecEventFdInt {
   }
 };
 
+/* internal representation of ServiceHandle */ 
 struct IOExecServiceInt {
   IOExecutor::Config ioConfig;
   std::vector<std::shared_ptr<IOExecutor>> ioexecVec;
@@ -128,6 +131,10 @@ struct IOExecServiceInt {
     auto slot = hasher(fileName) % ioexecVec.size();
     return slot;
   }
+
+  bool isValid() {
+    return (ioexecVec.size() > 0);
+  } 
 };
 
 int32_t IOExecGetNumExecutors(IOExecServiceHandle serviceHandle) 
@@ -178,18 +185,30 @@ IOExecServiceHandle IOExecFileServiceInit(const char *pConfigFileName) {
   return handle;
 }
 
-int32_t IOExecFileServiceDestroy(IOExecServiceHandle handle) {
-  for (auto elem : handle->ioexecVec) {
+int32_t IOExecFileServiceDestroy(IOExecServiceHandle serviceHandle) {
+  if (!serviceHandle) 
+  {
+    LOG(ERROR) << "service handle is invalid";
+    return -EINVAL;
+  }
+
+  for (auto elem : serviceHandle->ioexecVec) {
     elem->stop();
     elem.reset();
   }
-  delete handle;
+  delete serviceHandle;
   return 0;
 }
 
 
 IOExecFileHandle IOExecFileOpen(IOExecServiceHandle serviceHandle, const char *fileName, int32_t flags) {
+
   IOExecFileHandle newHandle{nullptr};
+
+  if (!serviceHandle || !serviceHandle->isValid()) {
+    LOG(ERROR) << "service handle is invalid";
+    return newHandle;
+  }
 
   int newFlags = flags | O_DIRECT;
 
@@ -214,8 +233,13 @@ int32_t IOExecFileClose(IOExecFileHandle pFileHandle) {
 }
 
 IOExecEventFdHandle IOExecEventFdOpen(IOExecServiceHandle serviceHandle) {
-  (void) serviceHandle; // unused right now
+
   IOExecEventFdHandle eventFdPtr = nullptr;
+
+  if (!serviceHandle || !serviceHandle->isValid()) {
+    LOG(ERROR) << "service handle is invalid";
+    return eventFdPtr;
+  }
 
   // open pipe
   int fd[2];
@@ -350,6 +374,12 @@ int32_t IOExecFileDeleteSync(IOExecServiceHandle serviceHandle, const char *file
 
 int32_t IOExecFileDelete(IOExecServiceHandle serviceHandle, const char *filename, gCompletionID completionId,
                          IOExecEventFdHandle eventFdHandle) {
+
+  if (!serviceHandle || !serviceHandle->isValid()) {
+    LOG(ERROR) << "service handle is invalid";
+    return -EINVAL;
+  }
+
   if (!eventFdHandle || (eventFdHandle->fd[1] == gobjfs::os::FD_INVALID)) {
     LOG(ERROR) << "Rejecting delete with invalid eventfd";
     return -EINVAL;

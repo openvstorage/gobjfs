@@ -2,6 +2,7 @@
 ADD_EXECUTABLE(ObjfsTester
   MempoolTest.cpp
   TestIOExecFile.cpp
+  TestIOExecAPI.cpp
   TestMain.cpp
   )
 
