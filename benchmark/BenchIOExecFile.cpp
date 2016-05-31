@@ -136,8 +136,8 @@ struct FixedSizeFileManager {
   uint32_t FileSize = FOURMB;
   uint64_t maxFiles_ = 300000;
 
-  void init(IOExecServiceHandle serviceHandle, uint32_t MaxFiles, bool newInstance) {
-    serviceHandle = serviceHandle;
+  void init(IOExecServiceHandle serviceHandleIn, uint32_t MaxFiles, bool newInstance) {
+    serviceHandle = serviceHandleIn;
     maxFiles_ = MaxFiles;
 
     if (!newInstance) {
