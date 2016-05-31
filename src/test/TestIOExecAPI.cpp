@@ -25,12 +25,11 @@ but WITHOUT ANY WARRANTY of any kind.
 
 /*
  * for a null service handle,
- * eventFdOpen, FileOpen, FileDelete, ServiceDestroy 
+ * eventFdOpen, FileOpen, FileDelete, ServiceDestroy
  * must fail
  */
 
-TEST(IOExecFile, NoInitDone) 
-{ 
+TEST(IOExecFile, NoInitDone) {
   IOExecServiceHandle serviceHandle = nullptr;
 
   auto evHandle = IOExecEventFdOpen(serviceHandle);
@@ -45,4 +44,3 @@ TEST(IOExecFile, NoInitDone)
   ret = IOExecFileServiceDestroy(serviceHandle);
   EXPECT_NE(ret, 0);
 }
-

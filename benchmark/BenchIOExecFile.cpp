@@ -57,7 +57,7 @@ struct Config {
   uint32_t maxFiles = 1000;
   uint32_t maxBlocks = 10000;
   uint64_t perThreadIO = 10000;
-  bool     doMemCheck = false;
+  bool doMemCheck = false;
   uint32_t maxThr = 1;
   uint32_t writePercent = 0;
   uint32_t totalReadWriteScale = 2000;
@@ -74,8 +74,9 @@ struct Config {
         "max_file_blocks", value<uint32_t>(&maxBlocks)->required(),
         "number of [blocksize] blocks in file")(
         "per_thread_max_io", value<uint64_t>(&perThreadIO)->required(),
-        "number of ops to execute")(
-        "do_mem_check", value<bool>(&doMemCheck)->required(), "compare read buffer")(
+        "number of ops to execute")("do_mem_check",
+                                    value<bool>(&doMemCheck)->required(),
+                                    "compare read buffer")(
         "max_threads", value<uint32_t>(&maxThr)->required(), "max threads")(
         "write_percent", value<uint32_t>(&writePercent)->required(),
         "percent of total read write scale")(
@@ -141,7 +142,8 @@ struct FixedSizeFileManager {
   uint32_t FileSize = FOURMB;
   uint64_t maxFiles_ = 300000;
 
-  void init(IOExecServiceHandle serviceHandleIn, uint32_t MaxFiles, bool newInstance) {
+  void init(IOExecServiceHandle serviceHandleIn, uint32_t MaxFiles,
+            bool newInstance) {
     serviceHandle = serviceHandleIn;
     maxFiles_ = MaxFiles;
 
@@ -176,7 +178,9 @@ struct FixedSizeFileManager {
               && (entryp->d_name[0] != '.')) {
             Directory.push_back(dirString + entryp->d_name);
             auto ret = parseFileName(entryp->d_name, max);
-            if (ret != 0) { LOG(FATAL) << "parse failed"; }
+            if (ret != 0) {
+              LOG(FATAL) << "parse failed";
+            }
             maxCtr = max;
           }
         } while ((ret == 0) && (result != nullptr));
@@ -225,7 +229,8 @@ struct FixedSizeFileManager {
     retFilenum = FilesCtr++;
     auto str = getFilename(retFilenum);
 
-    handle = IOExecFileOpen(serviceHandle, str.c_str(), O_RDWR | O_SYNC | O_CREAT);
+    handle =
+        IOExecFileOpen(serviceHandle, str.c_str(), O_RDWR | O_SYNC | O_CREAT);
     if (handle != nullptr) {
       std::unique_lock<std::mutex> lck(mutex);
       Directory.push_back(str);
@@ -235,7 +240,7 @@ struct FixedSizeFileManager {
     return ret;
   }
 
-  IOExecFileHandle openFile(uint32_t index, uint64_t* actualNumber) {
+  IOExecFileHandle openFile(uint32_t index, uint64_t *actualNumber) {
     IOExecFileHandle handle = nullptr;
 
     const size_t dirSize = Directory.size();
@@ -252,7 +257,9 @@ struct FixedSizeFileManager {
       if (config.doMemCheck && actualNumber) {
         auto filename = basename(str.c_str());
         auto ret = parseFileName(filename, *actualNumber);
-        if (ret != 0) { LOG(FATAL) << "parse failed"; }
+        if (ret != 0) {
+          LOG(FATAL) << "parse failed";
+        }
       }
     } catch (std::exception &e) {
       LOG(ERROR) << "bad index " << index << " dirsize=" << dirSize;
@@ -346,7 +353,7 @@ struct StatusExt {
     tid = gettid();
   }
 
-  uint32_t dirIndex{0}; 
+  uint32_t dirIndex{0};
   uint64_t actualFilenum{0};
   uint32_t tid{0};
   gIOBatch *batch{nullptr};
@@ -397,23 +404,24 @@ static int wait_for_iocompletion(int epollfd, int efd, ThreadCtx *ctx) {
               ctx->totalWriteLatency = ext->timer.elapsedMicroseconds();
               ctr++;
             } else if (ext->isRead()) {
-              if (config.doMemCheck) { 
-                gIOExecFragment& frag = ext->batch->array[0];
-                char* buf = frag.addr;
+              if (config.doMemCheck) {
+                gIOExecFragment &frag = ext->batch->array[0];
+                char *buf = frag.addr;
                 const char expChar = 'a' + (ext->actualFilenum % 26);
                 bool failed = false;
                 uint32_t bufOffset = 0;
-                for (uint32_t bufOffset = 0; bufOffset < frag.size; bufOffset++) {
+                for (uint32_t bufOffset = 0; bufOffset < frag.size;
+                     bufOffset++) {
                   if (buf[bufOffset] != expChar) {
                     failed = true;
-                    break;  
+                    break;
                   }
                 }
                 if (failed) {
-                  LOG(ERROR) << "Comparison failed at file=" << ext->dirIndex 
-                    << " offset=" << bufOffset
-                    << " expchar=" << expChar 
-                    << " actual=" << buf[bufOffset];
+                  LOG(ERROR) << "Comparison failed at file=" << ext->dirIndex
+                             << " offset=" << bufOffset
+                             << " expchar=" << expChar
+                             << " actual=" << buf[bufOffset];
                 }
               }
               ctx->totalReadLatency = ext->timer.elapsedMicroseconds();
@@ -736,9 +744,9 @@ int main(int argc, char *argv[]) {
     std::ostringstream s;
     // Print in csv format for easier input to excel
     s << config.writePercent << "," << config.totalReadWriteScale << ","
-      << IOExecGetNumExecutors(serviceHandle) << "," << config.maxThr << "," << totalIOPs
-      << "," << totalWriteLatency.mean() << "," << totalReadLatency.mean()
-      << "," << totalDeleteLatency.mean() << ","
+      << IOExecGetNumExecutors(serviceHandle) << "," << config.maxThr << ","
+      << totalIOPs << "," << totalWriteLatency.mean() << ","
+      << totalReadLatency.mean() << "," << totalDeleteLatency.mean() << ","
       << endCpuStats.getCpuUtilization();
 
     std::cout << s.str() << std::endl;

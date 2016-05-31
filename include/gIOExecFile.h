@@ -77,7 +77,8 @@ IOExecServiceHandle IOExecFileServiceInit(const char *configFileName);
 
 int32_t IOExecFileServiceDestroy(IOExecServiceHandle);
 
-IOExecFileHandle IOExecFileOpen(IOExecServiceHandle serviceHandle, const char *filename, int32_t flags);
+IOExecFileHandle IOExecFileOpen(IOExecServiceHandle serviceHandle,
+                                const char *filename, int32_t flags);
 
 int32_t IOExecFileClose(IOExecFileHandle FileHandle);
 
@@ -114,10 +115,12 @@ int32_t IOExecFileRead(IOExecFileHandle fileHandle, const gIOBatch *pIOBatch,
 /**
  *
  */
-int32_t IOExecFileDelete(IOExecServiceHandle serviceHandle, const char *filename, gCompletionID completionId,
+int32_t IOExecFileDelete(IOExecServiceHandle serviceHandle,
+                         const char *filename, gCompletionID completionId,
                          IOExecEventFdHandle eventFdHandle);
 
-int32_t IOExecFileDeleteSync(IOExecServiceHandle serviceHandle, const char *filename);
+int32_t IOExecFileDeleteSync(IOExecServiceHandle serviceHandle,
+                             const char *filename);
 
 // C API
 #ifdef __cplusplus
@@ -148,7 +151,8 @@ EXTERNC {
 
   int32_t gobjfs_ioexecfile_file_write(handle_t, const batch_t *, event_t evfd);
   int32_t gobjfs_ioexecfile_file_read(handle_t, batch_t *, event_t evfd);
-  int32_t gobjfs_ioexecfile_file_delete(service_handle_t, const char *, completion_id_t, event_t);
+  int32_t gobjfs_ioexecfile_file_delete(service_handle_t, const char *,
+                                        completion_id_t, event_t);
 
   int32_t gobjfs_ioexecfile_file_close(handle_t);
 
