@@ -40,7 +40,7 @@ sudo apt-get install clang-3.8 lldb-3.8
 
 To run address sanitizer
 
-(cd gobjfs; cd build; cmake -DCMAKE_BUILD_TYPE=ASan; make)
+(cd gobjfs; cd build; cmake -DCMAKE_BUILD_TYPE=ASan ..; make)
 
 #=========================
 
