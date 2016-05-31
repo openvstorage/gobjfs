@@ -552,7 +552,10 @@ int IOExecutor::submitTask(FilerJob *job, bool blocking) {
       // increment size before push, to prevent race conditions
       job->setSubmitTime();
       job->executor_ = this;
+      stats_.numQueued_++;
+
       fdQueueSize_++;
+
       bool pushReturn = false;
       do {
         pushReturn = fdQueue_.push(job);
