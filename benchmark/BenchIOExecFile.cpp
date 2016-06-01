@@ -267,7 +267,7 @@ struct FixedSizeFileManager {
     return handle;
   }
 
-  int getFileToDelete(uint32_t index, std::string& fname) {
+  int getFileToDelete(uint32_t index, std::string &fname) {
     int ret = 0;
 
     const size_t dirSize = Directory.size();
@@ -350,7 +350,7 @@ struct StatusExt {
 
   uint32_t dirIndex{0};
   uint64_t actualFilenum{0};
-  uint32_t tid{0}; // for debugging
+  uint32_t tid{0};   // for debugging
   std::string fname; // for delete
   gIOBatch *batch{nullptr};
   IOExecFileHandle handle{nullptr};
@@ -424,8 +424,8 @@ static int wait_for_iocompletion(int epollfd, int efd, ThreadCtx *ctx) {
               ctr++;
             } else if (ext->isDelete()) {
               ctx->totalDeleteLatency = ext->timer.elapsedMicroseconds();
-              ctr ++;
-              fileMgr.deleteCount ++;
+              ctr++;
+              fileMgr.deleteCount++;
             } else {
               LOG(FATAL) << "unknown opcode";
             }
@@ -562,7 +562,7 @@ static void doRandomReadWrite(ThreadCtx *ctx) {
       ret = fileMgr.getFileToDelete(ext->dirIndex, ext->fname);
       if (ret == 0) {
         ext->op = StatusExt::Delete;
-        // TODO 
+        // TODO
       } else {
         delete ext;
         continue;
@@ -640,10 +640,8 @@ static void doRandomReadWrite(ThreadCtx *ctx) {
       } else if (ext->isRead()) {
         ret = IOExecFileRead(handle, ext->batch, evHandle);
       } else if (ext->isDelete()) {
-        ret = IOExecFileDelete(ctx->serviceHandle, 
-          ext->fname.c_str(), 
-          ext->batch->array[0].completionId, 
-          evHandle);
+        ret = IOExecFileDelete(ctx->serviceHandle, ext->fname.c_str(),
+                               ext->batch->array[0].completionId, evHandle);
       } else {
         LOG(FATAL) << " Unknown opcode";
       }
