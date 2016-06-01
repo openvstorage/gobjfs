@@ -20,6 +20,7 @@ but WITHOUT ANY WARRANTY of any kind.
 #include <glog/logging.h>
 #include <gtest/gtest.h>
 
+#include <util/os_utils.h>
 #include <fcntl.h>
 #include <sys/types.h>
 
@@ -35,6 +36,9 @@ TEST(IOExecFile, NoInitDone)
 
   auto evHandle = IOExecEventFdOpen(serviceHandle);
   EXPECT_EQ(evHandle, nullptr);
+
+  auto fd = IOExecEventFdGetReadFd(evHandle);
+  EXPECT_EQ(fd, gobjfs::os::FD_INVALID);
 
   auto handle = IOExecFileOpen(serviceHandle, "/tmp/abc", O_RDWR | O_CREAT);
   EXPECT_EQ(handle, nullptr);
