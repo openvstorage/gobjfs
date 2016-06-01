@@ -140,6 +140,30 @@ int32_t IOExecGetNumExecutors(IOExecServiceHandle serviceHandle) {
   return serviceHandle->ioexecVec.size();
 }
 
+int32_t IOExecGetStats(IOExecServiceHandle serviceHandle, char* buf,
+  uint32_t len)
+{
+  uint32_t curOffset = 0;
+
+  for (auto& elem : serviceHandle->ioexecVec) 
+  {
+    auto str = elem->getState();
+    uint32_t copyLen = str.size();
+    if (str.size() >= len - curOffset)
+    {
+      copyLen = len;
+    }
+    strncpy(buf + curOffset, str.c_str(), copyLen);
+    curOffset += copyLen;
+    if (curOffset >= len) 
+    {
+      LOG(WARNING) << "input buffer len=" << len << " insufficient for stats";
+      break;
+    }
+  }
+  return 0;
+}
+
 IOExecServiceHandle IOExecFileServiceInit(const char *pConfigFileName) {
   int ret = 0;
 
@@ -474,5 +498,11 @@ EXTERNC {
 
     gobjfs_debug_fragment(fp);
     LOG(INFO) << "}";
+  }
+
+  int32_t gobjfs_ioexecfile_service_getstats(service_handle_t service_handle, 
+    char *buffer, 
+    size_t len) {
+      return IOExecGetStats(service_handle, buffer, len);
   }
 }

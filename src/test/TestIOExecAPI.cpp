@@ -48,3 +48,41 @@ TEST(IOExecFile, NoInitDone) {
   ret = IOExecFileServiceDestroy(serviceHandle);
   EXPECT_NE(ret, 0);
 }
+
+class IOExecFileInitTest : public testing::test {
+  
+  int fd {-1};
+  char* fileTemplate = "ioexecfiletestXXXXXX";
+
+  IOExecFileInitTest() {
+  }
+
+  void SetUp() {
+    fd = mkstemp(fileTemplate);
+
+    const char* configContents = 
+      "[ioexec]\nctx_queue_depth=200\ncpu_core=0\n";
+
+    ssize_t writeSz = write(fd, configContents, strlen(configContents));
+
+    EXPECT_EQ(writeSz, strlen(configContents));
+  }
+
+  void TearDown() {
+    close(fd);
+  }
+
+  ~IOExecFileInitTest()
+  }
+};
+
+TEST_F(IOExecFileInitTest, CheckStats) {
+
+  auto serviceHandle = IOExecFileServiceInit(fileTemplate);
+
+  char buf [8192];
+  auto ret = IOExecGetStats(serviceHandle, buffer, len);
+
+  LOG(INFO) << buffer;
+
+}

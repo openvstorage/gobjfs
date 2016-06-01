@@ -94,6 +94,9 @@ int IOExecEventFdGetReadFd(IOExecEventFdHandle eventFdPtr);
 // hidden API to retrieve number of configured IOExecutors
 int32_t IOExecGetNumExecutors(IOExecServiceHandle serviceHandle);
 
+int32_t IOExecGetStats(IOExecServiceHandle serviceHandle, const char* buf,
+  uint32_t len);
+
 /**
  * @param fileHandle file returned by IOExecFileOpen
  * @param pIOBatch batch containing offset, size and buffer to write
@@ -165,4 +168,6 @@ EXTERNC {
   // debugging helpers
   void gobjfs_debug_fragment(const void *);
   void gobjfs_debug_batch(const batch_t *);
+
+  int32_t gobjfs_ioexecfile_service_getstats(service_handle_t, char *buffer, size_t len);
 }
