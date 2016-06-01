@@ -16,13 +16,25 @@ Open vStorage is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY of any kind.
 */
 
+#include <gparse.h>
+
 #include <fstream>
 #include <glog/logging.h>
-#include <gparse.h>
+#include <boost/program_options.hpp>
+
+#include <boost/version.hpp>
 
 namespace po = boost::program_options;
 
 int ParseConfigFile(const char *configFileName, IOExecutor::Config &config) {
+
+  // print boost compile time version for diagnostic purposes
+  // in case it differs from link time version
+  LOG(INFO) << "Compile-time Boost version is "     
+    << BOOST_VERSION / 100000     << "."  // major version
+    << BOOST_VERSION / 100 % 1000 << "."  // minor version
+    << BOOST_VERSION % 100;                // patch level
+    
   po::options_description desc("allowed options");
   desc.add_options()("ioexec.ctx_queue_depth",
                      po::value<uint32_t>(&config.queueDepth_)->required(),

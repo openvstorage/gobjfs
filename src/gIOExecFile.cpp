@@ -27,6 +27,7 @@ but WITHOUT ANY WARRANTY of any kind.
 #include <fcntl.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include <boost/version.hpp>
 
 // objpool holds freelist of batches with only one fragment
 static gobjfs::MempoolSPtr objpool =
@@ -167,7 +168,11 @@ IOExecServiceHandle IOExecFileServiceInit(const char *pConfigFileName) {
       }
     } else {
       LOG(ERROR) << "config file=" << pConfigFileName
-                 << " has zero cpuCores allocated";
+                 << " has zero cpuCores allocated."
+                 << "  This can happen if your binary is linked to incorrect boost version."
+                 << "  Is your binary linked to boost_program_options version="
+                 << BOOST_LIB_VERSION;
+
       ret = -EINVAL;
     }
   } while (0);
