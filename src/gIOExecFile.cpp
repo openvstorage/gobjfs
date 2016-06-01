@@ -266,6 +266,11 @@ int32_t IOExecEventFdClose(IOExecEventFdHandle eventFdPtr) {
 }
 
 int IOExecEventFdGetReadFd(IOExecEventFdHandle eventFdPtr) {
+  if (!eventFdPtr) 
+  {
+    LOG(ERROR) << "Rejecting GetReadFd attempt with null eventHandle";
+    return gobjfs::os::FD_INVALID;
+  }
   return eventFdPtr->fd[0];
 }
 
