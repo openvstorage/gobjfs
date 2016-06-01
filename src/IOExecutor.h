@@ -126,23 +126,29 @@ public:
   struct Statistics {
     // Most variables are incremented by a single thread
     // but it is *not* the same thread that updates all
-    uint32_t numWrites_ = 0;
-    uint32_t numReads_ = 0;
-    uint64_t bytesWritten_ = 0;
-    uint64_t bytesRead_ = 0;
-
-    uint32_t numDeletes_ = 0;
 
     std::atomic<uint64_t> numQueued_{0};    // multi-thread writers
     std::atomic<uint64_t> numSubmitted_{0}; // multi-thread writers
     uint64_t numCompleted_{0};
 
     // updated by completionThread
-    gobjfs::stats::StatsCounter<int64_t> waitTime_;
-    gobjfs::stats::StatsCounter<int64_t> serviceTime_;
+    struct OpStats {
+      gobjfs::stats::StatsCounter<int64_t> waitTime_;
+      gobjfs::stats::StatsCounter<int64_t> serviceTime_;
+  
+      gobjfs::stats::Histogram<int64_t> waitHist_;
+      gobjfs::stats::Histogram<int64_t> serviceHist_;
 
-    gobjfs::stats::Histogram<int64_t> waitHist_;
-    gobjfs::stats::Histogram<int64_t> serviceHist_;
+      uint32_t numOps_ = 0;
+      uint32_t numBytes_ = 0;
+
+      std::string getState() const;
+    };
+
+    // maintain per-op statistics
+    OpStats write_; 
+    OpStats read_; 
+    OpStats delete_;
 
     gobjfs::stats::MaxValue<uint32_t> maxRequestQueueSize_;
     gobjfs::stats::MaxValue<uint32_t> maxFinishQueueSize_;

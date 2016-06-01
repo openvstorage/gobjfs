@@ -134,22 +134,34 @@ void IOExecutor::Config::print() const {
 
 void IOExecutor::Statistics::incrementOps(FilerJob *job) {
 
-  waitTime_ = job->waitTime();
-  serviceTime_ = job->serviceTime();
-
-  waitHist_ = job->waitTime();
-  serviceHist_ = job->serviceTime();
-
   if (job->op_ == FileOp::Write) {
+
     assert(job->size_);
-    numWrites_++;
-    bytesWritten_ += job->size_;
+    write_.numOps_ ++;
+    write_.numBytes_ += job->size_;
+    write_.waitTime_ = job->waitTime();
+    write_.serviceTime_ = job->serviceTime();
+    write_.waitHist_ = job->waitTime();
+    write_.serviceHist_ = job->serviceTime();
+
   } else if (job->op_ == FileOp::Read) {
+
     assert(job->size_);
-    numReads_++;
-    bytesRead_ += job->size_;
+    read_.numOps_ ++;
+    read_.numBytes_ += job->size_;
+    read_.waitTime_ = job->waitTime();
+    read_.serviceTime_ = job->serviceTime();
+    read_.waitHist_ = job->waitTime();
+    read_.serviceHist_ = job->serviceTime();
+
   } else if (job->op_ == FileOp::Delete) {
-    numDeletes_++;
+
+    delete_.numOps_ ++;
+    //delete_.numBytes_ += job->size_; not increment
+    delete_.waitTime_ = job->waitTime();
+    delete_.serviceTime_ = job->serviceTime();
+    delete_.waitHist_ = job->waitTime();
+    delete_.serviceHist_ = job->serviceTime();
   }
 
   numCompleted_++;
@@ -168,22 +180,33 @@ void IOExecutor::Statistics::print() const {
   }
 }
 
+std::string IOExecutor::Statistics::OpStats::getState() const {
+  std::ostringstream s;
+
+  s << "{numOps=" << numOps_ << ":numBytes=" << numBytes_
+    << ":waitTime=" << waitTime_ << ":waitHist=" << waitHist_
+    << ":serviceTime=" << serviceTime_ << ":serviceHist=" << serviceHist_
+    << "}";
+
+  return s.str();
+}
+
 std::string IOExecutor::Statistics::getState() const {
   std::ostringstream s;
 
-  s << ":numWrites=" << numWrites_ << ":bytesWritten=" << bytesWritten_
-    << ":numReads=" << numReads_ << ":bytesRead=" << bytesRead_
-    << ":numDeletes=" << numDeletes_ << ":numQueued=" << numQueued_
+  s << " write="   << write_.getState() 
+    << ",read="    << read_.getState() 
+    << ",delete="  << delete_.getState() 
+    << ",{numQueued=" << numQueued_
     << ":numSubmitted=" << numSubmitted_ << ":numCompleted=" << numCompleted_
-    << ":waitTime=" << waitTime_ << ":waitHist=" << waitHist_
-    << ":serviceTime=" << serviceTime_ << ":serviceHist=" << serviceHist_
-    << ":idleLoop=" << idleLoop_
-    << ":numProcessedInLoop=" << numProcessedInLoop_
     << ":maxRequestQueueSize=" << maxRequestQueueSize_
-    << ":numCompletionEvents=" << numCompletionEvents_
-    << ":requestQueueLow1_=" << requestQueueLow1_
-    << ":requestQueueLow2_=" << requestQueueLow2_
-    << ":requestQueueFull=" << requestQueueFull_;
+    << "}"
+    << ",idleLoop=" << idleLoop_
+    << ",numProcessedInLoop=" << numProcessedInLoop_
+    << ",numCompletionEvents=" << numCompletionEvents_
+    << ",requestQueueLow1_=" << requestQueueLow1_
+    << ",requestQueueLow2_=" << requestQueueLow2_
+    << ",requestQueueFull=" << requestQueueFull_;
 
   return s.str();
 }
@@ -290,8 +313,9 @@ void IOExecutor::execute() {
                 << ":fdQueueSize=" << fdQueueSize_
                 << ":idleloop=" << stats_.idleLoop_
                 << ":minSubmitSize=" << minSubmitSize_
-                << ":numReads=" << stats_.numReads_
-                << ":numWrites=" << stats_.numWrites_ << ":state=" << state_;
+                << ":numReads=" << stats_.read_.numOps_
+                << ":numWrites=" << stats_.write_.numOps_ 
+                << ":state=" << state_;
             submitterWaitingForNewRequests_ = false;
           }
         }
