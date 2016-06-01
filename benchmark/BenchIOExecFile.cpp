@@ -260,14 +260,13 @@ struct FixedSizeFileManager {
     return handle;
   }
 
-  int deleteFile(uint32_t index) {
+  int getFileToDelete(uint32_t index, std::string& fname) {
     int ret = 0;
 
     const size_t dirSize = Directory.size();
     if (!dirSize)
       return -ENOENT;
 
-    std::string fname;
     {
       std::unique_lock<std::mutex> lck(mutex);
 
@@ -286,10 +285,6 @@ struct FixedSizeFileManager {
       Directory.pop_back();
     }
 
-    ret = IOExecFileDeleteSync(serviceHandle, fname.c_str());
-    if (ret == 0) {
-      deleteCount++;
-    }
     return ret;
   }
 };
@@ -325,7 +320,7 @@ struct ThreadCtx {
 static gobjfs::MempoolSPtr objpool;
 
 struct StatusExt {
-  enum OpType { Invalid, Read, Write, Freed };
+  enum OpType { Invalid, Read, Write, Delete, Freed };
 
   static void *operator new(size_t sz) { return objpool->Alloc(sz); }
 
@@ -333,6 +328,7 @@ struct StatusExt {
 
   bool isRead() const { return (op == Read); }
   bool isWrite() const { return (op == Write); }
+  bool isDelete() const { return (op == Delete); }
 
   StatusExt() {
     op = Invalid;
@@ -341,14 +337,14 @@ struct StatusExt {
 
   ~StatusExt() {
     handle = nullptr;
-    // batch = nullptr;
     op = Freed;
     tid = gettid();
   }
 
   uint32_t dirIndex{0}; 
   uint64_t actualFilenum{0};
-  uint32_t tid{0};
+  uint32_t tid{0}; // for debugging
+  std::string fname; // for delete
   gIOBatch *batch{nullptr};
   IOExecFileHandle handle{nullptr};
   gobjfs::stats::Timer timer;
@@ -418,15 +414,22 @@ static int wait_for_iocompletion(int epollfd, int efd, ThreadCtx *ctx) {
               }
               ctx->totalReadLatency = ext->timer.elapsedMicroseconds();
               ctr++;
+            } else if (ext->isDelete()) {
+              ctx->totalDeleteLatency = ext->timer.elapsedMicroseconds();
+              ctr ++;
+              fileMgr.deleteCount ++;
             } else {
               LOG(FATAL) << "unknown opcode";
             }
 
-            IOExecFileClose(ext->handle);
+            if (!ext->isDelete()) {
+              IOExecFileClose(ext->handle);
+            }
+
             assert(ext->batch->count == 1);
             assert(ext->batch->array[0].completionId == iostatus.completionId);
-
             gIOBatchFree(ext->batch);
+
             delete ext;
           }
         } else {
@@ -547,17 +550,15 @@ static void doRandomReadWrite(ThreadCtx *ctx) {
       }
     } else if (DeletesAreEnabled && (num >= deleteThreshold)) {
       // its a delete
-      auto dirIndex = filenumGen(seedGen);
-      ret = fileMgr.deleteFile(dirIndex);
+      ext->dirIndex = filenumGen(seedGen);
+      ret = fileMgr.getFileToDelete(ext->dirIndex, ext->fname);
       if (ret == 0) {
-        uint64_t deleteTime = ext->timer.elapsedMicroseconds();
-        ctx->totalDeleteLatency = deleteTime;
+        ext->op = StatusExt::Delete;
+        // TODO 
       } else {
         delete ext;
+        continue;
       }
-
-      continue;
-
     } else {
       // its a create
       ret = fileMgr.createFile(handle, ext->actualFilenum);
@@ -608,25 +609,37 @@ static void doRandomReadWrite(ThreadCtx *ctx) {
         frag.size = config.blockSize * config.maxBlocks;
         frag.addr = (caddr_t)gMempool_alloc(frag.size);
         memset(frag.addr, 'a' + (ext->actualFilenum % 26), frag.size);
+        assert(frag.addr != nullptr);
       } else if (ext->isRead()) {
         uint64_t blockNum = blockGenerator(seedGen);
         frag.offset = blockNum * config.blockSize;
         frag.size = config.blockSize;
         frag.addr = (caddr_t)gMempool_alloc(frag.size);
+        assert(frag.addr != nullptr);
+      } else if (ext->isDelete()) {
+        // do nothing
       } else {
         LOG(FATAL) << "unknown op";
       }
-
-      assert(frag.addr != nullptr);
     }
 
     do {
+
       assert(ext->batch->count == 1);
+
       if (ext->isWrite()) {
         ret = IOExecFileWrite(handle, ext->batch, evHandle);
-      } else {
+      } else if (ext->isRead()) {
         ret = IOExecFileRead(handle, ext->batch, evHandle);
+      } else if (ext->isDelete()) {
+        ret = IOExecFileDelete(ctx->serviceHandle, 
+          ext->fname.c_str(), 
+          ext->batch->array[0].completionId, 
+          evHandle);
+      } else {
+        LOG(FATAL) << " Unknown opcode";
       }
+
       if (ret == -EAGAIN) {
         usleep(1);
         LOG(WARNING) << "too fast";
