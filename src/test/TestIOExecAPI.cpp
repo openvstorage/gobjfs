@@ -19,6 +19,7 @@ but WITHOUT ANY WARRANTY of any kind.
 #include <gIOExecFile.h>
 #include <glog/logging.h>
 #include <gtest/gtest.h>
+#include <gtest/gtest.h>
 
 #include <util/os_utils.h>
 #include <fcntl.h>
@@ -49,15 +50,20 @@ TEST(IOExecFile, NoInitDone) {
   EXPECT_NE(ret, 0);
 }
 
-class IOExecFileInitTest : public testing::test {
+class IOExecFileInitTest : public testing::Test {
   
   int fd {-1};
-  char* fileTemplate = "ioexecfiletestXXXXXX";
+
+
+public:
+  char fileTemplate[512];
 
   IOExecFileInitTest() {
   }
 
-  void SetUp() {
+  virtual void SetUp() override {
+    strcpy(fileTemplate,  "ioexecfiletestXXXXXX");
+
     fd = mkstemp(fileTemplate);
 
     const char* configContents = 
@@ -68,11 +74,11 @@ class IOExecFileInitTest : public testing::test {
     EXPECT_EQ(writeSz, strlen(configContents));
   }
 
-  void TearDown() {
+  virtual void TearDown() override {
     close(fd);
   }
 
-  ~IOExecFileInitTest()
+  virtual ~IOExecFileInitTest() {
   }
 };
 
@@ -80,9 +86,14 @@ TEST_F(IOExecFileInitTest, CheckStats) {
 
   auto serviceHandle = IOExecFileServiceInit(fileTemplate);
 
-  char buf [8192];
+  uint32_t len = 8192;
+  char buffer [len];
   auto ret = IOExecGetStats(serviceHandle, buffer, len);
 
-  LOG(INFO) << buffer;
-
+  EXPECT_LE(ret, len);
+  char* found = strstr(buffer, "stats");
+  EXPECT_NE(found, nullptr);
+  // TODO more sophisticated testing possible
+  // can check if buffer is json formatted here
+  LOG(INFO) << "len=" << ret << " buf=" << buffer;
 }

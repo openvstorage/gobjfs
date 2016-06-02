@@ -141,7 +141,7 @@ int32_t IOExecGetNumExecutors(IOExecServiceHandle serviceHandle) {
 }
 
 int32_t IOExecGetStats(IOExecServiceHandle serviceHandle, char* buf,
-  uint32_t len)
+  int32_t len)
 {
   uint32_t curOffset = 0;
 
@@ -151,6 +151,7 @@ int32_t IOExecGetStats(IOExecServiceHandle serviceHandle, char* buf,
     uint32_t copyLen = str.size();
     if (str.size() >= len - curOffset)
     {
+      // truncate the string to be copied
       copyLen = len;
     }
     strncpy(buf + curOffset, str.c_str(), copyLen);
@@ -161,7 +162,7 @@ int32_t IOExecGetStats(IOExecServiceHandle serviceHandle, char* buf,
       break;
     }
   }
-  return 0;
+  return curOffset;
 }
 
 IOExecServiceHandle IOExecFileServiceInit(const char *pConfigFileName) {
@@ -502,7 +503,7 @@ EXTERNC {
 
   int32_t gobjfs_ioexecfile_service_getstats(service_handle_t service_handle, 
     char *buffer, 
-    size_t len) {
+    int32_t len) {
       return IOExecGetStats(service_handle, buffer, len);
   }
 }
