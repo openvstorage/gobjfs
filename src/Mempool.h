@@ -26,7 +26,6 @@ namespace gobjfs {
 
 class Mempool {
 private:
-  const size_t alignSize_ = 4096;
 
   struct Stats {
     std::atomic<uint64_t> bytesAllocated_{0};

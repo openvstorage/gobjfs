@@ -29,7 +29,7 @@ namespace gobjfs {
 
 class AlignedMempool : public Mempool {
 private:
-  const size_t alignSize_ = 4096;
+  const size_t alignSize_;
 
   struct Stats {
     std::atomic<uint64_t> bytesAllocated_{0};
@@ -39,7 +39,7 @@ private:
   } stats_;
 
 public:
-  AlignedMempool(size_t alignSize = 4096);
+  AlignedMempool(size_t alignSize = 512);
 
   virtual void *Alloc(size_t size) override;
 
