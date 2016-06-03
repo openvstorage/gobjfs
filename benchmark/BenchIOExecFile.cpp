@@ -303,6 +303,8 @@ using gobjfs::stats::StatsCounter;
 StatsCounter<uint64_t> totalReadLatency;
 StatsCounter<uint64_t> totalWriteLatency;
 StatsCounter<uint64_t> totalDeleteLatency;
+uint64_t totalFailedReads{0};
+uint64_t totalFailedWrites{0};
 std::atomic<uint64_t> totalIOPs{0};
 
 class StatusExt;
@@ -318,6 +320,8 @@ struct ThreadCtx {
   StatsCounter<uint64_t> totalWriteLatency;
   StatsCounter<uint64_t> totalReadLatency;
   StatsCounter<uint64_t> totalDeleteLatency;
+  uint64_t failedReads{0};
+  uint64_t failedWrites{0};
 
   gobjfs::os::ShutdownNotifier ioCompletionThreadShutdown;
 
@@ -356,6 +360,7 @@ struct StatusExt {
   IOExecFileHandle handle{nullptr};
   gobjfs::stats::Timer timer;
   OpType op{Invalid};
+
 };
 
 static int wait_for_iocompletion(int epollfd, int efd, ThreadCtx *ctx) {
@@ -399,6 +404,9 @@ static int wait_for_iocompletion(int epollfd, int efd, ThreadCtx *ctx) {
             if (ext->isWrite()) {
               ctx->totalWriteLatency = ext->timer.elapsedMicroseconds();
               ctr++;
+              if (iostatus.errorCode != 0) {
+                ctx->failedWrites ++;        
+              }
             } else if (ext->isRead()) {
               if (config.doMemCheck) {
                 gIOExecFragment &frag = ext->batch->array[0];
@@ -419,6 +427,9 @@ static int wait_for_iocompletion(int epollfd, int efd, ThreadCtx *ctx) {
                              << " expchar=" << expChar
                              << " actual=" << buf[bufOffset];
                 }
+              }
+              if (iostatus.errorCode != 0) {
+                ctx->failedReads ++;
               }
               ctx->totalReadLatency = ext->timer.elapsedMicroseconds();
               ctr++;
@@ -669,7 +680,10 @@ static void doRandomReadWrite(ThreadCtx *ctx) {
   int64_t timeMilli = timer.elapsedMilliseconds();
   std::ostringstream s;
 
-  s << "thread=" << gobjfs::os::GetCpuCore() << ":num_io=" << ctx->perThreadIO
+  s << "thread=" << gobjfs::os::GetCpuCore() 
+    << ":num_io=" << ctx->perThreadIO
+    << ":failed_reads=" << ctx->failedReads
+    << ":failed_writes=" << ctx->failedWrites
     << ":time(msec)=" << timeMilli
     << ":read_latency(usec)=" << ctx->totalReadLatency
     << ":write_latency(usec)=" << ctx->totalWriteLatency
@@ -729,6 +743,8 @@ int main(int argc, char *argv[]) {
     totalWriteLatency += elem->totalWriteLatency;
     totalReadLatency += elem->totalReadLatency;
     totalDeleteLatency += elem->totalDeleteLatency;
+    totalFailedReads += elem->failedReads;
+    totalFailedWrites += elem->failedWrites;
   }
 
   gobjfs::os::CpuStats endCpuStats;
@@ -749,6 +765,13 @@ int main(int argc, char *argv[]) {
       << ":cpu_perc=" << endCpuStats.getCpuUtilization();
 
     LOG(INFO) << s.str();
+
+    if (totalFailedReads || totalFailedWrites) {
+      LOG(ERROR) 
+        << "failed reads=" << totalFailedReads
+        << " failed writes=" << totalFailedWrites
+        ;
+    }
   }
 
   {
