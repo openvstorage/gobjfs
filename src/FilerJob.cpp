@@ -6,6 +6,9 @@
 namespace gobjfs {
 
 using gobjfs::os::FD_INVALID;
+using gobjfs::os::IsDirectIOAligned;
+using gobjfs::os::RoundToNext512;
+
 
 std::ostream &operator<<(std::ostream &os, FileOp op) {
   switch (op) {
@@ -93,10 +96,12 @@ bool FilerJob::isValid(std::ostringstream &ostr) {
   return isValid;
 }
 
+
 void FilerJob::setBuffer(off_t fileOffset, char *buffer, size_t size) {
   buffer_ = buffer;
   offset_ = fileOffset;
-  size_ = size;
+  userSize_ = size;
+  size_ = RoundToNext512(userSize_);
 }
 
 void FilerJob::reset() {

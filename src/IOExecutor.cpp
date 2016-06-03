@@ -815,11 +815,13 @@ int32_t IOExecutor::ProcessCallbacks(io_event *events, int32_t numEvents) {
       LOG(ERROR) << "IOerror for job=" << (void *)job << ":fd=" << job->fd_
                  << ":op=" << job->op_ << ":size=" << job->size_
                  << ":offset=" << job->offset_ << ":error=" << job->retcode_;
-    } else if (events[idx].res != job->size_) {
+    } else if ((events[idx].res != job->userSize_) 
+      && (events[idx].res != job->size_)) {
+
       job->retcode_ = -EIO;
       LOG(ERROR) << "partial read/write for job=" << (void *)job
                  << ":fd=" << job->fd_ << ":op=" << job->op_
-                 << ":expected size=" << job->size_
+                 << ":expected size=" << job->userSize_
                  << ":actual size=" << events[idx].res
                  << ":offset=" << job->offset_;
     } else {
@@ -835,7 +837,7 @@ int32_t IOExecutor::ProcessCallbacks(io_event *events, int32_t numEvents) {
 }
 
 int32_t IOExecutor::doPostProcessingOfJob(FilerJob *job) {
-  job->reset(); // decr FileDesc count
+  job->reset(); 
   // incrementOps() has to be done after reset() because
   // reset() sets serviceTime , which is used by stats
   stats_.incrementOps(job);
