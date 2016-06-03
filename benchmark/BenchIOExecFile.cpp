@@ -61,6 +61,7 @@ struct Config {
   uint32_t maxThr = 1;
   uint32_t writePercent = 0;
   uint32_t totalReadWriteScale = 2000;
+  uint32_t shortenFileSize = 0;
   bool newInstance = false;
   std::vector<std::string> dirPrefix;
 
@@ -82,7 +83,10 @@ struct Config {
         "percent of total read write scale")(
         "total_read_write_scale",
         value<uint32_t>(&totalReadWriteScale)->required(),
-        "total scale")("new_instance", value<bool>(&newInstance)->required(),
+        "total scale")(
+        "shorten_file_size", value<uint32_t>(&shortenFileSize), "shorten the"
+" size by this much to test nonaliged reads")(
+        "new_instance", value<bool>(&newInstance)->required(),
                        "create files from scratch")(
         "mountpoint",
         value<std::vector<std::string>>(&dirPrefix)->required()->multitoken(),
@@ -128,7 +132,6 @@ struct Config {
 static Config config;
 
 static constexpr size_t FOURMB = (1 << 24);
-static constexpr size_t SHORTEN_FILE_SIZE = 10;
 
 struct FixedSizeFileManager {
   IOExecServiceHandle serviceHandle;
@@ -406,7 +409,8 @@ static int wait_for_iocompletion(int epollfd, int efd, ThreadCtx *ctx) {
             if (ext->isWrite()) {
               ctx->totalWriteLatency = ext->timer.elapsedMicroseconds();
               ctr++;
-              IOExecFileTruncate(ext->handle, ext->batch->array[0].size - SHORTEN_FILE_SIZE);
+              IOExecFileTruncate(ext->handle, ext->batch->array[0].size -
+config.shortenFileSize);
               if (iostatus.errorCode != 0) {
                 ctx->failedWrites ++;        
               }
@@ -637,7 +641,7 @@ static void doRandomReadWrite(ThreadCtx *ctx) {
         frag.offset = blockNum * config.blockSize;
         frag.size = config.blockSize;
         frag.addr = (caddr_t)gMempool_alloc(frag.size);
-        frag.size -= SHORTEN_FILE_SIZE; // TEST unaligned reads
+        frag.size -= config.shortenFileSize; // TEST unaligned reads
         assert(frag.addr != nullptr);
       } else if (ext->isDelete()) {
         // do nothing
