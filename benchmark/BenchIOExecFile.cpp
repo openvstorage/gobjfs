@@ -127,7 +127,8 @@ struct Config {
 
 static Config config;
 
-#define FOURMB (4 << 20)
+static constexpr size_t FOURMB = (1 << 24);
+static constexpr size_t SHORTEN_FILE_SIZE = 10;
 
 struct FixedSizeFileManager {
   IOExecServiceHandle serviceHandle;
@@ -363,10 +364,11 @@ struct StatusExt {
 
 };
 
+static constexpr size_t MAX_EVENTS = 10;
+
 static int wait_for_iocompletion(int epollfd, int efd, ThreadCtx *ctx) {
   LOG(INFO) << "polling " << efd << " for " << ctx->perThreadIO;
 
-#define MAX_EVENTS 10
   epoll_event events[MAX_EVENTS];
 
   uint64_t ctr = 0;
@@ -404,6 +406,7 @@ static int wait_for_iocompletion(int epollfd, int efd, ThreadCtx *ctx) {
             if (ext->isWrite()) {
               ctx->totalWriteLatency = ext->timer.elapsedMicroseconds();
               ctr++;
+              IOExecFileTruncate(ext->handle, ext->batch->array[0].size - SHORTEN_FILE_SIZE);
               if (iostatus.errorCode != 0) {
                 ctx->failedWrites ++;        
               }
@@ -634,6 +637,7 @@ static void doRandomReadWrite(ThreadCtx *ctx) {
         frag.offset = blockNum * config.blockSize;
         frag.size = config.blockSize;
         frag.addr = (caddr_t)gMempool_alloc(frag.size);
+        frag.size -= SHORTEN_FILE_SIZE; // TEST unaligned reads
         assert(frag.addr != nullptr);
       } else if (ext->isDelete()) {
         // do nothing
