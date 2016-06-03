@@ -20,28 +20,25 @@ but WITHOUT ANY WARRANTY of any kind.
 #include <gMempool.h>
 #include <glog/logging.h>
 #include <gtest/gtest.h>
+#include <util/os_utils.h>
 #include <string.h> // strstr
 
 using gobjfs::MempoolSPtr;
 using gobjfs::MempoolFactory;
 
-namespace {
-
-bool isAligned(void *ptr, uint32_t alignedSize) {
-  return (!((uint64_t)ptr & alignedSize));
-}
-}
+using gobjfs::os::IsDirectIOAligned;
+using gobjfs::os::DirectIOSize;
 
 TEST(MempoolTest, CheckAlignment) {
-  MempoolSPtr m = MempoolFactory::createAlignedMempool("aligned", 4096);
+  MempoolSPtr m = MempoolFactory::createAlignedMempool("aligned", DirectIOSize);
 
   void *p = m->Alloc(4097);
 
-  EXPECT_TRUE(isAligned(p, 4096));
+  EXPECT_TRUE(IsDirectIOAligned((uint64_t)p));
 }
 
 TEST(MempoolTest, CheckStats) {
-  MempoolSPtr m = MempoolFactory::createAlignedMempool("aligned", 4096);
+  MempoolSPtr m = MempoolFactory::createAlignedMempool("aligned", DirectIOSize);
 
   void *p = m->Alloc(2048);
 
@@ -64,15 +61,15 @@ TEST(MempoolTest, CheckStats) {
 }
 
 TEST(gMempoolTest, CheckAlignment) {
-  gMempool_init(4096);
+  gMempool_init(DirectIOSize);
 
   void *p = gMempool_alloc(4097);
 
-  EXPECT_TRUE(isAligned(p, 4096));
+  EXPECT_TRUE(IsDirectIOAligned((uint64_t)p));
 }
 
 TEST(gMempoolTest, CheckStats) {
-  gMempool_init(4096);
+  gMempool_init(DirectIOSize);
 
   void *p = gMempool_alloc(2048);
 
