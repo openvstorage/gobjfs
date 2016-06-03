@@ -36,12 +36,22 @@ but WITHOUT ANY WARRANTY of any kind.
 typedef int16_t CoreId; // TODO make a full class later ?
 #define CoreIdInvalid (-1)
 
-#define IsDirectIOAligned(number) (number & ((2 << 9) - 1))
 
 namespace gobjfs {
 namespace os {
 
-static constexpr int32_t MEM_ALIGN_SIZE = 512; // for posix_memalign
+static constexpr int32_t DirectIOSize = 512; // for posix_memalign
+
+// https://blogs.oracle.com/jwadams/entry/macros_and_powers_of_two
+inline bool IsDirectIOAligned(uint64_t number) {
+  // check for 0 is special
+  return (!number) || (!(number & (DirectIOSize - 1)));
+}
+
+inline size_t RoundToNext512(size_t numToRound) {
+  constexpr uint32_t multiple = DirectIOSize;
+  return (numToRound + multiple - 1) & ~(multiple - 1);
+}
 
 static constexpr int32_t FD_INVALID = -1;
 

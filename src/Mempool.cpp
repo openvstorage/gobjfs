@@ -22,6 +22,7 @@ but WITHOUT ANY WARRANTY of any kind.
 #include <cassert> // numeric_limits
 #include <limits>  // numeric_limits
 #include <sstream> // ostringstream
+#include <util/os_utils.h>
 
 namespace gobjfs {
 
@@ -39,7 +40,7 @@ private:
   } stats_;
 
 public:
-  AlignedMempool(size_t alignSize = 512);
+  AlignedMempool(size_t alignSize = gobjfs::os::DirectIOSize);
 
   virtual void *Alloc(size_t size) override;
 
