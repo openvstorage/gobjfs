@@ -82,6 +82,8 @@ IOExecFileHandle IOExecFileOpen(IOExecServiceHandle serviceHandle,
 
 int32_t IOExecFileClose(IOExecFileHandle FileHandle);
 
+int32_t IOExecFileTruncate(IOExecFileHandle FileHandle, size_t newSize);
+
 struct IOExecEventFdInt;
 typedef IOExecEventFdInt *IOExecEventFdHandle;
 

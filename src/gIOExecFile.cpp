@@ -29,12 +29,16 @@ but WITHOUT ANY WARRANTY of any kind.
 #include <unistd.h>
 #include <boost/version.hpp>
 
+using gobjfs::IOExecutor;
+using gobjfs::FilerJob;
+using gobjfs::FileOp;
+
 // objpool holds freelist of batches with only one fragment
 static gobjfs::MempoolSPtr objpool =
     gobjfs::MempoolFactory::createObjectMempool(
         "object", sizeof(gIOBatch) + sizeof(gIOExecFragment));
 
-// ==============================
+// =======================================================
 
 gIOBatch *gIOBatchAlloc(size_t count) {
   const size_t allocSize =
@@ -71,7 +75,7 @@ void gIOBatchFree(gIOBatch *ptr) {
   free(ptr);
 }
 
-// ==============================
+// =======================================================
 
 gIOStatusBatch *gIOStatusBatchAlloc(size_t count) {
   const size_t allocSize = sizeof(gIOStatusBatch) + (count * sizeof(gIOStatus));
@@ -80,47 +84,7 @@ gIOStatusBatch *gIOStatusBatchAlloc(size_t count) {
 
 void gIOStatusBatchFree(gIOStatusBatch *ptr) { free(ptr); }
 
-// ==============================
-
-/* internal representation of FileHandle */
-struct IOExecFileInt {
-  IOExecServiceHandle serviceHandle;
-  int fd{-1};
-  CoreId core{CoreIdInvalid};
-
-  IOExecFileInt(IOExecServiceHandle serviceHandle, int fd, CoreId core)
-      : serviceHandle(serviceHandle), fd(fd), core(core) {
-    assert(fd >= 0);
-  }
-
-  ~IOExecFileInt() {
-    int ret = close(fd);
-    if (ret != 0) {
-      LOG(ERROR) << "failed to close fd=" << fd << " errno=" << errno;
-    }
-  }
-};
-
-using gobjfs::IOExecutor;
-using gobjfs::FilerJob;
-using gobjfs::FileOp;
-
-/* internal representation of EventFdHandle */
-struct IOExecEventFdInt {
-  int fd[2]{-1, -1};
-
-  IOExecEventFdInt(int in_fd[]) {
-    fd[0] = in_fd[0];
-    fd[1] = in_fd[1];
-    assert(fd[0] >= 0);
-    assert(fd[1] >= 0);
-  }
-
-  ~IOExecEventFdInt() {
-    close(fd[0]);
-    close(fd[1]);
-  }
-};
+// =======================================================
 
 /* internal representation of ServiceHandle */
 struct IOExecServiceInt {
@@ -225,37 +189,26 @@ int32_t IOExecFileServiceDestroy(IOExecServiceHandle serviceHandle) {
   return 0;
 }
 
-IOExecFileHandle IOExecFileOpen(IOExecServiceHandle serviceHandle,
-                                const char *fileName, int32_t flags) {
 
-  IOExecFileHandle newHandle{nullptr};
+// =======================================================
 
-  if (!serviceHandle || !serviceHandle->isValid()) {
-    LOG(ERROR) << "service handle is invalid";
-    return newHandle;
+/* internal representation of EventFdHandle */
+struct IOExecEventFdInt {
+  int fd[2]{-1, -1};
+
+  IOExecEventFdInt(int in_fd[]) {
+    fd[0] = in_fd[0];
+    fd[1] = in_fd[1];
+    assert(fd[0] >= 0);
+    assert(fd[1] >= 0);
   }
 
-  int newFlags = flags | O_DIRECT;
-
-  int mode = S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH;
-
-  int fd = open(fileName, newFlags, mode);
-
-  if (fd < 0) {
-    int capture_errno = errno;
-    LOG(ERROR) << "failed to open file=" << fileName << " flags=" << newFlags
-               << " mode=" << mode << " errno=" << capture_errno;
-  } else {
-    CoreId core = serviceHandle->getSlot(fileName);
-    newHandle = new IOExecFileInt(serviceHandle, fd, core);
+  ~IOExecEventFdInt() {
+    close(fd[0]);
+    close(fd[1]);
   }
-  return newHandle;
-}
+};
 
-int32_t IOExecFileClose(IOExecFileHandle pFileHandle) {
-  delete pFileHandle;
-  return 0;
-}
 
 IOExecEventFdHandle IOExecEventFdOpen(IOExecServiceHandle serviceHandle) {
 
@@ -302,6 +255,67 @@ int IOExecEventFdGetReadFd(IOExecEventFdHandle eventFdPtr) {
   }
   return eventFdPtr->fd[0];
 }
+
+// =======================================================
+
+/* internal representation of FileHandle */
+struct IOExecFileInt {
+  IOExecServiceHandle serviceHandle;
+  int fd{-1};
+  CoreId core{CoreIdInvalid};
+
+  IOExecFileInt(IOExecServiceHandle serviceHandle, int fd, CoreId core)
+      : serviceHandle(serviceHandle), fd(fd), core(core) {
+    assert(fd >= 0);
+  }
+
+  ~IOExecFileInt() {
+    int ret = close(fd);
+    if (ret != 0) {
+      LOG(ERROR) << "failed to close fd=" << fd << " errno=" << errno;
+    }
+  }
+};
+
+IOExecFileHandle IOExecFileOpen(IOExecServiceHandle serviceHandle,
+                                const char *fileName, int32_t flags) {
+
+  IOExecFileHandle newHandle{nullptr};
+
+  if (!serviceHandle || !serviceHandle->isValid()) {
+    LOG(ERROR) << "service handle is invalid";
+    return newHandle;
+  }
+
+  int newFlags = flags | O_DIRECT;
+
+  int mode = S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH;
+
+  int fd = open(fileName, newFlags, mode);
+
+  if (fd < 0) {
+    int capture_errno = errno;
+    LOG(ERROR) << "failed to open file=" << fileName << " flags=" << newFlags
+               << " mode=" << mode << " errno=" << capture_errno;
+  } else {
+    CoreId core = serviceHandle->getSlot(fileName);
+    newHandle = new IOExecFileInt(serviceHandle, fd, core);
+  }
+  return newHandle;
+}
+
+int32_t IOExecFileClose(IOExecFileHandle pFileHandle) {
+  delete pFileHandle;
+  return 0;
+}
+
+int32_t IOExecFileTruncate(IOExecFileHandle pFileHandle, size_t newSize) {
+  int ret = ftruncate(pFileHandle->fd, newSize);
+  if (ret != 0) {
+    LOG(WARNING) << "truncate failed ret=" << ret;
+  }
+}
+
 
 int32_t IOExecFileWrite(IOExecFileHandle fileHandle, const gIOBatch *batch,
                         IOExecEventFdHandle eventFdHandle) {
@@ -429,6 +443,8 @@ int32_t IOExecFileDelete(IOExecServiceHandle serviceHandle,
   }
   return retcode;
 }
+
+// ============================================
 
 EXTERNC {
   service_handle_t gobjfs_ioexecfile_service_init(const char *cfg_name) {
