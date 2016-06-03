@@ -304,16 +304,25 @@ IOExecFileHandle IOExecFileOpen(IOExecServiceHandle serviceHandle,
   return newHandle;
 }
 
-int32_t IOExecFileClose(IOExecFileHandle pFileHandle) {
-  delete pFileHandle;
+int32_t IOExecFileClose(IOExecFileHandle fileHandle) {
+  delete fileHandle;
   return 0;
 }
 
-int32_t IOExecFileTruncate(IOExecFileHandle pFileHandle, size_t newSize) {
-  int ret = ftruncate(pFileHandle->fd, newSize);
-  if (ret != 0) {
-    LOG(WARNING) << "truncate failed ret=" << ret;
+int32_t IOExecFileTruncate(IOExecFileHandle fileHandle, size_t newSize) {
+
+  if (!fileHandle) {
+    LOG(ERROR) << "Rejecting truncate with null file handle";
+    return -EINVAL;
   }
+  
+  int ret = ftruncate(fileHandle->fd, newSize);
+  if (ret != 0) {
+    ret = -errno;
+    LOG(ERROR) << "truncate failed ret=" << errno;
+  }
+
+  return ret;
 }
 
 
@@ -323,6 +332,11 @@ int32_t IOExecFileWrite(IOExecFileHandle fileHandle, const gIOBatch *batch,
 
   if (!eventFdHandle || (eventFdHandle->fd[1] == gobjfs::os::FD_INVALID)) {
     LOG(ERROR) << "Rejecting write with invalid eventfd";
+    return -EINVAL;
+  }
+
+  if (!fileHandle) {
+    LOG(ERROR) << "Rejecting write with invalid file handle";
     return -EINVAL;
   }
 
@@ -368,6 +382,11 @@ int32_t IOExecFileRead(IOExecFileHandle fileHandle, const gIOBatch *batch,
 
   if (!eventFdHandle || (eventFdHandle->fd[1] == gobjfs::os::FD_INVALID)) {
     LOG(ERROR) << "Rejecting read with invalid eventfd";
+    return -EINVAL;
+  }
+
+  if (!fileHandle) {
+    LOG(ERROR) << "Rejecting write with invalid file handle";
     return -EINVAL;
   }
 
@@ -479,6 +498,10 @@ EXTERNC {
                                         event_t eventFd) {
     return IOExecFileDelete(service_handle, name, cid,
                             (IOExecEventFdHandle)eventFd);
+  }
+
+  int32_t gobjfs_ioexecfile_file_truncate(handle_t handle, size_t new_size) {
+    return IOExecFileTruncate(handle, new_size);
   }
 
   int32_t gobjfs_ioexecfile_file_close(handle_t handle) {

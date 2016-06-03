@@ -34,6 +34,8 @@ but WITHOUT ANY WARRANTY of any kind.
 TEST(IOExecFile, NoInitDone) {
   IOExecServiceHandle serviceHandle = nullptr;
 
+  int32_t ret;
+
   auto evHandle = IOExecEventFdOpen(serviceHandle);
   EXPECT_EQ(evHandle, nullptr);
 
@@ -43,7 +45,10 @@ TEST(IOExecFile, NoInitDone) {
   auto handle = IOExecFileOpen(serviceHandle, "/tmp/abc", O_RDWR | O_CREAT);
   EXPECT_EQ(handle, nullptr);
 
-  auto ret = IOExecFileDelete(serviceHandle, "/tmp/abc", 0, evHandle);
+  ret = IOExecFileTruncate(handle, 512);
+  EXPECT_NE(ret, 0);
+
+  ret = IOExecFileDelete(serviceHandle, "/tmp/abc", 0, evHandle);
   EXPECT_NE(ret, 0);
 
   ret = IOExecFileServiceDestroy(serviceHandle);

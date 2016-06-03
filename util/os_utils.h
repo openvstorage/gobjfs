@@ -50,6 +50,7 @@ inline bool IsDirectIOAligned(uint64_t number) {
 
 inline size_t RoundToNext512(size_t numToRound) {
   constexpr uint32_t multiple = DirectIOSize;
+  // another alternative (-((-number) & -(512)));
   return (numToRound + multiple - 1) & ~(multiple - 1);
 }
 

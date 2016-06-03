@@ -183,6 +183,11 @@ EXTERNC {
                                         completion_id_t, event_t);
 
   // @param handle returned from "file_open"
+  // @param new size for file
+  // @return 0 on success, else negative number
+  int32_t gobjfs_ioexecfile_file_truncate(handle_t, size_t new_size);
+
+  // @param handle returned from "file_open"
   // @return 0 on successful close, else negative number
   int32_t gobjfs_ioexecfile_file_close(handle_t);
 
