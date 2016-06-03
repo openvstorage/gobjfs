@@ -81,6 +81,8 @@ public:
 
   virtual void TearDown() override {
     close(fd);
+    int ret = ::unlink(fileTemplate);
+    assert(ret == 0);
   }
 
   virtual ~IOExecFileInitTest() {
