@@ -6,6 +6,7 @@
 namespace gobjfs {
 
 using gobjfs::os::FD_INVALID;
+using gobjfs::os::IsDirectIOAligned;
 
 std::ostream &operator<<(std::ostream &os, FileOp op) {
   switch (op) {
