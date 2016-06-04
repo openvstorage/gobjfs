@@ -25,6 +25,9 @@ std::ostream &operator<<(std::ostream &os, FileOp op) {
   case FileOp::Delete:
     os << "Delete";
     break;
+  case FileOp::NonAlignedWrite:
+    os << "NonAlignedWrite";
+    break;
   default:
     os << "Unknown";
     break;
@@ -73,6 +76,11 @@ int32_t FilerJob::prepareCallblock(iocb *cb) {
 
 bool FilerJob::isValid(std::ostringstream &ostr) {
   bool isValid = true;
+
+  if ((op_ != FileOp::Read) && (op_ != FileOp::Write))
+  {
+    return isValid;
+  }
 
   if (!gobjfs::os::IsFdOpen(fd_)) {
     ostr << ":fd=" << fd_ << " has errno=" << errno;

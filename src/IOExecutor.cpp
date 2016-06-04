@@ -31,6 +31,7 @@ but WITHOUT ANY WARRANTY of any kind.
 
 using namespace gobjfs;
 using namespace gobjfs::stats;
+using gobjfs::os::IsDirectIOAligned;
 
 #define EPOLL_MAXEVENT 10 // arbitrary number
 
@@ -135,7 +136,7 @@ void IOExecutor::Config::print() const {
 
 void IOExecutor::Statistics::incrementOps(FilerJob *job) {
 
-  if (job->op_ == FileOp::Write) {
+  if ((job->op_ == FileOp::Write) || (job->op_ == FileOp::NonAlignedWrite)) {
 
     assert(job->size_);
     write_.numOps_ ++;
@@ -547,6 +548,16 @@ int32_t IOExecutor::ProcessFdQueue() {
           LOG(ERROR) << "delete file=" << job->fileName_
                      << " failed errno=" << job->retcode_;
         }
+      } else if (job->op_ == FileOp::NonAlignedWrite) {
+        job->setWaitTime();
+        stats_.numSubmitted_ ++;
+        ssize_t writeSz = ::pwrite(job->fd_, job->buffer_, job->size_, job->offset_);
+        if (writeSz != job->size_) {
+          job->retcode_ = -errno;
+          LOG(ERROR) << "op=" << job->op_ 
+            << " failed for job=" << (void *)job
+            << " errno=" << job->retcode_;
+        }
       } else {
         LOG(ERROR) << "unknown op=" << job->op_ << " for job=" << (void *)job;
         job->retcode_ = -EINVAL;
@@ -578,6 +589,14 @@ int IOExecutor::submitTask(FilerJob *job, bool blocking) {
       LOG(ERROR) << "shutting down. rejecting job=" << (void *)job;
       ret = -EAGAIN;
       break;
+    }
+
+    if (!IsDirectIOAligned(job->size_)) {
+      if (job->op_ == FileOp::Write) {
+        job->op_ = FileOp::NonAlignedWrite;
+      } else if (job->op_ == FileOp::Read) {
+        // TODO
+      }
     }
 
     if ((job->op_ == FileOp::Delete) || (job->op_ == FileOp::Sync)) {
