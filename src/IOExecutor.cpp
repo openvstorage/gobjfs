@@ -136,7 +136,7 @@ void IOExecutor::Config::print() const {
 
 void IOExecutor::Statistics::incrementOps(FilerJob *job) {
 
-  if ((job->op_ == FileOp::Write) || (job->op_ == FileOp::NonAlignedWrite)) {
+  if (job->op_ == FileOp::Write) {
 
     assert(job->size_);
     write_.numOps_ ++;
@@ -145,6 +145,16 @@ void IOExecutor::Statistics::incrementOps(FilerJob *job) {
     write_.serviceTime_ = job->serviceTime();
     write_.waitHist_ = job->waitTime();
     write_.serviceHist_ = job->serviceTime();
+
+  } else if (job->op_ == FileOp::NonAlignedWrite) {
+
+    assert(job->size_);
+    nonAlignedWrite_.numOps_ ++;
+    nonAlignedWrite_.numBytes_ += job->size_;
+    nonAlignedWrite_.waitTime_ = job->waitTime();
+    nonAlignedWrite_.serviceTime_ = job->serviceTime();
+    nonAlignedWrite_.waitHist_ = job->waitTime();
+    nonAlignedWrite_.serviceHist_ = job->serviceTime();
 
   } else if (job->op_ == FileOp::Read) {
 
@@ -186,7 +196,9 @@ std::string IOExecutor::Statistics::getState() const {
   std::ostringstream s;
 
   // json format
-  s << "{\"stats\":{\"write\":"   << write_.getState() 
+  s << "{\"stats\":{"
+    << "\"write\":"   << write_.getState() 
+    << ",\"nonAlignedWrite\":"   << nonAlignedWrite_.getState() 
     << ",\"read\":"    << read_.getState() 
     << ",\"delete\":"  << delete_.getState() 
     << ",\"numQueued\":" << numQueued_
@@ -323,6 +335,7 @@ void IOExecutor::execute() {
                 << ":minSubmitSize=" << minSubmitSize_
                 << ":numReads=" << stats_.read_.numOps_
                 << ":numWrites=" << stats_.write_.numOps_ 
+                << ":numNonAlignedWrites=" << stats_.nonAlignedWrite_.numOps_ 
                 << ":state=" << state_;
             submitterWaitingForNewRequests_ = false;
           }
@@ -551,12 +564,14 @@ int32_t IOExecutor::ProcessFdQueue() {
       } else if (job->op_ == FileOp::NonAlignedWrite) {
         job->setWaitTime();
         stats_.numSubmitted_ ++;
-        ssize_t writeSz = ::pwrite(job->fd_, job->buffer_, job->size_, job->offset_);
-        if (writeSz != job->size_) {
+        ssize_t writeSz = ::pwrite(job->fd_, job->buffer_, job->userSize_, job->offset_);
+        if (writeSz != job->userSize_) {
           job->retcode_ = -errno;
           LOG(ERROR) << "op=" << job->op_ 
             << " failed for job=" << (void *)job
             << " errno=" << job->retcode_;
+        } else {
+          job->retcode_ = 0;
         }
       } else {
         LOG(ERROR) << "unknown op=" << job->op_ << " for job=" << (void *)job;
@@ -591,7 +606,7 @@ int IOExecutor::submitTask(FilerJob *job, bool blocking) {
       break;
     }
 
-    if (!IsDirectIOAligned(job->size_)) {
+    if (!IsDirectIOAligned(job->userSize_)) {
       if (job->op_ == FileOp::Write) {
         job->op_ = FileOp::NonAlignedWrite;
       } else if (job->op_ == FileOp::Read) {
@@ -599,7 +614,9 @@ int IOExecutor::submitTask(FilerJob *job, bool blocking) {
       }
     }
 
-    if ((job->op_ == FileOp::Delete) || (job->op_ == FileOp::Sync)) {
+    if ((job->op_ == FileOp::Delete) || 
+      (job->op_ == FileOp::Sync) ||
+      (job->op_ == FileOp::NonAlignedWrite)) {
       // increment size before push, to prevent race conditions
       job->setSubmitTime();
       job->executor_ = this;

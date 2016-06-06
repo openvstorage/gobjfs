@@ -22,6 +22,7 @@ but WITHOUT ANY WARRANTY of any kind.
 #include <gIOExecFile.h>
 #include <gMempool.h>
 #include <glog/logging.h>
+#include <util/os_utils.h>
 #include <gparse.h>
 
 #include <fcntl.h>
@@ -32,6 +33,7 @@ but WITHOUT ANY WARRANTY of any kind.
 using gobjfs::IOExecutor;
 using gobjfs::FilerJob;
 using gobjfs::FileOp;
+using gobjfs::os::IsDirectIOAligned;
 
 // objpool holds freelist of batches with only one fragment
 static gobjfs::MempoolSPtr objpool =
@@ -64,8 +66,8 @@ gIOBatch *gIOBatchAlloc(size_t count) {
 void gIOBatchFree(gIOBatch *ptr) {
   for (size_t idx = 0; idx < ptr->count; idx++) {
     gIOExecFragment &frag = ptr->array[idx];
-    assert((frag.size & (4096 - 1)) == 0);
-    assert((frag.offset & (4096 - 1)) == 0);
+    //assert(IsDirectIOAligned(frag.size));
+    assert(IsDirectIOAligned(frag.offset));
     assert(frag.completionId != 0);
 
     gMempool_free(frag.addr);
@@ -287,7 +289,7 @@ IOExecFileHandle IOExecFileOpen(IOExecServiceHandle serviceHandle,
     return newHandle;
   }
 
-  int newFlags = flags | O_DIRECT;
+  int newFlags = flags; // TODO : add O_DIRECT
 
   int mode = S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH;
 

@@ -129,7 +129,7 @@ public:
 
     std::atomic<uint64_t> numQueued_{0};    // multi-thread writers
     std::atomic<uint64_t> numSubmitted_{0}; // multi-thread writers
-    uint64_t numCompleted_{0};
+    std::atomic<uint64_t> numCompleted_{0}; // multi-thread writers
 
     // updated by completionThread
     struct OpStats {
@@ -147,6 +147,7 @@ public:
 
     // maintain per-op statistics
     OpStats write_; 
+    OpStats nonAlignedWrite_; 
     OpStats read_; 
     OpStats delete_;
 
