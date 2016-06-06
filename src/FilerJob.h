@@ -17,6 +17,7 @@ enum class FileOp : int32_t {
   Read = 2,
   Sync = 3,
   Delete = 4,
+  NonAlignedWrite = 5,
   // STOP - ENSURE u add to the ostream operator
   // when you change this
 };
