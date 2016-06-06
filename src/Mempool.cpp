@@ -32,13 +32,6 @@ class AlignedMempool : public Mempool {
 private:
   const size_t alignSize_;
 
-  struct Stats {
-    std::atomic<uint64_t> bytesAllocated_{0};
-    std::atomic<uint64_t> numAllocCalls_{0};
-    std::atomic<uint64_t> numFailedAllocCalls_{0};
-    std::atomic<uint64_t> numFreeCalls_{0};
-  } stats_;
-
 public:
   AlignedMempool(size_t alignSize = gobjfs::os::DirectIOSize);
 
