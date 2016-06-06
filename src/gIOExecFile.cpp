@@ -32,6 +32,7 @@ but WITHOUT ANY WARRANTY of any kind.
 using gobjfs::IOExecutor;
 using gobjfs::FilerJob;
 using gobjfs::FileOp;
+using gobjfs::os::IsDirectIOAligned;
 
 // objpool holds freelist of batches with only one fragment
 static gobjfs::MempoolSPtr objpool =
@@ -64,8 +65,8 @@ gIOBatch *gIOBatchAlloc(size_t count) {
 void gIOBatchFree(gIOBatch *ptr) {
   for (size_t idx = 0; idx < ptr->count; idx++) {
     gIOExecFragment &frag = ptr->array[idx];
-    assert((frag.size & (4096 - 1)) == 0);
-    assert((frag.offset & (4096 - 1)) == 0);
+    assert(IsDirectIOAligned(frag.size));
+    assert(IsDirectIOAligned(frag.offset));
     assert(frag.completionId != 0);
 
     gMempool_free(frag.addr);
