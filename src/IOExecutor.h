@@ -111,6 +111,8 @@ public:
     // maxRequestQueueSize need not be more than io contexts available
     uint32_t maxRequestQueueSize_;
 
+    uint32_t maxFdQueueSize_;
+
     void setDerivedParam();
 
     explicit Config(); // use defaults
@@ -152,7 +154,7 @@ public:
     OpStats delete_;
 
     gobjfs::stats::MaxValue<uint32_t> maxRequestQueueSize_;
-    gobjfs::stats::MaxValue<uint32_t> maxFinishQueueSize_;
+    gobjfs::stats::MaxValue<uint32_t> maxFdQueueSize_;
 
     gobjfs::stats::StatsCounter<int64_t> numProcessedInLoop_;
 
@@ -226,6 +228,7 @@ private:
 
   // for metadata ops (create, delete, sync)
   std::thread fdQueueThread_;
+  ConditionWrapper fdQueueHasSpace_;
   SemaphoreWrapper fdQueueCond_; // signals if fdQueue has new elem
   boost::lockfree::queue<FilerJob *> fdQueue_;
   std::atomic<int32_t> fdQueueSize_{0};

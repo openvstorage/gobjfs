@@ -123,11 +123,13 @@ IOExecutor::Config::Config(uint32_t queueDepth) : queueDepth_(queueDepth) {
 
 void IOExecutor::Config::setDerivedParam() {
   maxRequestQueueSize_ = queueDepth_ / 5;
+  maxFdQueueSize_ = queueDepth_;
 }
 
 void IOExecutor::Config::print() const {
   LOG(INFO) << " \"queueDepth\":" << queueDepth_
             << ",\"maxRequestQueueSize\":" << maxRequestQueueSize_
+            << ",\"maxFdQueueSize\":" << maxFdQueueSize_
             << ",\"minSubmitSize\":" << minSubmitSize_
             << ",\"noSubmitterThread\":" << noSubmitterThread_;
 }
@@ -205,6 +207,7 @@ std::string IOExecutor::Statistics::getState() const {
     << ",\"numSubmitted\":" << numSubmitted_ 
     << ",\"numCompleted\":" << numCompleted_
     << ",\"maxRequestQueueSize\":" << maxRequestQueueSize_
+    << ",\"maxFdQueueSize\":" << maxFdQueueSize_
     << ",\"idleLoop\":" << idleLoop_
     << ",\"numProcessedInLoop\":" << numProcessedInLoop_
     << ",\"numCompletionEvents\":" << numCompletionEvents_
@@ -588,6 +591,9 @@ int32_t IOExecutor::ProcessFdQueue() {
     }
 
     fdQueueSize_--;
+    if (fdQueueSize_ >= (int32_t)config_.maxRequestQueueSize_) {
+      fdQueueHasSpace_.wakeup();
+    }
   }
 
   stats_.fdQueueThread_.getThreadStats();
@@ -609,6 +615,7 @@ int IOExecutor::submitTask(FilerJob *job, bool blocking) {
     if (!IsDirectIOAligned(job->userSize_)) {
       if (job->op_ == FileOp::Write) {
         job->op_ = FileOp::NonAlignedWrite;
+        blocking = true;
       } else if (job->op_ == FileOp::Read) {
         // TODO
       }
@@ -617,12 +624,24 @@ int IOExecutor::submitTask(FilerJob *job, bool blocking) {
     if ((job->op_ == FileOp::Delete) || 
       (job->op_ == FileOp::Sync) ||
       (job->op_ == FileOp::NonAlignedWrite)) {
+
+      if (fdQueueSize_ > (int32_t)config_.maxRequestQueueSize_) {
+        if (!blocking) {
+          LOG(ERROR) << "FD Queue full.  rejecting nonblocking job=" << (void *)job;
+          ret = job->retcode_ = -EAGAIN;
+          break;
+        } else {
+          stats_.requestQueueFull_++;
+          fdQueueHasSpace_.pause();
+        }
+      }
+
       // increment size before push, to prevent race conditions
       job->setSubmitTime();
       job->executor_ = this;
       stats_.numQueued_++;
 
-      fdQueueSize_++;
+      stats_.maxFdQueueSize_ = ++fdQueueSize_;
 
       bool pushReturn = false;
       do {
@@ -635,49 +654,56 @@ int IOExecutor::submitTask(FilerJob *job, bool blocking) {
       break;
     }
 
-    if (requestQueueSize_ > (int32_t)config_.maxRequestQueueSize_) {
-      if (!blocking) {
-        LOG(ERROR) << "Queue full.  rejecting nonblocking job=" << (void *)job;
-        ret = job->retcode_ = -EAGAIN;
-        break;
-      } else {
-        stats_.requestQueueFull_++;
-        requestQueueHasSpace_.pause();
-      }
-    }
+    else if ((job->op_ == FileOp::Write) || 
+      (job->op_ == FileOp::Read)) {
 
-    // set FilerJob variables and increment queue size,
-    // before pushing into queue
-    // otherwise asserts fail because completion thread
-    // also changes FilerJob
-    stats_.maxRequestQueueSize_ = ++requestQueueSize_;
-    job->setSubmitTime();
-    job->executor_ = this;
-    stats_.numQueued_++;
-
-    bool pushReturn = false;
-    do {
-      pushReturn = requestQueue_.push(job);
-      if (pushReturn == false) {
-        LOG_EVERY_N(WARNING, 10) << "push into requestQueue failing";
-      }
-    } while (pushReturn == false);
-
-    // if context is free & num jobs > min, wakeup
-
-    if (config_.noSubmitterThread_) {
-      if (requestQueueSize_ >= (int32_t)minSubmitSize_) {
-        std::unique_lock<std::mutex> lck(submitterCond_.mutex_);
-        if (requestQueueSize_ >= (int32_t)minSubmitSize_)
-          ProcessRequestQueue();
-      }
-    } else {
-      if (submitterWaitingForNewRequests_) {
-        std::unique_lock<std::mutex> lck(submitterCond_.mutex_);
-        if (submitterWaitingForNewRequests_) {
-          submitterCond_.cond_.notify_one();
+      if (requestQueueSize_ > (int32_t)config_.maxRequestQueueSize_) {
+        if (!blocking) {
+          LOG(ERROR) << "Async Queue full.  rejecting nonblocking job=" << (void *)job;
+          ret = job->retcode_ = -EAGAIN;
+          break;
+        } else {
+          stats_.requestQueueFull_++;
+          requestQueueHasSpace_.pause();
         }
       }
+
+      // set FilerJob variables and increment queue size,
+      // before pushing into queue
+      // otherwise asserts fail because completion thread
+      // also changes FilerJob
+      stats_.maxRequestQueueSize_ = ++requestQueueSize_;
+      job->setSubmitTime();
+      job->executor_ = this;
+      stats_.numQueued_++;
+
+      bool pushReturn = false;
+      do {
+        pushReturn = requestQueue_.push(job);
+        if (pushReturn == false) {
+          LOG_EVERY_N(WARNING, 10) << "push into requestQueue failing";
+        }
+      } while (pushReturn == false);
+
+      // if context is free & num jobs > min, wakeup
+
+      if (config_.noSubmitterThread_) {
+        if (requestQueueSize_ >= (int32_t)minSubmitSize_) {
+          std::unique_lock<std::mutex> lck(submitterCond_.mutex_);
+          if (requestQueueSize_ >= (int32_t)minSubmitSize_)
+            ProcessRequestQueue();
+        }
+      } else {
+        if (submitterWaitingForNewRequests_) {
+          std::unique_lock<std::mutex> lck(submitterCond_.mutex_);
+          if (submitterWaitingForNewRequests_) {
+            submitterCond_.cond_.notify_one();
+          }
+        }
+      }
+    } else {
+      LOG(ERROR) << "bad op=" << job->op_;
+      ret = -EAGAIN;
     }
   } while (0);
 
