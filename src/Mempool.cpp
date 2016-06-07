@@ -26,18 +26,15 @@ but WITHOUT ANY WARRANTY of any kind.
 
 namespace gobjfs {
 
+// boost lockfree queue becomes lockfree when
+// queue size is fixed at start
+static constexpr size_t DefaultQueueSize = 200;
+
 // ==================================
 
 class AlignedMempool : public Mempool {
 private:
   const size_t alignSize_;
-
-  struct Stats {
-    std::atomic<uint64_t> bytesAllocated_{0};
-    std::atomic<uint64_t> numAllocCalls_{0};
-    std::atomic<uint64_t> numFailedAllocCalls_{0};
-    std::atomic<uint64_t> numFreeCalls_{0};
-  } stats_;
 
 public:
   AlignedMempool(size_t alignSize = gobjfs::os::DirectIOSize);
@@ -73,7 +70,7 @@ void AlignedMempool::Free(void *ptr) {
 
 std::string AlignedMempool::GetStats() const {
   std::ostringstream os;
-  os << "for mempool thisptr=" << (void *)this
+  os << "for alignedmempool thisptr=" << (void *)this
      << ":bytes alloc=" << stats_.bytesAllocated_
      << ":num alloc=" << stats_.numAllocCalls_
      << ":num failed=" << stats_.numFailedAllocCalls_
@@ -84,7 +81,8 @@ std::string AlignedMempool::GetStats() const {
 // =======================
 
 class ObjectMempool : public Mempool {
-  boost::lockfree::queue<void *> freeList{200};
+
+  boost::lockfree::queue<void *> freeList{DefaultQueueSize};
   size_t objSize_{0};
 
 public:
@@ -96,18 +94,35 @@ public:
     bool yes = false;
     if (!freeList.empty()) {
       yes = freeList.pop(ptr);
+      stats_.numReused_ ++;
     }
     if (!yes) {
-      return malloc(objSize_);
+      ptr =  malloc(objSize_);
     }
+    stats_.numAllocCalls_ ++;
+    stats_.bytesAllocated_ += allocSize;
     return ptr;
   }
 
-  virtual void Free(void *ptr) override { freeList.push(ptr); }
+  virtual void Free(void *ptr) override 
+  { 
+    bool ret = freeList.push(ptr);
+    if (ret == false) {
+      free(ptr);
+    } 
+    stats_.numFreeCalls_ ++;
+  }
 
-  virtual std::string GetStats() const override {
-    std::string str;
-    return str;
+  virtual std::string GetStats() const override
+  {
+    std::ostringstream os;
+    os << "for objmempool thisptr=" << (void*)this
+      << ":bytes alloc=" << stats_.bytesAllocated_
+      << ":num alloc=" << stats_.numAllocCalls_
+      << ":num reused=" << stats_.numReused_
+      << ":num free=" << stats_.numFreeCalls_
+      << std::endl;
+    return os.str();
   }
 
   virtual size_t allocSize() override { return objSize_; }

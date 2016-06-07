@@ -25,13 +25,14 @@ but WITHOUT ANY WARRANTY of any kind.
 namespace gobjfs {
 
 class Mempool {
-private:
+protected:
 
   struct Stats {
     std::atomic<uint64_t> bytesAllocated_{0};
     std::atomic<uint64_t> numAllocCalls_{0};
     std::atomic<uint64_t> numFailedAllocCalls_{0};
     std::atomic<uint64_t> numFreeCalls_{0};
+    std::atomic<uint64_t> numReused_{0};
   } stats_;
 
 public:
