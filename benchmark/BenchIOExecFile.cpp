@@ -257,7 +257,7 @@ struct FixedSizeFileManager {
 
     try {
       auto str = Directory.at(index);
-      handle = IOExecFileOpen(serviceHandle, str.c_str(), O_RDWR);
+      handle = IOExecFileOpen(serviceHandle, str.c_str(), O_DIRECT | O_RDONLY);
       if (config.doMemCheck && actualNumber) {
         auto filename = basename(str.c_str());
         auto ret = parseFileName(filename, *actualNumber);
@@ -409,8 +409,7 @@ static int wait_for_iocompletion(int epollfd, int efd, ThreadCtx *ctx) {
             if (ext->isWrite()) {
               ctx->totalWriteLatency = ext->timer.elapsedMicroseconds();
               ctr++;
-              IOExecFileTruncate(ext->handle, ext->batch->array[0].size -
-config.shortenFileSize);
+              //IOExecFileTruncate(ext->handle, ext->batch->array[0].size - -config.shortenFileSize);
               if (iostatus.errorCode != 0) {
                 ctx->failedWrites ++;        
               }
@@ -552,6 +551,8 @@ static void doRandomReadWrite(ThreadCtx *ctx) {
 
   uint64_t totalIO = 0;
 
+  uint32_t sleepTimeMicrosec = 1;
+
   while (totalIO < ctx->perThreadIO) {
     IOExecFileHandle handle{nullptr};
 
@@ -632,16 +633,15 @@ static void doRandomReadWrite(ThreadCtx *ctx) {
 
       if (ext->isWrite()) {
         frag.offset = 0;
-        frag.size = config.blockSize * config.maxBlocks;
+        frag.size = (config.blockSize * config.maxBlocks) - config.shortenFileSize; 
         frag.addr = (caddr_t)gMempool_alloc(frag.size);
         memset(frag.addr, 'a' + (ext->actualFilenum % 26), frag.size);
         assert(frag.addr != nullptr);
       } else if (ext->isRead()) {
         uint64_t blockNum = blockGenerator(seedGen);
         frag.offset = blockNum * config.blockSize;
-        frag.size = config.blockSize;
+        frag.size = config.blockSize - config.shortenFileSize;
         frag.addr = (caddr_t)gMempool_alloc(frag.size);
-        frag.size -= config.shortenFileSize; // TEST unaligned reads
         assert(frag.addr != nullptr);
       } else if (ext->isDelete()) {
         // do nothing
@@ -666,8 +666,10 @@ static void doRandomReadWrite(ThreadCtx *ctx) {
       }
 
       if (ret == -EAGAIN) {
-        usleep(1);
-        LOG(WARNING) << "too fast";
+	if (sleepTimeMicrosec < 10) 
+          sleepTimeMicrosec *= 2;
+        usleep(sleepTimeMicrosec);
+        LOG(WARNING) << "too fast sleep=" << sleepTimeMicrosec;
       } else {
         if (StartCounting) {
           totalIO++;
