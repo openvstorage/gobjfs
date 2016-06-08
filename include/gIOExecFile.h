@@ -40,6 +40,7 @@ struct gIOExecFragment {
                               * In both cases, memory is freed on calling gIOBatchFree
                               */
   caddr_t addr;
+  int socketFd;
 };
 
 struct gIOBatch {
@@ -117,6 +118,7 @@ int32_t IOExecFileWrite(IOExecFileHandle fileHandle, const gIOBatch *pIOBatch,
  */
 int32_t IOExecFileRead(IOExecFileHandle fileHandle, const gIOBatch *pIOBatch,
                        IOExecEventFdHandle eventFdHandle);
+
 
 /**
  *

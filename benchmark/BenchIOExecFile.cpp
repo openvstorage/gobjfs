@@ -63,6 +63,7 @@ struct Config {
   uint32_t totalReadWriteScale = 2000;
   bool newInstance = false;
   std::vector<std::string> dirPrefix;
+  int sendReadDataToPort;
 
   int readConfig(const std::string &configFileName) {
     options_description desc("allowed options");
@@ -84,6 +85,9 @@ struct Config {
         value<uint32_t>(&totalReadWriteScale)->required(),
         "total scale")("new_instance", value<bool>(&newInstance)->required(),
                        "create files from scratch")(
+        "send_read_data_to_port",
+        value<int32_t>(&sendReadDataToPort)->required(),
+        "send data which is read to a socket")(
         "mountpoint",
         value<std::vector<std::string>>(&dirPrefix)->required()->multitoken(),
         "ssd mount point");
@@ -314,6 +318,7 @@ struct ThreadCtx {
   uint32_t minFiles;
   uint32_t maxFiles;
   uint32_t maxBlocks;
+  int socketFd{-1};
 
   uint64_t perThreadIO{0};
 
@@ -326,6 +331,12 @@ struct ThreadCtx {
   gobjfs::os::ShutdownNotifier ioCompletionThreadShutdown;
 
   int writePercent{0}; // between 0 -100
+
+  ~ThreadCtx()
+  {
+    if (socketFd != -1) 
+      close(socketFd);
+  }
 };
 
 static gobjfs::MempoolSPtr objpool;
@@ -629,12 +640,14 @@ static void doRandomReadWrite(ThreadCtx *ctx) {
         frag.addr = (caddr_t)gMempool_alloc(frag.size);
         memset(frag.addr, 'a' + (ext->actualFilenum % 26), frag.size);
         assert(frag.addr != nullptr);
+        frag.socketFd = -1;
       } else if (ext->isRead()) {
         uint64_t blockNum = blockGenerator(seedGen);
         frag.offset = blockNum * config.blockSize;
         frag.size = config.blockSize;
         frag.addr = (caddr_t)gMempool_alloc(frag.size);
         assert(frag.addr != nullptr);
+        frag.socketFd = -1;
       } else if (ext->isDelete()) {
         // do nothing
       } else {
@@ -699,12 +712,43 @@ static void doRandomReadWrite(ThreadCtx *ctx) {
   close(epollfd);
 }
 
+#include <stdio.h> // malloc
+#include <unistd.h> // write
+#include <sys/socket.h>
+#include <netinet/in.h> 
+#include <arpa/inet.h> //  inet_addr
+
+static int ConnectSocket(std::string& addr, int port, int& sock_fd)
+{
+  sock_fd = socket(PF_INET, SOCK_STREAM, 0); 
+
+  struct sockaddr_in server_addr;
+  socklen_t server_addr_size;
+
+  server_addr.sin_family = AF_INET;
+  server_addr.sin_port = htons(port);
+  server_addr.sin_addr.s_addr = inet_addr(addr.c_str());
+  memset(server_addr.sin_zero, '\0', sizeof(server_addr.sin_zero));
+  server_addr_size = sizeof(server_addr);
+
+  int err = connect(sock_fd, (struct sockaddr*)&server_addr, server_addr_size);
+  if (err < 0)  
+  {
+    close(sock_fd);
+    return errno;
+  }
+  return err;
+}
+
+
+
 int main(int argc, char *argv[]) {
   google::InitGoogleLogging(argv[0]);
 
   config.readConfig("./benchioexec.conf");
 
   auto serviceHandle = IOExecFileServiceInit("./gioexecfile.conf");
+
 
   gMempool_init(config.alignSize);
 
@@ -720,12 +764,17 @@ int main(int argc, char *argv[]) {
 
   std::vector<std::future<void>> futVec;
 
+  std::string serverName = "127.0.0.1";
+
   for (decltype(config.maxThr) thr = 0; thr < config.maxThr; thr++) {
     ThreadCtx *ctx = new ThreadCtx;
     ctx->serviceHandle = serviceHandle;
     ctx->maxBlocks = config.maxBlocks;
     ctx->perThreadIO = config.perThreadIO;
     ctx->writePercent = config.writePercent;
+
+    int err = ConnectSocket(serverName, config.sendReadDataToPort, ctx->socketFd);
+    assert(err == 0);
 
     ctx->minFiles = 0;
     ctx->maxFiles = config.maxFiles;
@@ -745,6 +794,7 @@ int main(int argc, char *argv[]) {
     totalDeleteLatency += elem->totalDeleteLatency;
     totalFailedReads += elem->failedReads;
     totalFailedWrites += elem->failedWrites;
+    delete elem;
   }
 
   gobjfs::os::CpuStats endCpuStats;

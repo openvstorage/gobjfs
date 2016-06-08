@@ -1,6 +1,8 @@
 #include <FilerJob.h>
 #include <glog/logging.h>
 #include <unistd.h>
+#include <sys/types.h>
+#include <sys/socket.h>
 #include <util/os_utils.h>
 
 namespace gobjfs {
@@ -108,6 +110,31 @@ void FilerJob::reset() {
   gIOStatus iostatus;
   iostatus.completionId = completionId_;
   iostatus.errorCode = retcode_;
+
+  if ((socketFd_ != -1) && (op_ == FileOp::Read)) {
+
+    bool done = false;
+    char* writebuf = buffer_;
+    ssize_t toWriteSz = size_;
+    do {
+      ssize_t writeSz = send(socketFd_, writebuf, toWriteSz, MSG_NOSIGNAL);
+
+      if (writeSz < 0) {
+        if ((errno == EAGAIN) || (errno == EINTR)) {
+          // will continue
+        } else {
+          LOG(ERROR) << "write to socket=" << socketFd_ << " failed errno=" << errno;
+          done = true;
+        }
+      } else if (writeSz != toWriteSz) {
+        writebuf += writeSz;
+        toWriteSz -= writeSz;
+        assert(toWriteSz >= 0);
+      } else {
+        done = true;
+      }
+    } while (done);
+  }
 
   if (write(completionFd_, &iostatus, sizeof(iostatus)) != sizeof(iostatus)) {
     LOG(ERROR) << "For job=" << (void *)this

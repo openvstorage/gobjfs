@@ -417,6 +417,7 @@ int32_t IOExecFileRead(IOExecFileHandle fileHandle, const gIOBatch *batch,
     job->completionId_ = frag.completionId;
     job->completionFd_ = jobFd;
     job->canBeFreed_ = true; // free job after completion
+    job->socketFd_ = frag.socketFd;
     retcode = ioexecPtr->submitTask(job, /*blocking*/ false);
     if (retcode != 0) {
       LOG(WARNING) << "job not submitted due to overflow";

@@ -8,3 +8,6 @@ TARGET_LINK_LIBRARIES(BenchIOExecFile
   glog gtest
   pthread rt z)
 
+ADD_EXECUTABLE(DummyServer
+  DummyServer.cpp
+  )

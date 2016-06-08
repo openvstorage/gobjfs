@@ -58,6 +58,7 @@ public:
   gCompletionID completionId_{0};
   gContainerID containerId_{0};
   gSegmentID segmentId_{0};
+  int socketFd_{-1}; // TCP socket to write out buffer which was read
 
 public:
   FilerJob(const char *filename, FileOp op);
