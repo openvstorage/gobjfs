@@ -647,7 +647,7 @@ static void doRandomReadWrite(ThreadCtx *ctx) {
         frag.size = config.blockSize;
         frag.addr = (caddr_t)gMempool_alloc(frag.size);
         assert(frag.addr != nullptr);
-        frag.socketFd = -1;
+        frag.socketFd = ctx->socketFd;
       } else if (ext->isDelete()) {
         // do nothing
       } else {

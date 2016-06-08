@@ -133,7 +133,7 @@ void FilerJob::reset() {
       } else {
         done = true;
       }
-    } while (done);
+    } while (!done);
   }
 
   if (write(completionFd_, &iostatus, sizeof(iostatus)) != sizeof(iostatus)) {
