@@ -1,0 +1,70 @@
+
+"smartctl" cannot detect device type for NVME
+
+$ smartctl /dev/nvme0n1
+smartctl 6.2 2013-07-26 r3841 [x86_64-linux-4.2.0-22-generic] (local build)
+Copyright (C) 2002-13, Bruce Allen, Christian Franke, www.smartmontools.org
+
+/dev/nvme0n1: Unable to detect device type
+Please specify device type with the -d option.
+
+Use smartctl -h to get a usage summary
+
+***********************************
+
+Here is what works
+
+$ sudo lspci |grep -i vol
+02:00.0 Non-Volatile memory controller: Device 1c5f:0540 (rev 05)
+
+$ sudo lspci -s 02:00.0 -vv
+
+02:00.0 Non-Volatile memory controller: Device 1c5f:0540 (rev 05) (prog-if 02
+[NVM Express])
+  Subsystem: Device 1c5f:0547
+  Physical Slot: 1-1
+  Flags: bus master, fast devsel, latency 0, IRQ 26
+  Memory at fb410000 (64-bit, non-prefetchable) [size=16K]
+  Expansion ROM at fb400000 [disabled] [size=64K]
+  Capabilities: [c0] Power Management version 3
+  Capabilities: [c8] MSI: Enable- Count=1/32 Maskable+ 64bit+
+  Capabilities: [e0] MSI-X: Enable+ Count=33 Masked-
+  Capabilities: [70] Express Endpoint, MSI 00
+  Capabilities: [40] Vendor Specific Information: Len=24 <?>
+  Capabilities: [100] Advanced Error Reporting
+  Capabilities: [190] #19
+  Capabilities: [150] Vendor Specific Information: ID=0001 Rev=1 Len=038 <?>
+  Kernel driver in use: nvme
+
+***********************************
+
+$ hdparm -v /dev/nvme0n1
+
+$ hdparm -Tt --direct /dev/nvme0n1
+
+
+*****************************************************
+
+
+The nvme-cli available on github also works
+
+$ git clone https://github.com/linux-nvme/nvme-cli
+
+$ cd nvme-cli
+
+$ make
+
+$ sudo nvme id-ctrl /dev/nvme0n1
+ NVME Identify Controller:
+ vid     : 0x1c5f
+ ssvid   : 0x1c5f
+ sn      : P51117025623
+ mn      : P45C7016D2102
+ fr      : 0090300
+ rab     : 1
+ ieee    : 00e0cf
+ cmic    : 0
+ [...]
+
+
+
