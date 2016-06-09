@@ -74,7 +74,8 @@ static void run_verifyIO() {
   gMempool_init(ALIGNSIZE);
 
   // figure out how to provide the path to config file in a test
-  auto serviceHandle = IOExecFileServiceInit("../../../src/gioexecfile.conf");
+  const char* mnt =  "/mnt/nvme" ;
+  auto serviceHandle = IOExecFileServiceInit("../../../src/gioexecfile.conf", mnt, true);
 
   IOExecFileHandle handle;
   handle = IOExecFileOpen(serviceHandle, "/tmp/abc", O_RDWR | O_CREAT);

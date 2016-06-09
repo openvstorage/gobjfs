@@ -23,6 +23,7 @@ but WITHOUT ANY WARRANTY of any kind.
 #include <gMempool.h>
 #include <glog/logging.h>
 #include <gparse.h>
+#include <FileDistributor.h>
 
 #include <fcntl.h>
 #include <sys/types.h>
@@ -31,6 +32,7 @@ but WITHOUT ANY WARRANTY of any kind.
 
 using gobjfs::IOExecutor;
 using gobjfs::FilerJob;
+using gobjfs::FileDistributor;
 using gobjfs::FileOp;
 using gobjfs::os::IsDirectIOAligned;
 
@@ -92,6 +94,7 @@ void gIOStatusBatchFree(gIOStatusBatch *ptr) { free(ptr); }
 struct IOExecServiceInt {
   IOExecutor::Config ioConfig;
   std::vector<std::shared_ptr<IOExecutor>> ioexecVec;
+  FileDistributor fileDistributor;
 
   int32_t getSlot(const char *fileName) {
     static std::hash<std::string> hasher;
@@ -131,7 +134,10 @@ int32_t IOExecGetStats(IOExecServiceHandle serviceHandle, char* buf,
   return curOffset;
 }
 
-IOExecServiceHandle IOExecFileServiceInit(const char *pConfigFileName) {
+IOExecServiceHandle IOExecFileServiceInit(const char *pConfigFileName,
+  const char* mnt,
+  bool createFlag) {
+
   int ret = 0;
 
   IOExecServiceHandle handle = new IOExecServiceInt;
@@ -166,6 +172,21 @@ IOExecServiceHandle IOExecFileServiceInit(const char *pConfigFileName) {
 
       ret = -EINVAL;
     }
+
+    std::vector<std::string> mountPoints = { mnt };
+
+    if ((ret == 0) && createFlag) {
+      ret = handle->fileDistributor.removeDirectories(mountPoints);
+    }
+
+    uint32_t slots = 1024;
+
+    if (ret == 0)  {
+      ret = handle->fileDistributor.initDirectories(mountPoints, 
+        slots, 
+        createFlag);
+    }
+    
   } while (0);
 
   if (ret != 0) {
@@ -289,15 +310,18 @@ IOExecFileHandle IOExecFileOpen(IOExecServiceHandle serviceHandle,
     return newHandle;
   }
 
+  auto dir = serviceHandle->fileDistributor.getDir(fileName);
+  auto absFileName = dir + fileName;
+
   int newFlags = flags | O_DIRECT;
 
   int mode = S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH;
 
-  int fd = open(fileName, newFlags, mode);
+  int fd = open(absFileName.c_str(), newFlags, mode);
 
   if (fd < 0) {
     int capture_errno = errno;
-    LOG(ERROR) << "failed to open file=" << fileName << " flags=" << newFlags
+    LOG(ERROR) << "failed to open file=" << absFileName << " flags=" << newFlags
                << " mode=" << mode << " errno=" << capture_errno;
   } else {
     CoreId core = serviceHandle->getSlot(fileName);
@@ -395,19 +419,22 @@ int32_t IOExecFileRead(IOExecFileHandle fileHandle, const gIOBatch *batch,
 }
 
 int32_t IOExecFileDeleteSync(IOExecServiceHandle serviceHandle,
-                             const char *filename) {
+                             const char *fileName) {
   (void)serviceHandle;
 
-  int retcode = ::unlink(filename);
+  auto dir = serviceHandle->fileDistributor.getDir(fileName);
+  auto absFileName = dir + fileName;
+
+  int retcode = ::unlink(absFileName.c_str());
   if (retcode != 0) {
     retcode = -errno;
-    LOG(ERROR) << "failed to delete file=" << filename << " errno=" << errno;
+    LOG(ERROR) << "failed to delete file=" << fileName << " errno=" << errno;
   }
   return retcode;
 }
 
 int32_t IOExecFileDelete(IOExecServiceHandle serviceHandle,
-                         const char *filename, gCompletionID completionId,
+                         const char *fileName, gCompletionID completionId,
                          IOExecEventFdHandle eventFdHandle) {
 
   if (!serviceHandle || !serviceHandle->isValid()) {
@@ -420,7 +447,10 @@ int32_t IOExecFileDelete(IOExecServiceHandle serviceHandle,
     return -EINVAL;
   }
 
-  auto job = new FilerJob(filename, FileOp::Delete);
+  auto dir = serviceHandle->fileDistributor.getDir(fileName);
+  auto absFileName = dir + fileName;
+
+  auto job = new FilerJob(absFileName.c_str(), FileOp::Delete);
   job->completionId_ = completionId;
   job->completionFd_ = eventFdHandle->fd[1];
   job->canBeFreed_ = true; // free job after completion
@@ -436,7 +466,8 @@ int32_t IOExecFileDelete(IOExecServiceHandle serviceHandle,
 
 EXTERNC {
   service_handle_t gobjfs_ioexecfile_service_init(const char *cfg_name) {
-    return IOExecFileServiceInit(cfg_name);
+    const char* mnt =  "/mnt" ;
+    return IOExecFileServiceInit(cfg_name, mnt, true);
   }
 
   int32_t gobjfs_ioexecfile_service_destroy(service_handle_t service_handle) {

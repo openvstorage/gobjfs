@@ -21,6 +21,8 @@ but WITHOUT ANY WARRANTY of any kind.
 #include <gcommon.h>
 #include <stdint.h> // uint64
 #include <stdlib.h>
+#include <vector>
+#include <string>
 #include <sys/uio.h>
 
 struct IOExecServiceInt;
@@ -73,7 +75,9 @@ void gIOStatusBatchFree(gIOStatusBatch *ptr);
 
 // ========================================
 
-IOExecServiceHandle IOExecFileServiceInit(const char *configFileName);
+IOExecServiceHandle IOExecFileServiceInit(const char *pConfigFileName,
+  const char* mountPoint,
+  bool createFlag);
 
 int32_t IOExecFileServiceDestroy(IOExecServiceHandle);
 

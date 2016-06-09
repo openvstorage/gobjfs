@@ -11,7 +11,7 @@ namespace gobjfs {
 static constexpr size_t MaxOpenFd = 100;
 
 int32_t 
-FileDistributor::createDirectories(const std::vector<std::string>& mountPoints, 
+FileDistributor::initDirectories(const std::vector<std::string>& mountPoints, 
   size_t slots, 
   bool createFlag)
 {
@@ -85,12 +85,13 @@ FileDeleterFunc(const char* fpath,
 }
 
 int32_t 
-FileDistributor::removeDirectories()
+FileDistributor::removeDirectories(
+  const std::vector<std::string>& mountPoints)
 {
   const int numOpenFD = MaxOpenFd;
   int ret = 0;
 
-  for (auto dir : dirs_)
+  for (auto dir : mountPoints)
   {
     // specified depth-first search FTW_DEPTH
     // because we can't delete dir unless
@@ -100,6 +101,11 @@ FileDistributor::removeDirectories()
       numOpenFD, 
       FTW_DEPTH | FTW_MOUNT | FTW_PHYS);
   
+    // WORKAROUND for top-level dir (aka mountpoint) doesn't get removed
+    if (ret == FTW_STOP) 
+    {
+      ret = 0;
+    }
     if (ret == 0)
     {
       LOG(INFO) << "removed all dirs and files under path=" << dir;

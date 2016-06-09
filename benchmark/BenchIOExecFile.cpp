@@ -215,8 +215,9 @@ struct FixedSizeFileManager {
   }
 
   std::string getFilename(uint64_t fileNum) {
-    static const auto numDir = config.dirPrefix.size();
-    return config.dirPrefix[fileNum % numDir] + buildFileName(fileNum);
+    //static const auto numDir = config.dirPrefix.size();
+    //return config.dirPrefix[fileNum % numDir] + buildFileName(fileNum);
+    return buildFileName(fileNum);
   }
 
   int createFile(IOExecFileHandle &handle, uint64_t &retFilenum) {
@@ -704,7 +705,9 @@ int main(int argc, char *argv[]) {
 
   config.readConfig("./benchioexec.conf");
 
-  auto serviceHandle = IOExecFileServiceInit("./gioexecfile.conf");
+  auto serviceHandle = IOExecFileServiceInit("./gioexecfile.conf", 
+    config.dirPrefix[0].c_str(),
+    config.newInstance);
 
   gMempool_init(config.alignSize);
 

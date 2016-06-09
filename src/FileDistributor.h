@@ -23,13 +23,13 @@ class FileDistributor
 
   static FileDistributor instance_;
 
-  int32_t createDirectories(const std::vector<std::string> &mountPoints, 
+  int32_t initDirectories(const std::vector<std::string> &mountPoints, 
     size_t slots, 
     bool createFlag);
 
   const std::string& getDir(const std::string& fileName) const;
 
-  int32_t removeDirectories();
+  int32_t removeDirectories(const std::vector<std::string> &mountPoints);
 };
 
 }
