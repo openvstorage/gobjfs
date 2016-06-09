@@ -147,8 +147,4 @@ static void run_verifyIO() {
   IOExecFileServiceDestroy(serviceHandle);
 }
 
-TEST(IOExecFile, OneFileReadWrite) 
-{ 
-  run_verifyIO(); 
-}
-
+TEST(DISABLED_IOExecFile, OneFileReadWrite) { run_verifyIO(); }

@@ -97,11 +97,12 @@ CpuStats CpuStats::operator-(const CpuStats &other) {
 std::string CpuStats::ToString() const {
   std::ostringstream s;
 
-  s << ":user_time(us)=" << userTimeMicrosec_
-    << ":system_time(us)=" << systemTimeMicrosec_
-    << ":wall_time(us)=" << wallTimeMicrosec_
-    << ":vol ctx switch=" << voluntaryCtxSwitch_
-    << ":invol ctx switch=" << involuntaryCtxSwitch_;
+  s << "{\"user_time(us)\":" << userTimeMicrosec_
+    << ",\"system_time(us)\":" << systemTimeMicrosec_
+    << ",\"wall_time(us)\":" << wallTimeMicrosec_
+    << ",\"vol ctx switch\":" << voluntaryCtxSwitch_
+    << ",\"invol ctx switch\":" << involuntaryCtxSwitch_
+    << "}";
 
   return s.str();
 }

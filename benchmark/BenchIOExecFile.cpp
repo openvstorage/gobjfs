@@ -57,7 +57,7 @@ struct Config {
   uint32_t maxFiles = 1000;
   uint32_t maxBlocks = 10000;
   uint64_t perThreadIO = 10000;
-  bool     doMemCheck = false;
+  bool doMemCheck = false;
   uint32_t maxThr = 1;
   uint32_t writePercent = 0;
   uint32_t totalReadWriteScale = 2000;
@@ -74,8 +74,9 @@ struct Config {
         "max_file_blocks", value<uint32_t>(&maxBlocks)->required(),
         "number of [blocksize] blocks in file")(
         "per_thread_max_io", value<uint64_t>(&perThreadIO)->required(),
-        "number of ops to execute")(
-        "do_mem_check", value<bool>(&doMemCheck)->required(), "compare read buffer")(
+        "number of ops to execute")("do_mem_check",
+                                    value<bool>(&doMemCheck)->required(),
+                                    "compare read buffer")(
         "max_threads", value<uint32_t>(&maxThr)->required(), "max threads")(
         "write_percent", value<uint32_t>(&writePercent)->required(),
         "percent of total read write scale")(
@@ -141,7 +142,8 @@ struct FixedSizeFileManager {
   uint32_t FileSize = FOURMB;
   uint64_t maxFiles_ = 300000;
 
-  void init(IOExecServiceHandle serviceHandleIn, uint32_t MaxFiles, bool newInstance) {
+  void init(IOExecServiceHandle serviceHandleIn, uint32_t MaxFiles,
+            bool newInstance) {
     serviceHandle = serviceHandleIn;
     maxFiles_ = MaxFiles;
 
@@ -176,7 +178,9 @@ struct FixedSizeFileManager {
               && (entryp->d_name[0] != '.')) {
             Directory.push_back(dirString + entryp->d_name);
             auto ret = parseFileName(entryp->d_name, max);
-            if (ret != 0) { LOG(FATAL) << "parse failed"; }
+            if (ret != 0) {
+              LOG(FATAL) << "parse failed";
+            }
             maxCtr = max;
           }
         } while ((ret == 0) && (result != nullptr));
@@ -225,7 +229,8 @@ struct FixedSizeFileManager {
     retFilenum = FilesCtr++;
     auto str = getFilename(retFilenum);
 
-    handle = IOExecFileOpen(serviceHandle, str.c_str(), O_RDWR | O_SYNC | O_CREAT);
+    handle =
+        IOExecFileOpen(serviceHandle, str.c_str(), O_RDWR | O_SYNC | O_CREAT);
     if (handle != nullptr) {
       std::unique_lock<std::mutex> lck(mutex);
       Directory.push_back(str);
@@ -235,7 +240,7 @@ struct FixedSizeFileManager {
     return ret;
   }
 
-  IOExecFileHandle openFile(uint32_t index, uint64_t* actualNumber) {
+  IOExecFileHandle openFile(uint32_t index, uint64_t *actualNumber) {
     IOExecFileHandle handle = nullptr;
 
     const size_t dirSize = Directory.size();
@@ -252,7 +257,9 @@ struct FixedSizeFileManager {
       if (config.doMemCheck && actualNumber) {
         auto filename = basename(str.c_str());
         auto ret = parseFileName(filename, *actualNumber);
-        if (ret != 0) { LOG(FATAL) << "parse failed"; }
+        if (ret != 0) {
+          LOG(FATAL) << "parse failed";
+        }
       }
     } catch (std::exception &e) {
       LOG(ERROR) << "bad index " << index << " dirsize=" << dirSize;
@@ -260,14 +267,13 @@ struct FixedSizeFileManager {
     return handle;
   }
 
-  int deleteFile(uint32_t index) {
+  int getFileToDelete(uint32_t index, std::string &fname) {
     int ret = 0;
 
     const size_t dirSize = Directory.size();
     if (!dirSize)
       return -ENOENT;
 
-    std::string fname;
     {
       std::unique_lock<std::mutex> lck(mutex);
 
@@ -286,10 +292,6 @@ struct FixedSizeFileManager {
       Directory.pop_back();
     }
 
-    ret = IOExecFileDeleteSync(serviceHandle, fname.c_str());
-    if (ret == 0) {
-      deleteCount++;
-    }
     return ret;
   }
 };
@@ -301,6 +303,8 @@ using gobjfs::stats::StatsCounter;
 StatsCounter<uint64_t> totalReadLatency;
 StatsCounter<uint64_t> totalWriteLatency;
 StatsCounter<uint64_t> totalDeleteLatency;
+uint64_t totalFailedReads{0};
+uint64_t totalFailedWrites{0};
 std::atomic<uint64_t> totalIOPs{0};
 
 class StatusExt;
@@ -316,6 +320,8 @@ struct ThreadCtx {
   StatsCounter<uint64_t> totalWriteLatency;
   StatsCounter<uint64_t> totalReadLatency;
   StatsCounter<uint64_t> totalDeleteLatency;
+  uint64_t failedReads{0};
+  uint64_t failedWrites{0};
 
   gobjfs::os::ShutdownNotifier ioCompletionThreadShutdown;
 
@@ -325,7 +331,7 @@ struct ThreadCtx {
 static gobjfs::MempoolSPtr objpool;
 
 struct StatusExt {
-  enum OpType { Invalid, Read, Write, Freed };
+  enum OpType { Invalid, Read, Write, Delete, Freed };
 
   static void *operator new(size_t sz) { return objpool->Alloc(sz); }
 
@@ -333,6 +339,7 @@ struct StatusExt {
 
   bool isRead() const { return (op == Read); }
   bool isWrite() const { return (op == Write); }
+  bool isDelete() const { return (op == Delete); }
 
   StatusExt() {
     op = Invalid;
@@ -341,18 +348,19 @@ struct StatusExt {
 
   ~StatusExt() {
     handle = nullptr;
-    // batch = nullptr;
     op = Freed;
     tid = gettid();
   }
 
-  uint32_t dirIndex{0}; 
+  uint32_t dirIndex{0};
   uint64_t actualFilenum{0};
-  uint32_t tid{0};
+  uint32_t tid{0};   // for debugging
+  std::string fname; // for delete
   gIOBatch *batch{nullptr};
   IOExecFileHandle handle{nullptr};
   gobjfs::stats::Timer timer;
   OpType op{Invalid};
+
 };
 
 static int wait_for_iocompletion(int epollfd, int efd, ThreadCtx *ctx) {
@@ -396,37 +404,51 @@ static int wait_for_iocompletion(int epollfd, int efd, ThreadCtx *ctx) {
             if (ext->isWrite()) {
               ctx->totalWriteLatency = ext->timer.elapsedMicroseconds();
               ctr++;
+              if (iostatus.errorCode != 0) {
+                ctx->failedWrites ++;        
+              }
             } else if (ext->isRead()) {
-              if (config.doMemCheck) { 
-                gIOExecFragment& frag = ext->batch->array[0];
-                char* buf = frag.addr;
+              if (config.doMemCheck) {
+                gIOExecFragment &frag = ext->batch->array[0];
+                char *buf = frag.addr;
                 const char expChar = 'a' + (ext->actualFilenum % 26);
                 bool failed = false;
                 uint32_t bufOffset = 0;
-                for (uint32_t bufOffset = 0; bufOffset < frag.size; bufOffset++) {
+                for (uint32_t bufOffset = 0; bufOffset < frag.size;
+                     bufOffset++) {
                   if (buf[bufOffset] != expChar) {
                     failed = true;
-                    break;  
+                    break;
                   }
                 }
                 if (failed) {
-                  LOG(ERROR) << "Comparison failed at file=" << ext->dirIndex 
-                    << " offset=" << bufOffset
-                    << " expchar=" << expChar 
-                    << " actual=" << buf[bufOffset];
+                  LOG(ERROR) << "Comparison failed at file=" << ext->dirIndex
+                             << " offset=" << bufOffset
+                             << " expchar=" << expChar
+                             << " actual=" << buf[bufOffset];
                 }
+              }
+              if (iostatus.errorCode != 0) {
+                ctx->failedReads ++;
               }
               ctx->totalReadLatency = ext->timer.elapsedMicroseconds();
               ctr++;
+            } else if (ext->isDelete()) {
+              ctx->totalDeleteLatency = ext->timer.elapsedMicroseconds();
+              ctr++;
+              fileMgr.deleteCount++;
             } else {
               LOG(FATAL) << "unknown opcode";
             }
 
-            IOExecFileClose(ext->handle);
+            if (!ext->isDelete()) {
+              IOExecFileClose(ext->handle);
+            }
+
             assert(ext->batch->count == 1);
             assert(ext->batch->array[0].completionId == iostatus.completionId);
-
             gIOBatchFree(ext->batch);
+
             delete ext;
           }
         } else {
@@ -547,17 +569,15 @@ static void doRandomReadWrite(ThreadCtx *ctx) {
       }
     } else if (DeletesAreEnabled && (num >= deleteThreshold)) {
       // its a delete
-      auto dirIndex = filenumGen(seedGen);
-      ret = fileMgr.deleteFile(dirIndex);
+      ext->dirIndex = filenumGen(seedGen);
+      ret = fileMgr.getFileToDelete(ext->dirIndex, ext->fname);
       if (ret == 0) {
-        uint64_t deleteTime = ext->timer.elapsedMicroseconds();
-        ctx->totalDeleteLatency = deleteTime;
+        ext->op = StatusExt::Delete;
+        // TODO
       } else {
         delete ext;
+        continue;
       }
-
-      continue;
-
     } else {
       // its a create
       ret = fileMgr.createFile(handle, ext->actualFilenum);
@@ -608,25 +628,35 @@ static void doRandomReadWrite(ThreadCtx *ctx) {
         frag.size = config.blockSize * config.maxBlocks;
         frag.addr = (caddr_t)gMempool_alloc(frag.size);
         memset(frag.addr, 'a' + (ext->actualFilenum % 26), frag.size);
+        assert(frag.addr != nullptr);
       } else if (ext->isRead()) {
         uint64_t blockNum = blockGenerator(seedGen);
         frag.offset = blockNum * config.blockSize;
         frag.size = config.blockSize;
         frag.addr = (caddr_t)gMempool_alloc(frag.size);
+        assert(frag.addr != nullptr);
+      } else if (ext->isDelete()) {
+        // do nothing
       } else {
         LOG(FATAL) << "unknown op";
       }
-
-      assert(frag.addr != nullptr);
     }
 
     do {
+
       assert(ext->batch->count == 1);
+
       if (ext->isWrite()) {
         ret = IOExecFileWrite(handle, ext->batch, evHandle);
-      } else {
+      } else if (ext->isRead()) {
         ret = IOExecFileRead(handle, ext->batch, evHandle);
+      } else if (ext->isDelete()) {
+        ret = IOExecFileDelete(ctx->serviceHandle, ext->fname.c_str(),
+                               ext->batch->array[0].completionId, evHandle);
+      } else {
+        LOG(FATAL) << " Unknown opcode";
       }
+
       if (ret == -EAGAIN) {
         usleep(1);
         LOG(WARNING) << "too fast";
@@ -650,7 +680,10 @@ static void doRandomReadWrite(ThreadCtx *ctx) {
   int64_t timeMilli = timer.elapsedMilliseconds();
   std::ostringstream s;
 
-  s << "thread=" << gobjfs::os::GetCpuCore() << ":num_io=" << ctx->perThreadIO
+  s << "thread=" << gobjfs::os::GetCpuCore() 
+    << ":num_io=" << ctx->perThreadIO
+    << ":failed_reads=" << ctx->failedReads
+    << ":failed_writes=" << ctx->failedWrites
     << ":time(msec)=" << timeMilli
     << ":read_latency(usec)=" << ctx->totalReadLatency
     << ":write_latency(usec)=" << ctx->totalWriteLatency
@@ -710,6 +743,8 @@ int main(int argc, char *argv[]) {
     totalWriteLatency += elem->totalWriteLatency;
     totalReadLatency += elem->totalReadLatency;
     totalDeleteLatency += elem->totalDeleteLatency;
+    totalFailedReads += elem->failedReads;
+    totalFailedWrites += elem->failedWrites;
   }
 
   gobjfs::os::CpuStats endCpuStats;
@@ -730,15 +765,22 @@ int main(int argc, char *argv[]) {
       << ":cpu_perc=" << endCpuStats.getCpuUtilization();
 
     LOG(INFO) << s.str();
+
+    if (totalFailedReads || totalFailedWrites) {
+      LOG(ERROR) 
+        << "failed reads=" << totalFailedReads
+        << " failed writes=" << totalFailedWrites
+        ;
+    }
   }
 
   {
     std::ostringstream s;
     // Print in csv format for easier input to excel
     s << config.writePercent << "," << config.totalReadWriteScale << ","
-      << IOExecGetNumExecutors(serviceHandle) << "," << config.maxThr << "," << totalIOPs
-      << "," << totalWriteLatency.mean() << "," << totalReadLatency.mean()
-      << "," << totalDeleteLatency.mean() << ","
+      << IOExecGetNumExecutors(serviceHandle) << "," << config.maxThr << ","
+      << totalIOPs << "," << totalWriteLatency.mean() << ","
+      << totalReadLatency.mean() << "," << totalDeleteLatency.mean() << ","
       << endCpuStats.getCpuUtilization();
 
     std::cout << s.str() << std::endl;

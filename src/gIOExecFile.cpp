@@ -27,13 +27,20 @@ but WITHOUT ANY WARRANTY of any kind.
 #include <fcntl.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include <boost/version.hpp>
+
+using gobjfs::IOExecutor;
+using gobjfs::FilerJob;
+using gobjfs::FileOp;
+using gobjfs::os::IsDirectIOAligned;
 
 // objpool holds freelist of batches with only one fragment
-static gobjfs::MempoolSPtr objpool =
-    gobjfs::MempoolFactory::createObjectMempool(
-        "object", sizeof(gIOBatch) + sizeof(gIOExecFragment));
+// Not used anymore
+//static gobjfs::MempoolSPtr objpool =
+    //gobjfs::MempoolFactory::createObjectMempool(
+        //"object", sizeof(gIOBatch) + sizeof(gIOExecFragment));
 
-// ==============================
+// =======================================================
 
 gIOBatch *gIOBatchAlloc(size_t count) {
   const size_t allocSize =
@@ -59,8 +66,8 @@ gIOBatch *gIOBatchAlloc(size_t count) {
 void gIOBatchFree(gIOBatch *ptr) {
   for (size_t idx = 0; idx < ptr->count; idx++) {
     gIOExecFragment &frag = ptr->array[idx];
-    assert((frag.size & (4096 - 1)) == 0);
-    assert((frag.offset & (4096 - 1)) == 0);
+    assert(IsDirectIOAligned(frag.size));
+    assert(IsDirectIOAligned(frag.offset));
     assert(frag.completionId != 0);
 
     gMempool_free(frag.addr);
@@ -70,7 +77,7 @@ void gIOBatchFree(gIOBatch *ptr) {
   free(ptr);
 }
 
-// ==============================
+// =======================================================
 
 gIOStatusBatch *gIOStatusBatchAlloc(size_t count) {
   const size_t allocSize = sizeof(gIOStatusBatch) + (count * sizeof(gIOStatus));
@@ -79,32 +86,115 @@ gIOStatusBatch *gIOStatusBatchAlloc(size_t count) {
 
 void gIOStatusBatchFree(gIOStatusBatch *ptr) { free(ptr); }
 
-// ==============================
+// =======================================================
 
-/* internal representation of FileHandle */ 
-struct IOExecFileInt {
-  IOExecServiceHandle serviceHandle;
-  int fd{-1};
-  CoreId core{CoreIdInvalid};
+/* internal representation of ServiceHandle */
+struct IOExecServiceInt {
+  IOExecutor::Config ioConfig;
+  std::vector<std::shared_ptr<IOExecutor>> ioexecVec;
 
-  IOExecFileInt(IOExecServiceHandle serviceHandle, int fd, CoreId core) 
-    : serviceHandle(serviceHandle), fd(fd), core(core) {
-    assert(fd >= 0);
+  int32_t getSlot(const char *fileName) {
+    static std::hash<std::string> hasher;
+    auto slot = hasher(fileName) % ioexecVec.size();
+    return slot;
   }
 
-  ~IOExecFileInt() {
-    int ret = close(fd);
-    if (ret != 0) {
-      LOG(ERROR) << "failed to close fd=" << fd << " errno=" << errno;
-    }
-  }
+  bool isValid() { return (ioexecVec.size() > 0); }
 };
 
-using gobjfs::IOExecutor;
-using gobjfs::FilerJob;
-using gobjfs::FileOp;
+int32_t IOExecGetNumExecutors(IOExecServiceHandle serviceHandle) {
+  return serviceHandle->ioexecVec.size();
+}
 
-/* internal representation of EventFdHandle */ 
+int32_t IOExecGetStats(IOExecServiceHandle serviceHandle, char* buf,
+  int32_t len)
+{
+  decltype(len) curOffset = 0;
+
+  for (auto& elem : serviceHandle->ioexecVec) 
+  {
+    auto str = elem->getState();
+    uint32_t copyLen = str.size();
+    if (str.size() >= len - curOffset)
+    {
+      // truncate the string to be copied
+      copyLen = len;
+    }
+    strncpy(buf + curOffset, str.c_str(), copyLen);
+    curOffset += copyLen;
+    if (curOffset >= len) 
+    {
+      LOG(WARNING) << "input buffer len=" << len << " insufficient for stats";
+      break;
+    }
+  }
+  return curOffset;
+}
+
+IOExecServiceHandle IOExecFileServiceInit(const char *pConfigFileName) {
+  int ret = 0;
+
+  IOExecServiceHandle handle = new IOExecServiceInt;
+
+  do {
+    if (ParseConfigFile(pConfigFileName, handle->ioConfig) < 0) {
+      LOG(ERROR) << "Invalid Config File=" << pConfigFileName;
+      ret = -EINVAL;
+      break;
+    }
+
+    if (handle->ioConfig.cpuCores_.size()) {
+      for (auto &elem : handle->ioConfig.cpuCores_) {
+        const std::string name = "ioexecfile" + std::to_string(elem);
+        try {
+          auto sptr =
+              std::make_shared<IOExecutor>(name, elem, handle->ioConfig);
+          handle->ioexecVec.emplace_back(sptr);
+        } catch (const std::exception &e) {
+          LOG(ERROR) << "failed to alloc IOExecutor for core=" << elem
+                     << " exception=" << e.what();
+          ret = -ENOMEM;
+          break;
+        }
+      }
+    } else {
+      LOG(ERROR) << "config file=" << pConfigFileName
+                 << " has zero cpuCores allocated."
+                 << "  This can happen if your binary is linked to incorrect boost version."
+                 << "  Is your binary linked to boost_program_options version="
+                 << BOOST_LIB_VERSION;
+
+      ret = -EINVAL;
+    }
+  } while (0);
+
+  if (ret != 0) {
+    delete handle;
+    handle = nullptr;
+  }
+
+  google::FlushLogFiles(0);
+  return handle;
+}
+
+int32_t IOExecFileServiceDestroy(IOExecServiceHandle serviceHandle) {
+  if (!serviceHandle) {
+    LOG(ERROR) << "service handle is invalid";
+    return -EINVAL;
+  }
+
+  for (auto elem : serviceHandle->ioexecVec) {
+    elem->stop();
+    elem.reset();
+  }
+  delete serviceHandle;
+  return 0;
+}
+
+
+// =======================================================
+
+/* internal representation of EventFdHandle */
 struct IOExecEventFdInt {
   int fd[2]{-1, -1};
 
@@ -121,116 +211,6 @@ struct IOExecEventFdInt {
   }
 };
 
-/* internal representation of ServiceHandle */ 
-struct IOExecServiceInt {
-  IOExecutor::Config ioConfig;
-  std::vector<std::shared_ptr<IOExecutor>> ioexecVec;
-
-  int32_t getSlot(const char *fileName) {
-    static std::hash<std::string> hasher;
-    auto slot = hasher(fileName) % ioexecVec.size();
-    return slot;
-  }
-
-  bool isValid() {
-    return (ioexecVec.size() > 0);
-  } 
-};
-
-int32_t IOExecGetNumExecutors(IOExecServiceHandle serviceHandle) 
-{ 
-  return serviceHandle->ioexecVec.size(); 
-}
-
-IOExecServiceHandle IOExecFileServiceInit(const char *pConfigFileName) {
-  int ret = 0;
-
-  IOExecServiceHandle handle = new IOExecServiceInt;
-
-  do {
-    if (ParseConfigFile(pConfigFileName, handle->ioConfig) < 0) {
-      LOG(ERROR) << "Invalid Config File=" << pConfigFileName;
-      ret = -EINVAL;
-      break;
-    }
-
-    if (handle->ioConfig.cpuCores_.size()) 
-    {
-      for (auto &elem : handle->ioConfig.cpuCores_) {
-        const std::string name = "ioexecfile" + std::to_string(elem);
-        try {
-          auto sptr = std::make_shared<IOExecutor>(name, elem, handle->ioConfig);
-          handle->ioexecVec.emplace_back(sptr);
-        } catch (const std::exception &e) {
-          LOG(ERROR) << "failed to alloc IOExecutor for core=" << elem
-                    << " exception=" << e.what();
-          ret = -ENOMEM;
-          break;
-        }
-      }
-    } 
-    else 
-    {
-      LOG(ERROR) << "config file=" << pConfigFileName << " has zero cpuCores allocated";
-      ret = -EINVAL;
-    }
-  } while (0);
-
-  if (ret != 0) {
-    delete handle;
-    handle = nullptr;
-  }
-
-  google::FlushLogFiles(0);
-  return handle;
-}
-
-int32_t IOExecFileServiceDestroy(IOExecServiceHandle serviceHandle) {
-  if (!serviceHandle) 
-  {
-    LOG(ERROR) << "service handle is invalid";
-    return -EINVAL;
-  }
-
-  for (auto elem : serviceHandle->ioexecVec) {
-    elem->stop();
-    elem.reset();
-  }
-  delete serviceHandle;
-  return 0;
-}
-
-
-IOExecFileHandle IOExecFileOpen(IOExecServiceHandle serviceHandle, const char *fileName, int32_t flags) {
-
-  IOExecFileHandle newHandle{nullptr};
-
-  if (!serviceHandle || !serviceHandle->isValid()) {
-    LOG(ERROR) << "service handle is invalid";
-    return newHandle;
-  }
-
-  int newFlags = flags | O_DIRECT;
-
-  int mode = S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH;
-
-  int fd = open(fileName, newFlags, mode);
-
-  if (fd < 0) {
-    int capture_errno = errno;
-    LOG(ERROR) << "failed to open file=" << fileName << " flags=" << newFlags
-               << " mode=" << mode << " errno=" << capture_errno;
-  } else {
-    CoreId core = serviceHandle->getSlot(fileName);
-    newHandle = new IOExecFileInt(serviceHandle, fd, core);
-  }
-  return newHandle;
-}
-
-int32_t IOExecFileClose(IOExecFileHandle pFileHandle) {
-  delete pFileHandle;
-  return 0;
-}
 
 IOExecEventFdHandle IOExecEventFdOpen(IOExecServiceHandle serviceHandle) {
 
@@ -271,59 +251,98 @@ int32_t IOExecEventFdClose(IOExecEventFdHandle eventFdPtr) {
 }
 
 int IOExecEventFdGetReadFd(IOExecEventFdHandle eventFdPtr) {
+  if (!eventFdPtr) {
+    LOG(ERROR) << "Rejecting GetReadFd attempt with null eventHandle";
+    return gobjfs::os::FD_INVALID;
+  }
   return eventFdPtr->fd[0];
 }
 
-int32_t IOExecFileWrite(IOExecFileHandle fileHandle, const gIOBatch *batch,
-                        IOExecEventFdHandle eventFdHandle) {
-  int32_t retcode = 0;
+// =======================================================
 
-  if (!eventFdHandle || (eventFdHandle->fd[1] == gobjfs::os::FD_INVALID)) {
-    LOG(ERROR) << "Rejecting write with invalid eventfd";
-    return -EINVAL;
+/* internal representation of FileHandle */
+struct IOExecFileInt {
+  IOExecServiceHandle serviceHandle;
+  int fd{-1};
+  CoreId core{CoreIdInvalid};
+
+  IOExecFileInt(IOExecServiceHandle serviceHandle, int fd, CoreId core)
+      : serviceHandle(serviceHandle), fd(fd), core(core) {
+    assert(fd >= 0);
   }
 
-  int jobFd = eventFdHandle->fd[1];
-
-  gobjfs::IOExecutorSPtr ioexecPtr;
-  try {
-    ioexecPtr = fileHandle->serviceHandle->ioexecVec.at(fileHandle->core);
-  } catch (const std::exception &e) {
-    LOG(ERROR) << "entry=" << fileHandle->core
-               << " doesnt exist in ioexec vector of size=" << fileHandle->serviceHandle->ioexecVec.size();
-    return -EINVAL;
-  }
-
-  // cache batch->count before the loop
-  // because the batch can be freed after submitTask
-  // making any read of batch->count incorrect
-  const decltype(batch->count) totalCount = batch->count;
-  for (decltype(batch->count) idx = 0; idx < totalCount; idx++) {
-    const gIOExecFragment &frag = batch->array[idx];
-    if ((frag.size == 0) || (frag.addr == nullptr)) {
-      continue;
-    }
-    auto job = new FilerJob(fileHandle->fd, FileOp::Write);
-    job->setBuffer(frag.offset, (char *)frag.addr, frag.size);
-    job->completionId_ = frag.completionId;
-    job->completionFd_ = jobFd;
-    job->canBeFreed_ = true; // free job after completion
-    retcode = ioexecPtr->submitTask(job, /*blocking*/ false);
-    if (retcode != 0) {
-      // delete job if not submitted
-      LOG(WARNING) << "job not submitted due to overflow";
-      delete job;
+  ~IOExecFileInt() {
+    int ret = close(fd);
+    if (ret != 0) {
+      LOG(ERROR) << "failed to close fd=" << fd << " errno=" << errno;
     }
   }
-  return retcode;
+};
+
+IOExecFileHandle IOExecFileOpen(IOExecServiceHandle serviceHandle,
+                                const char *fileName, int32_t flags) {
+
+  IOExecFileHandle newHandle{nullptr};
+
+  if (!serviceHandle || !serviceHandle->isValid()) {
+    LOG(ERROR) << "service handle is invalid";
+    return newHandle;
+  }
+
+  int newFlags = flags | O_DIRECT;
+
+  int mode = S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH;
+
+  int fd = open(fileName, newFlags, mode);
+
+  if (fd < 0) {
+    int capture_errno = errno;
+    LOG(ERROR) << "failed to open file=" << fileName << " flags=" << newFlags
+               << " mode=" << mode << " errno=" << capture_errno;
+  } else {
+    CoreId core = serviceHandle->getSlot(fileName);
+    newHandle = new IOExecFileInt(serviceHandle, fd, core);
+  }
+  return newHandle;
 }
 
-int32_t IOExecFileRead(IOExecFileHandle fileHandle, const gIOBatch *batch,
-                       IOExecEventFdHandle eventFdHandle) {
+int32_t IOExecFileClose(IOExecFileHandle fileHandle) {
+  delete fileHandle;
+  return 0;
+}
+
+int32_t IOExecFileTruncate(IOExecFileHandle fileHandle, size_t newSize) {
+
+  if (!fileHandle) {
+    LOG(ERROR) << "Rejecting truncate with null file handle";
+    return -EINVAL;
+  }
+  
+  int ret = ftruncate(fileHandle->fd, newSize);
+  if (ret != 0) {
+    ret = -errno;
+    LOG(ERROR) << "truncate failed ret=" << errno;
+  }
+
+  return ret;
+}
+
+
+static int32_t IOExecFileOp(const char* name, 
+  FileOp optype,
+  IOExecFileHandle fileHandle, 
+  const gIOBatch *batch,
+  IOExecEventFdHandle eventFdHandle) {
+
   int retcode = 0;
 
   if (!eventFdHandle || (eventFdHandle->fd[1] == gobjfs::os::FD_INVALID)) {
-    LOG(ERROR) << "Rejecting read with invalid eventfd";
+    LOG(ERROR) << "Rejecting " << name << " with invalid eventfd";
+    return -EINVAL;
+  }
+
+  if (!fileHandle) {
+    LOG(ERROR) << "Rejecting " << name << " with invalid file handle";
     return -EINVAL;
   }
 
@@ -334,7 +353,8 @@ int32_t IOExecFileRead(IOExecFileHandle fileHandle, const gIOBatch *batch,
     ioexecPtr = fileHandle->serviceHandle->ioexecVec.at(fileHandle->core);
   } catch (const std::exception &e) {
     LOG(ERROR) << "entry=" << fileHandle->core
-               << " doesnt exist in ioexec vector of size=" << fileHandle->serviceHandle->ioexecVec.size();
+               << " doesnt exist in ioexec vector of size="
+               << fileHandle->serviceHandle->ioexecVec.size();
     return -EINVAL;
   }
 
@@ -347,7 +367,7 @@ int32_t IOExecFileRead(IOExecFileHandle fileHandle, const gIOBatch *batch,
     if ((frag.size == 0) || (frag.addr == nullptr)) {
       continue;
     }
-    auto job = new FilerJob(fileHandle->fd, FileOp::Read);
+    auto job = new FilerJob(fileHandle->fd, optype);
     job->setBuffer(frag.offset, (char *)frag.addr, frag.size);
     job->completionId_ = frag.completionId;
     job->completionFd_ = jobFd;
@@ -361,8 +381,22 @@ int32_t IOExecFileRead(IOExecFileHandle fileHandle, const gIOBatch *batch,
   return retcode;
 }
 
-int32_t IOExecFileDeleteSync(IOExecServiceHandle serviceHandle, const char *filename) {
-  (void) serviceHandle;
+int32_t IOExecFileWrite(IOExecFileHandle fileHandle, const gIOBatch *batch,
+                        IOExecEventFdHandle eventFdHandle) {
+
+  return IOExecFileOp("write", FileOp::Write, fileHandle, batch, eventFdHandle);
+
+}
+
+int32_t IOExecFileRead(IOExecFileHandle fileHandle, const gIOBatch *batch,
+                       IOExecEventFdHandle eventFdHandle) {
+
+  return IOExecFileOp("read", FileOp::Read, fileHandle, batch, eventFdHandle);
+}
+
+int32_t IOExecFileDeleteSync(IOExecServiceHandle serviceHandle,
+                             const char *filename) {
+  (void)serviceHandle;
 
   int retcode = ::unlink(filename);
   if (retcode != 0) {
@@ -372,7 +406,8 @@ int32_t IOExecFileDeleteSync(IOExecServiceHandle serviceHandle, const char *file
   return retcode;
 }
 
-int32_t IOExecFileDelete(IOExecServiceHandle serviceHandle, const char *filename, gCompletionID completionId,
+int32_t IOExecFileDelete(IOExecServiceHandle serviceHandle,
+                         const char *filename, gCompletionID completionId,
                          IOExecEventFdHandle eventFdHandle) {
 
   if (!serviceHandle || !serviceHandle->isValid()) {
@@ -397,6 +432,8 @@ int32_t IOExecFileDelete(IOExecServiceHandle serviceHandle, const char *filename
   return retcode;
 }
 
+// ============================================
+
 EXTERNC {
   service_handle_t gobjfs_ioexecfile_service_init(const char *cfg_name) {
     return IOExecFileServiceInit(cfg_name);
@@ -407,7 +444,8 @@ EXTERNC {
     return rc;
   }
 
-  handle_t gobjfs_ioexecfile_file_open(service_handle_t service_handle, const char *name, int options) {
+  handle_t gobjfs_ioexecfile_file_open(service_handle_t service_handle,
+                                       const char *name, int options) {
     IOExecFileHandle h = IOExecFileOpen(service_handle, name, options);
     return (handle_t)h;
   }
@@ -424,9 +462,15 @@ EXTERNC {
                           (IOExecEventFdHandle)eventFd);
   }
 
-  int32_t gobjfs_ioexecfile_file_delete(service_handle_t service_handle, const char *name, completion_id_t cid,
+  int32_t gobjfs_ioexecfile_file_delete(service_handle_t service_handle,
+                                        const char *name, completion_id_t cid,
                                         event_t eventFd) {
-    return IOExecFileDelete(service_handle, name, cid, (IOExecEventFdHandle)eventFd);
+    return IOExecFileDelete(service_handle, name, cid,
+                            (IOExecEventFdHandle)eventFd);
+  }
+
+  int32_t gobjfs_ioexecfile_file_truncate(handle_t handle, size_t new_size) {
+    return IOExecFileTruncate(handle, new_size);
   }
 
   int32_t gobjfs_ioexecfile_file_close(handle_t handle) {
@@ -463,5 +507,11 @@ EXTERNC {
 
     gobjfs_debug_fragment(fp);
     LOG(INFO) << "}";
+  }
+
+  int32_t gobjfs_ioexecfile_service_getstats(service_handle_t service_handle, 
+    char *buffer, 
+    int32_t len) {
+      return IOExecGetStats(service_handle, buffer, len);
   }
 }

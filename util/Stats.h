@@ -151,11 +151,12 @@ public:
 template <class T>
 std::ostream &operator<<(std::ostream &os, const StatsCounter<T> &t) {
   if (gobjfs_unlikely(t.numSamples_ == 0)) {
-    os << "{min=0:avg=0:stddev=0:max=0:numSamples=0}";
+    os << "{\"min\":0,\"avg\":0,\"stddev\":0,\"max\":0,\"numSamples\":0}";
   } else {
-    os << "{min=" << t.min_ << ":avg=" << t.mean_
-       << ":stddev=" << t.stdDeviation() << ":max=" << t.max_
-       << ":numSamples=" << t.numSamples_ << "}";
+    // json format
+    os << "{\"min\":" << t.min_ << ",\"avg\":" << t.mean_
+       << ",\"stddev\":" << t.stdDeviation() << ",\"max\":" << t.max_
+       << ",\"numSamples\":" << t.numSamples_ << "}";
   }
   return os;
 }
@@ -163,6 +164,11 @@ std::ostream &operator<<(std::ostream &os, const StatsCounter<T> &t) {
 // ================
 
 /**
+ * Log scale histogram 
+ * bucket 0 contains 0-10 
+ * bucket 1 contains 10-100 
+ * and so on..
+ *
  * Usage
  * Histogram<int64_t> a;
  * for (int i = 0; i < 10; i++)
@@ -224,9 +230,10 @@ public:
 
   template <typename U>
   friend std::ostream &operator<<(std::ostream &os, const Histogram<U> &t) {
-    os << "{histogram samples=" << t.numSamples_ << "[";
+    // json format
+    os << "{\"numSamples\":" << t.numSamples_ << ",\"histogram\":[";
     for (uint16_t i = 0; i < MaxDigitsInType - 1; i++) {
-      os << t.buckets_[i] << ":";
+      os << t.buckets_[i] << ",";
     }
     os << t.buckets_[MaxDigitsInType - 1] << "]}";
     return os;

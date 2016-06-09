@@ -19,7 +19,6 @@ but WITHOUT ANY WARRANTY of any kind.
 #pragma once
 
 #include <IOExecutor.h>
-#include <boost/program_options.hpp>
 
 using gobjfs::IOExecutor;
 
