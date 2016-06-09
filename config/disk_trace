@@ -1,0 +1,33 @@
+
+$ sudo blktrace /dev/nvme0n1 (or p1)
+
+HIT CTRL-C after a while
+
+This will create nvme0n1.* files in your current dir
+
+$ ls -l 
+-rw-r--r-- 1 sandeep root       0 May 31 15:15 nvme0n1.blktrace.6
+-rw-r--r-- 1 sandeep root       0 May 31 15:15 nvme0n1.blktrace.7
+-rw-r--r-- 1 sandeep root       0 May 31 15:15 nvme0n1.blktrace.8
+
+Give prefix of the files to blkparse to decode output
+As follows
+
+$ sudo blkparse -i nvme0n1
+
+this prints the trace for every IO request
+
+259,0    1        6     0.000039691  1403  Q   R 3752541 + 8 [ObjectFS_io_gc]
+259,0    1        7     0.000040007  1403  G   R 3752541 + 8 [ObjectFS_io_gc]
+259,0    1        8     0.000041677  1403  U   N [ObjectFS_io_gc] 1
+259,0    1        9     0.000041951  1403  I  RS 3752541 + 8 [ObjectFS_io_gc]
+259,0    1       10     0.000042944  1403  D  RS 3752541 + 8 [ObjectFS_io_gc]
+259,0   12        1     0.000162006     0  C  RS 3752541 + 8 [0]
+
+Every request goes thru 5-6 stages
+Q - request was queued
+C - request was completed
+
+time differnce between C-Q  = 000162006 - 000039691 = 120 something microsec
+
+do "man blkparse" for more
