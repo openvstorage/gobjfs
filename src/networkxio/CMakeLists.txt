@@ -27,11 +27,11 @@ ADD_LIBRARY(networkServer SHARED ${SOURCES})
 SET_TARGET_PROPERTIES(networkServer 
   PROPERTIES LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/lib)
 
-ADD_EXECUTABLE(NetworkServerApp NetworkServer.cpp)
+ADD_EXECUTABLE(NetworkServer NetworkServer.cpp)
 
-TARGET_LINK_LIBRARIES(NetworkServerApp networkServer ${LIBRARY_LIST})
+TARGET_LINK_LIBRARIES(NetworkServer networkServer ${LIBRARY_LIST})
 
-ADD_EXECUTABLE(NetworkServerTest NetworkServerTest.cpp)
+ADD_EXECUTABLE(NetworkClient NetworkClient.cpp)
 
-TARGET_LINK_LIBRARIES(NetworkServerTest networkServer ${LIBRARY_LIST})
+TARGET_LINK_LIBRARIES(NetworkClient networkServer ${LIBRARY_LIST})
 
