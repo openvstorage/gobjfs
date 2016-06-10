@@ -1,4 +1,3 @@
-//#include "NetworkXioInterface.h"
 #include <assert.h>
 #include "volumedriver.h"
 #include <fcntl.h>
@@ -6,18 +5,16 @@
 
 void NetworkServerWriteReadTest(void)
 {
-    uint64_t volume_size = 1 << 30;
     ovs_ctx_attr_t *ctx_attr = ovs_ctx_attr_new();
-              ovs_ctx_attr_set_transport(ctx_attr,
+
+    ovs_ctx_attr_set_transport(ctx_attr,
                                          "tcp",
                                          "127.0.0.1",
                                          21321);
+
     ovs_ctx_t *ctx = ovs_ctx_new(ctx_attr);
     assert(ctx != nullptr);
-    /*ovs_create_volume(ctx,
-                    "volume",
-                    volume_size);
-    GLOG_DEBUG("\n\n------------------- Create Volume Successful -------------- \n\n");*/
+
     int err = ovs_ctx_init(ctx,
                "/dev/sdb",
                O_RDWR);
@@ -26,9 +23,6 @@ void NetworkServerWriteReadTest(void)
         return;
     }
 
-    GLOG_DEBUG("\n\n------------------- Volume open Successful -------------- \n\n");
-
-    
     auto rbuf = (char*)malloc(4096);
     assert(rbuf != nullptr);
 
@@ -43,22 +37,17 @@ void NetworkServerWriteReadTest(void)
         GLOG_ERROR("Read Length and write length not matching \n");
         assert(0);
     }
-
-
     GLOG_DEBUG("\n\n------------------- ovs_read Successful -------------- \n\n");
+
     ovs_ctx_destroy(ctx);
+
     GLOG_DEBUG("\n\n------------------- ovs_ctx_destroy Successful -------------- \n\n");
+
     ovs_ctx_attr_destroy(ctx_attr);
 }
+
 int main(int argc, char *argv[]) {
-/*
-    ovs_ctx_attr_t *ctx_attr = ovs_ctx_attr_new();
-    assert(ctx_attr != nullptr);
-    ovs_ctx_attr_set_transport(ctx_attr,"tcp","127.0.0.1", 21321);
-    ovs_ctx_t *ctx = ovs_ctx_new(ctx_attr);
-    assert(ctx != nullptr);
-    ovs_create_volume(ctx,"volume",10000);
-    ovs_ctx_attr_destroy(ctx_attr);
-*/
+
     NetworkServerWriteReadTest();
+
 }
