@@ -32,8 +32,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef __CONTEXT_H
-#define __CONTEXT_H
+#pragma once
 
 /*#include "../ShmControlChannelProtocol.h"
 #include "../ShmClient.h"*/
@@ -47,7 +46,7 @@ struct ovs_context_t
     std::string uri;
     std::string dev_name;
     int oflag;
-    volumedriverfs::NetworkXioClientPtr net_client_;
+    gobjfs::xio::NetworkXioClientPtr net_client_;
 };
 static int
 ovs_xio_open_device(ovs_ctx_t *ctx, const char *dev_name);
@@ -149,4 +148,3 @@ ovs_xio_open_device(ovs_ctx_t *ctx, const char *dev_name)
     XXExit();
     return r;
 }
-#endif // __CONTEXT_H

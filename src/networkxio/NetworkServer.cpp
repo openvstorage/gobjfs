@@ -30,7 +30,7 @@
 #include <strings.h>
 
 using namespace boost::program_options;
-using namespace volumedriverfs;
+using namespace gobjfs::xio;
 using namespace std;
 
 struct Config {

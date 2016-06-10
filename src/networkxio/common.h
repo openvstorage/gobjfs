@@ -32,8 +32,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef __LIB_OVS_COMMON_H
-#define __LIB_OVS_COMMON_H
+#pragma once
 
 #define ATTRIBUTE_UNUSED __attribute__((unused))
 
@@ -96,4 +95,3 @@ struct ovs_aio_request
     pthread_mutex_t _mutex;
 };
 
-#endif

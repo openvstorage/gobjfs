@@ -21,8 +21,7 @@
 
 #define POLLING_TIME_USEC   20
 
-namespace volumedriverfs
-{
+namespace gobjfs { namespace xio {
 /*
 MAKE_EXCEPTION(FailedBindXioServer, fungi::IOException);
 MAKE_EXCEPTION(FailedCreateXioContext, fungi::IOException);
@@ -639,4 +638,4 @@ NetworkXioServer::shutdown()
     XXExit();
 }
 
-} //namespace
+}} //namespace

@@ -12,13 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef NETWORK_XIO_WORK_H_
-#define NETWORK_XIO_WORK_H_
+#pragma once
 
 #include <functional>
 #include <libxio.h>
 
-namespace volumedriverfs
+namespace gobjfs { namespace xio
 {
 
 struct Work;
@@ -31,6 +30,4 @@ struct Work
     void *obj;
 };
 
-} //namespace
-
-#endif //NETWORK_XIO_WORK_H_
+}} //namespace

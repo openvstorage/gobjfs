@@ -43,8 +43,7 @@ xrefcnt_shutdown()
     }
 }
 
-namespace volumedriverfs
-{
+namespace gobjfs { namespace xio {
 /*
 MAKE_EXCEPTION(FailedCreateXioClient, fungi::IOException);
 MAKE_EXCEPTION(FailedCreateEventfd, fungi::IOException);
@@ -745,4 +744,4 @@ NetworkXioClient::xio_msg_prepare(xio_msg_s *xmsg)
 }
 
 
-} //namespace volumedriverfs
+}} //namespace gobjfs

@@ -12,8 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef __NETWORK_XIO_PROTOCOL_H_
-#define __NETWORK_XIO_PROTOCOL_H_
+#pragma once
 
 #include <msgpack.hpp>
 #include <sstream>
@@ -207,4 +206,3 @@ public:
 
 MSGPACK_ADD_ENUM(NetworkXioMsgOpcode);
 
-#endif //__NETWORK_XIO_PROTOCOL_H_

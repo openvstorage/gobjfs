@@ -12,8 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef __NETWORK_XIO_IO_HANDLER_H_
-#define __NETWORK_XIO_IO_HANDLER_H_
+#pragma once
 
 //#include "FileSystem.h"
 
@@ -27,7 +26,7 @@
 
 #include "gIOExecFile.h"
 
-namespace volumedriverfs
+namespace gobjfs { namespace xio
 {
 
 class NetworkXioIOHandler
@@ -103,7 +102,6 @@ private:
 
 typedef std::unique_ptr<NetworkXioIOHandler> NetworkXioIOHandlerPtr;
 
-} //namespace volumedriverfs
+}} //namespace 
 
 
-#endif

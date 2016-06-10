@@ -12,8 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef NETWORK_XIO_WORKQUEUE_H_
-#define NETWORK_XIO_WORKQUEUE_H_
+#pragma once
 
 //#include <youtils/IOException.h>
 #include <iostream>
@@ -29,7 +28,7 @@
 //#include <youtils/SpinLock.h>
 #include "NetworkXioRequest.h"
 
-namespace volumedriverfs
+namespace gobjfs { namespace xio
 {
 
 //MAKE_EXCEPTION(WorkQueueThreadsException, Exception);
@@ -330,6 +329,5 @@ retry:
 
 typedef std::shared_ptr<NetworkXioWorkQueue> NetworkXioWorkQueuePtr;
 
-} //namespace
+}} //namespace
 
-#endif //NETWORK_XIO_WORKQUEUE_H_

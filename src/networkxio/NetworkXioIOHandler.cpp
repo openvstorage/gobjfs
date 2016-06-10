@@ -24,8 +24,8 @@
 #include "NetworkXioCommon.h"
 #include "NetworkXioWorkQueue.h"
 using namespace std;
-namespace volumedriverfs
-{
+namespace gobjfs { namespace xio {
+
 #define XIO_COMPLETION_DEFAULT_MAX_EVENTS 100
     static int 
     gxio_completion_handler(int epollfd, int efd);
@@ -359,4 +359,4 @@ namespace volumedriverfs
         XXExit();
     }
 
-} //namespace volumedriverfs
+}} //namespace gobjfs

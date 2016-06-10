@@ -12,14 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef __NETWORK_XIO_REQUEST_H_
-#define __NETWORK_XIO_REQUEST_H_
+#pragma once 
 
 #include "NetworkXioWork.h"
 #include "NetworkXioCommon.h"
 
 #include <list>
-namespace volumedriverfs
+namespace gobjfs { namespace xio 
 {
 
 struct NetworkXioClientData;
@@ -68,6 +67,5 @@ struct NetworkXioClientData
     std::list<NetworkXioRequest*> ncd_done_reqs;
 };
 
-} //namespace
+}} //namespace
 
-#endif //__NETWORK_XIO_REQUEST_H_

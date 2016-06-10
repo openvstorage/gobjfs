@@ -12,8 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef __NETWORK_XIO_SERVER_H_
-#define __NETWORK_XIO_SERVER_H_
+#pragma once
 
 #include <map>
 #include <tuple>
@@ -26,7 +25,7 @@
 #include "NetworkXioWorkQueue.h"
 #include "NetworkXioRequest.h"
 
-namespace volumedriverfs
+namespace gobjfs { namespace xio 
 {
 
 class NetworkXioServer
@@ -121,6 +120,5 @@ private:
     allocate_client_data();
 };
 
-} //namespace
+}} //namespace
 
-#endif //__NETWORK_XIO_SERVER_H_

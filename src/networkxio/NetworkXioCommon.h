@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef __NETWORK_XIO_COMMON_H_
-#define __NETWORK_XIO_COMMON_H_
+#pragma once
+
 #include <iostream>
 #include <sys/eventfd.h>
 
@@ -32,7 +32,7 @@
 #define GLOG_FATAL(msg) GLOG_ERROR(msg)
 #define GLOG_DEBUG(msg) GLOG_ERROR(msg)
 #define GLOG_TRACE(msg) GLOG_ERROR(msg)
-namespace volumedriverfs
+namespace gobjfs { namespace xio
 {
 static inline int
 xeventfd_read(int fd)
@@ -69,7 +69,7 @@ xeventfd_write(int fd)
     return ret;
 }
 
-} //namespace
+}} //namespace
 
 // TODO Change
 enum class NetworkXioMsgOpcode
@@ -84,5 +84,5 @@ enum class NetworkXioMsgOpcode
     ErrorRsp,
     ShutdownRsp,
 };
+
 #define GetNegative(err) (err > 0) ? -err:err;
-#endif //__NETWORK_XIO_COMMON_H_

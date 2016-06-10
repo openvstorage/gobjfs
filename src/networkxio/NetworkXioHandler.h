@@ -32,13 +32,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef __NETWORK_XIO_HANDLER_H
-#define __NETWORK_XIO_HANDLER_H
+#pragma once
 
 #include "common.h"
 //#include "AioCompletion.h"
 #include "NetworkXioCommon.h"
-namespace volumedriverfs
+namespace gobjfs { namespace xio 
 {
 
 static void
@@ -96,5 +95,4 @@ ovs_xio_complete_request_control(void *opaque, ssize_t retval, int errval)
     XXExit();
 }
 
-}
-#endif //__NETWORK_XIO_HANDLER_H
+}} 

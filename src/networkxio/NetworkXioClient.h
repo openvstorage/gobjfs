@@ -12,8 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef __NETWORK_XIO_CLIENT_H_
-#define __NETWORK_XIO_CLIENT_H_
+#pragma once
 
 #include <libxio.h>
 #include <iostream>
@@ -28,7 +27,7 @@
 
 #include "NetworkXioProtocol.h"
 
-namespace volumedriverfs
+namespace gobjfs { namespace xio 
 {
 
 extern void ovs_xio_aio_complete_request(void *request,
@@ -178,6 +177,5 @@ private:
 
 typedef std::shared_ptr<NetworkXioClient> NetworkXioClientPtr;
 
-} //namespace volumedriverfs
+}} //namespace 
 
-#endif //__NETWORK_XIO_CLIENT_H_

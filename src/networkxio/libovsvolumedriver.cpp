@@ -200,7 +200,7 @@ ovs_ctx_init(ovs_ctx_t *ctx,
         try
         {
             ctx->net_client_ =
-                std::make_shared<volumedriverfs::NetworkXioClient>(ctx->uri);
+                std::make_shared<gobjfs::xio::NetworkXioClient>(ctx->uri);
         }
         catch (...)
         {
@@ -246,7 +246,7 @@ _ovs_submit_aio_request(ovs_ctx_t *ctx,
 {
     XXEnter();
     int r = 0, accmode;
-    volumedriverfs::NetworkXioClientPtr net_client = ctx->net_client_;
+    gobjfs::xio::NetworkXioClientPtr net_client = ctx->net_client_;
 
 
     if (ctx == NULL || ovs_aiocbp == NULL)
