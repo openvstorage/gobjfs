@@ -1,0 +1,24 @@
+
+To ensure that the NVME device is writable, setup a udev config file
+
+Create a file called "nvme.rules" in /etc/udev/rules.d
+with the following line, to indicate that the device
+is read+write for user+group+other
+
+=======
+KERNEL=="nvme*", MODE="0666"
+=======
+
+Then ask udevadm to re-read the config file
+$ sudo udevadm trigger
+
+This will change permissions on the NVME block devices
+
+$ ls -l /dev/nvme*
+
+crw-rw-rw- 1 root root 244, 0 Apr 26 02:52 /dev/nvme0
+brw-rw-rw- 1 root root 259, 0 Apr 26 02:52 /dev/nvme0n1
+crw-rw-rw- 1 root root 244, 1 Apr 26 02:52 /dev/nvme1
+brw-rw-rw- 1 root root 259, 1 Apr 26 02:52 /dev/nvme1n1
+
+
