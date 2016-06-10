@@ -1,4 +1,4 @@
-#include "NetworkXioInterface.h"
+//#include "NetworkXioInterface.h"
 #include "NetworkXioServer.h"
 #include <string>
 #include <assert.h>
@@ -26,9 +26,8 @@
 #include <thread>
 #include <boost/program_options.hpp>
 #include <fstream>
-#include <gobj.h>
+#include <gIOExecFile.h>
 #include <strings.h>
-#include <ObjectFS.h>
 
 using namespace boost::program_options;
 using namespace volumedriverfs;
@@ -116,7 +115,8 @@ int main(int argc, char *argv[]) {
     
     //TODO Read COnfig file
     
-    if (ObjectFS_Init(config.ioConfigFile.c_str()) < 0) {
+    // TODO
+    if (IOExecFileServiceInit(config.ioConfigFile.c_str()) < 0) {
         LOG(ERROR) << "ObjectFS_init Failed";
         return -1;
     }

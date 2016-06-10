@@ -68,21 +68,13 @@ public:
     void
     xio_send_close_request(const void *opaque);
 
+      // TODO - gobjid
     void
     xio_send_read_request(uint64_t gobjid_,
                         void *buf,
                         const uint64_t size_in_bytes,
                         const uint64_t offset_in_bytes,
                         const void *opaque);
-
-    void
-    xio_send_write_request(uint64_t gobjid_,
-                         const void *buf,
-                         const uint64_t size_in_bytes,
-                         const void *opaque);
-
-    void
-    xio_send_flush_request(const void *opaque);
 
     int
     on_session_event(xio_session *session,
@@ -117,52 +109,6 @@ public:
     void
     xstop_loop();
 
-    static void
-    xio_create_volume(const std::string& uri,
-                      const std::string& dev_name,
-                      size_t size,
-                      void *opaque);
-
-    static void
-    xio_remove_volume(const std::string& uri,
-                      const std::string& dev_name,
-                      void* opaque);
-
-    static void
-    xio_list_volumes(const std::string& uri,
-                     std::vector<std::string>& volumes);
-
-    static void
-    xio_list_snapshots(const std::string& uri,
-                       const std::string& dev_name,
-                       std::vector<std::string>& snapshots,
-                       uint64_t *size,
-                       void *opaque);
-
-    static void
-    xio_create_snapshot(const std::string& uri,
-                        const std::string& dev_name,
-                        const std::string& snap_name,
-                        int64_t timeout,
-                        void *opaque);
-
-    static void
-    xio_delete_snapshot(const std::string& uri,
-                        const std::string& dev_name,
-                        const std::string& snap_name,
-                        void *opaque);
-
-    static void
-    xio_rollback_snapshot(const std::string& uri,
-                          const std::string& dev_name,
-                          const std::string& snap_name,
-                          void *opaque);
-
-    static void
-    xio_is_snapshot_synced(const std::string& uri,
-                           const std::string& dev_name,
-                           const std::string& snap_name,
-                           void *opaque);
 private:
     xio_context *ctx;
     xio_session *session;
@@ -228,16 +174,6 @@ private:
     static void
     xio_msg_prepare(xio_msg_s *xmsg);
 
-    static void
-    handle_list_volumes(xio_ctl_s *xctl,
-                        xio_iovec_ex *sglist,
-                        int vec_size);
-
-    static void
-    handle_list_snapshots(xio_ctl_s *xctl,
-                          xio_iovec_ex *sglist,
-                          int vec_size,
-                          int size);
 };
 
 typedef std::shared_ptr<NetworkXioClient> NetworkXioClientPtr;

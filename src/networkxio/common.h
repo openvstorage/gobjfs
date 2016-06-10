@@ -37,13 +37,11 @@
 
 #define ATTRIBUTE_UNUSED __attribute__((unused))
 
+// TODO
 enum class RequestOp
 {
     Noop,
     Read,
-    Write,
-    Flush,
-    AsyncFlush,
     Open,
     Close,
 };

@@ -37,16 +37,16 @@ public:
                         NetworkXioWorkQueuePtr wq)*/
     NetworkXioIOHandler(NetworkXioWorkQueuePtr wq)
     : wq_(wq) {
-        handle_ = NULL;
         dev_name_ = "";
      }
 
     ~NetworkXioIOHandler()
     {
-        if (handle_ )
+        if (serviceHandle_ )
         {
-            ObjectFS_Close(&handle_);
-            handle_ = NULL;
+          // TODO 
+          IOExecFileServiceDestroy(serviceHandle_);
+          serviceHandle_ = NULL;
         }
         dev_name_ = "";
 
@@ -70,25 +70,9 @@ private:
 
     void handle_close(NetworkXioRequest *req);
 
-    void handle_create_volume(NetworkXioRequest *req,
-                          const std::string& dev_name,
-                          size_t size);
-    void
-    handle_remove_volume(NetworkXioRequest *req,
-                         const std::string& dev_name);
-
     void handle_read(NetworkXioRequest *req,
                      uint64_t gobjid_,
                      size_t size,
-                     uint64_t offset);
-
-    int32_t 
-        ReadIOGetReadObjectInfoFromDB(uint64_t objid_,
-                                      gRdObject_t *pRdObject);
-
-    void handle_write(NetworkXioRequest *req,
-                      uint64_t gobjid_,
-                      size_t size,
                      uint64_t offset);
 
     void handle_flush(NetworkXioRequest *req);
@@ -103,8 +87,8 @@ private:
     NetworkXioWorkQueuePtr wq_;
 
     std::string dev_name_;
-    IOExecServiceHandle    handle_;
-    int efd = -1;
+    IOExecServiceHandle    serviceHandle_{nullptr};
+    IOExecEventFdHandle    eventHandle_{nullptr};
     int epollfd = -1 ; 
     std::thread *pioCompletionThread;
 

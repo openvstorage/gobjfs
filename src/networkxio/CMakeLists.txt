@@ -4,14 +4,13 @@ INCLUDE_DIRECTORIES(${PROJECT_SOURCE_DIR}/thirdparty/msgpack/include)
 SET(SOURCES 
     libovsvolumedriver.cpp
     NetworkXioClient.cpp
-    NetworkXioInterface.cpp
     NetworkXioIOHandler.cpp
     NetworkXioServer.cpp
    )
 
 SET(LIBRARY_LIST
     gobjfs
-    dce_util
+    gobjfs_util
     aio
     msgpack
     xio

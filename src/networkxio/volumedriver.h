@@ -41,6 +41,10 @@
 #include <unistd.h>
 #include <stdint.h>
 #include <stdbool.h>
+#include <string>
+#include <sys/types.h>
+
+#include "NetworkXioCommon.h"
 
 #ifdef __cplusplus
 extern "C"
@@ -128,28 +132,6 @@ ovs_ctx_init(ovs_ctx_t *ctx,
 int
 ovs_ctx_destroy(ovs_ctx_t *ctx);
 
-/*
- * Create an Open vStorage volume
- * param ctx: Open vStorage context
- * param dev_name: Volume name
- * param size: Size of volume in bytes
- * return: 0 on success, -1 on fail
- */
-int
-ovs_create_volume(ovs_ctx_t *ctx,
-                  const char *dev_name,
-                  uint64_t size);
-
-/*
- * Remove an Open vStorage volume
- * param ctx: Open vStorage context
- * param dev_name: Volume name
- * return: 0 on success, -1 on fail
- */
-int
-ovs_remove_volume(ovs_ctx_t *ctx,
-                  const char *dev_name);
-
 
 /*
  * Allocate buffer from the shared memory segment
@@ -200,38 +182,6 @@ ovs_read(ovs_ctx_t *ctx,
          size_t nbytes,
          off_t offset);
 
-/*
- * Write to a volume
- * param ctx: Open vStorage context
- * param buf: Shared memory buffer
- * param nbytes: Size to write in bytes
- * param offset: Offset to write in volume
- * return: Number of bytes actually written, -Error on fail
- */
-ssize_t
-ovs_write(ovs_ctx_t *ctx,
-          uint64_t gobjid_,
-          const void *buf,
-          size_t nbytes,
-          off_t offset);
-
-/*
- * Syncronize a volume's in-core state with that on disk
- * param ctx: Open vStorage context
- * return: 0 on success, -1 on fail
- */
-int
-ovs_flush(ovs_ctx_t *ctx, uint64_t gobjid_);
-
-/*
- * Get volume status
- * param ctx: Open vStorage context
- * param buf: Pointer to a stat structure
- * return: 0 on success, -1 on fail
- */
-int
-ovs_stat(ovs_ctx_t *ctx,
-         struct stat *buf);
 
 /*
  * Suspend until asynchronous I/O operation or timeout complete
@@ -296,16 +246,6 @@ ovs_aio_read(ovs_ctx_t *ctx,
              const std::string  &gobjid,
              struct ovs_aiocb *ovs_aiocbp);
 
-/*
- * Asynchronous write to a volume
- * param ctx: Open vStorage context
- * param ovs_aiocb: Pointer to an AIO Control Block structure
- * return: 0 on success, -1 on fail
- */
-int
-ovs_aio_write(ovs_ctx_t *ctx,
-              const std::string &gobjid,
-              struct ovs_aiocb *ovs_aiocbp);
 
 /*
  * Asynchronous read from a volume with completion
@@ -319,31 +259,6 @@ ovs_aio_readcb(ovs_ctx_t *ctx,
                uint64_t gobjid_,
                struct ovs_aiocb *ovs_aiocbp,
                ovs_completion_t *completion);
-
-/*
- * Asynchronous write to a volume with completion
- * param ctx: Open vStorage context
- * param ovs_aiocb: Pointer to an AIO Control Block structure
- * param completion: Pointer to a completion structure
- * return: 0 on success, -1 on fail
- */
-int
-ovs_aio_writecb(ovs_ctx_t *ctx,
-                uint64_t gobjid_,
-                struct ovs_aiocb *ovs_aiocbp,
-                ovs_completion_t *completion);
-
-/*
- * Asynchronously syncronize a volume's in-core state with that on disk with
- * completion
- * param ctx: Open vStorage context
- * param completion: Pointer to a completion structure
- * return: 0 on success, -1 on fail
- */
-int
-ovs_aio_flushcb(ovs_ctx_t *ctx,
-                uint64_t gobjid_,
-                ovs_completion_t *completion);
 
 /*
  * Create a new completion

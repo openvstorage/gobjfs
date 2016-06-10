@@ -1,6 +1,8 @@
-#include "NetworkXioInterface.h"
+//#include "NetworkXioInterface.h"
 #include <assert.h>
-#include <volumedriver.h>
+#include "volumedriver.h"
+#include <fcntl.h>
+#include <string.h>
 
 void NetworkServerWriteReadTest(void)
 {
@@ -26,56 +28,24 @@ void NetworkServerWriteReadTest(void)
 
     GLOG_DEBUG("\n\n------------------- Volume open Successful -------------- \n\n");
 
-    std::string pattern("DCENGINES DCENGINES");
-    auto wbuf = std::make_unique<uint8_t[]>(pattern.length());
-    assert(wbuf != nullptr);
-
-    memcpy(wbuf.get(), pattern.c_str(), pattern.length());
-
-    uint64_t objID = 1234;
-    auto sz = ovs_write(ctx, objID, wbuf.get(), 
-                        pattern.length(),
-                        1024);
-    if (sz < 0) {
-        GLOG_ERROR("OMG!!Write failure with error  : " << sz);
-        return;
-    }
-
-    if (sz != (ssize_t)pattern.length()) {
-        GLOG_ERROR("ovs_write() returned " << sz << " but pattern length not matching. len is " << pattern.length());
-    }
-    GLOG_DEBUG("\n\n------------------- ovs_write Successful -------------- \n\n");
-
-    /*int ret = ovs_flush(ctx, objID);
-    assert (ret == 0);
-
-    wbuf.reset();
-    GLOG_DEBUG("\n\n------------------- ovs_flush Successful -------------- \n\n");
-
     
-    auto rbuf = std::make_unique<uint8_t[]>(pattern.length());
+    auto rbuf = (char*)malloc(4096);
     assert(rbuf != nullptr);
 
-    sz = ovs_read(ctx,  objID, rbuf.get(), pattern.length(), 1024);
+    uint64_t objID = 0;
+    auto sz = ovs_read(ctx, objID, rbuf, 4096, 1024);
 
     if (sz < 0) {
-        GLOG_ERROR("OMG!!Write failure with error  : " << sz);
+        GLOG_ERROR("OMG!!read failure with error  : " << sz);
         return;
     }
-    if (sz != (ssize_t) pattern.length()) {
+    if (sz != (ssize_t) 4096) {
         GLOG_ERROR("Read Length and write length not matching \n");
         assert(0);
     }
-    ret = memcmp(rbuf.get(), pattern.c_str(), pattern.length());
-    if (ret != 0) {
-        GLOG_ERROR("memcmp failed \n");
-        assert(0);
-    }
 
-    rbuf.reset();
 
     GLOG_DEBUG("\n\n------------------- ovs_read Successful -------------- \n\n");
-    */
     ovs_ctx_destroy(ctx);
     GLOG_DEBUG("\n\n------------------- ovs_ctx_destroy Successful -------------- \n\n");
     ovs_ctx_attr_destroy(ctx_attr);

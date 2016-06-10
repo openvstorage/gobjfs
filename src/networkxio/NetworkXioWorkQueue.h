@@ -315,7 +315,7 @@ retry:
                 req->work.func(&req->work);
             }
             //wq->finished_lock.lock();
-            if ((req->op != NetworkXioMsgOpcode::ReadRsp) && (req->op != NetworkXioMsgOpcode::WriteRsp)){
+            if (req->op != NetworkXioMsgOpcode::ReadRsp) {
                 wq->lock_ts(); 
                 wq->finished.push(req);
                 wq->unlock_ts(); 

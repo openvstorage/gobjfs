@@ -70,7 +70,7 @@ ovs_xio_aio_complete_request(void* opaque, ssize_t retval, int errval)
     request->_rv = retval;
     request->_failed = (retval == -1 ? true : false);
     request->_completed = true;
-    if (op != RequestOp::AsyncFlush)
+    //if (op != RequestOp::AsyncFlush)
     {
         _xio_aio_wake_up_suspended_aiocb(request);
     }
@@ -78,13 +78,6 @@ ovs_xio_aio_complete_request(void* opaque, ssize_t retval, int errval)
     {
         completion->_rv = retval;
         completion->_failed = (retval == -1 ? true : false);
-        if (RequestOp::AsyncFlush == op)
-        {
-            pthread_mutex_destroy(&request->_mutex);
-            pthread_cond_destroy(&request->_cond);
-            delete request->ovs_aiocbp;
-            delete request;
-        }
        // AioCompletion::get_aio_context().schedule(completion);
     }
     XXExit();

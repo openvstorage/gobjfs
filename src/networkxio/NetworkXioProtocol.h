@@ -25,8 +25,8 @@ public:
         NetworkXioMsgOpcode opcode_;
         std::string         devname_;
         uint64_t         gobjid_;
-        uint64_t            offset_;
         size_t              size_;
+        uint64_t            offset_;
         ssize_t             retval_;
         int                 errval_;
         uintptr_t           opaque_;

@@ -569,9 +569,7 @@ NetworkXioServer::xio_send_reply(NetworkXioRequest *req)
     req->xio_reply.out.header.iov_base =
         const_cast<void*>(reinterpret_cast<const void*>(req->s_msg.c_str()));
     req->xio_reply.out.header.iov_len = req->s_msg.length();
-    if ((req->op == NetworkXioMsgOpcode::ReadRsp ||
-         req->op == NetworkXioMsgOpcode::ListVolumesRsp ||
-         req->op == NetworkXioMsgOpcode::ListSnapshotsRsp) && req->data)
+    if ((req->op == NetworkXioMsgOpcode::ReadRsp) && req->data)
     {
         vmsg_sglist_set_nents(&req->xio_reply.out, 1);
         req->xio_reply.out.sgl_type = XIO_SGL_TYPE_IOV;

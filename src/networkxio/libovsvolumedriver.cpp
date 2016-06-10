@@ -237,185 +237,6 @@ ovs_ctx_destroy(ovs_ctx_t *ctx)
     return r;
 }
 
-int
-ovs_create_volume(ovs_ctx_t *ctx,
-                  const char* dev_name,
-                  uint64_t size)
-{
-    int r = 0;
-    if (not _is_dev_name_valid(dev_name))
-    {
-        errno = EINVAL; r = -1;
-        return r;
-    }
-
-    switch (ctx->transport)
-    {
-    case TransportType::TCP:
-    case TransportType::RDMA:
-    {
-        ovs_aio_request *request = create_new_request(RequestOp::Noop,
-                                                      NULL,
-                                                      NULL);
-        if (request == NULL)
-        {
-            errno = ENOMEM; r = -1;
-            break;
-        }
-        try
-        {
-            volumedriverfs::NetworkXioClient::xio_create_volume(ctx->uri,
-                                                                dev_name,
-                                                                size,
-                                                                static_cast<void*>(request));
-            errno = request->_errno; r = request->_rv;
-        }
-        catch (const std::bad_alloc&)
-        {
-            errno = ENOMEM; r = -1;
-        }
-        catch (...)
-        {
-            errno = EIO; r = -1;
-        }
-        delete request;
-        break;
-    }
-    default:
-        errno = EINVAL; r = -1;
-        break;
-    }
-    return r;
-}
-
-int
-ovs_remove_volume(ovs_ctx_t *ctx,
-                  const char* dev_name)
-{
-    int r = 0;
-    if (not _is_dev_name_valid(dev_name))
-    {
-        errno = EINVAL; r = -1;
-        return r;
-    }
-
-    switch (ctx->transport)
-    {
-    case TransportType::TCP:
-    case TransportType::RDMA:
-    {
-        ovs_aio_request *request = create_new_request(RequestOp::Noop,
-                                                      NULL,
-                                                      NULL);
-        if (request == NULL)
-        {
-            errno = ENOMEM; r = -1;
-            break;
-        }
-        try
-        {
-            volumedriverfs::NetworkXioClient::xio_remove_volume(ctx->uri,
-                                                                dev_name,
-                                                                static_cast<void*>(request));
-            errno = request->_errno; r = request->_rv;
-        }
-        catch (const std::bad_alloc&)
-        {
-            errno = ENOMEM; r = -1;
-        }
-        catch (...)
-        {
-            errno = EIO; r = -1;
-        }
-        delete request;
-        break;
-    }
-    default:
-        errno = EINVAL; r = -1;
-        break;
-    }
-    return r;
-}
-
-
-int
-ovs_list_volumes(ovs_ctx_t *ctx,
-                 char *names,
-                 size_t *size)
-{
-    std::vector<std::string> volumes;
-    size_t expected_size = 0;
-    int r = 0;
-
-/*
-    tracepoint(openvstorage_libovsvolumedriver,
-               ovs_list_volumes_enter,
-               names,
-               *size);
-
-    auto on_exit(youtils::make_scope_exit([&]
-                {
-                    safe_errno_tracepoint(openvstorage_libovsvolumedriver,
-                                          ovs_list_volumes_exit,
-                                          names,
-                                          *size,
-                                          r,
-                                          errno);
-                }));
-*/
-    switch (ctx->transport)
-    {
-    case TransportType::TCP:
-    case TransportType::RDMA:
-    {
-        try
-        {
-            volumedriverfs::NetworkXioClient::xio_list_volumes(ctx->uri,
-                                                               volumes);
-        }
-        catch (const std::bad_alloc&)
-        {
-            errno = ENOMEM; r = -1;
-        }
-        catch (...)
-        {
-            errno = EIO; r = -1;
-        }
-        break;
-    }
-    default:
-        errno = EINVAL; r = -1;
-        break;
-    }
-
-    for (size_t t = 0; t < volumes.size(); t++)
-    {
-        expected_size += volumes[t].size() + 1;
-    }
-
-    if (*size < expected_size)
-    {
-        *size = expected_size;
-        errno = ERANGE;
-        return (r = -1);
-    }
-
-    if (!names)
-    {
-        errno = EINVAL;
-        return (r = -1);
-    }
-
-    for (int i = 0; i < (int)volumes.size(); i++)
-    {
-        const char* name = volumes[i].c_str();
-        strcpy(names, name);
-        names += strlen(name) + 1;
-    }
-    r = (int)expected_size;
-    return r;
-}
-
 static int
 _ovs_submit_aio_request(ovs_ctx_t *ctx,
                         uint64_t gobjid_,
@@ -436,8 +257,7 @@ _ovs_submit_aio_request(ovs_ctx_t *ctx,
     }
 
     if ((ovs_aiocbp->aio_nbytes <= 0 ||
-         ovs_aiocbp->aio_offset < 0) &&
-         op != RequestOp::Flush && op != RequestOp::AsyncFlush)
+         ovs_aiocbp->aio_offset < 0))
     {
         errno = EINVAL;
         XXExit();
@@ -449,16 +269,6 @@ _ovs_submit_aio_request(ovs_ctx_t *ctx,
     {
     case RequestOp::Read:
         if (accmode == O_WRONLY)
-        {
-            errno = EBADF;
-            XXExit();
-            return -1;
-        }
-        break;
-    case RequestOp::Write:
-    case RequestOp::Flush:
-    case RequestOp::AsyncFlush:
-        if (accmode == O_RDONLY)
         {
             errno = EBADF;
             XXExit();
@@ -506,49 +316,6 @@ _ovs_submit_aio_request(ovs_ctx_t *ctx,
             }
         }
         break;
-    case RequestOp::Write:
-    case RequestOp::Flush:
-    case RequestOp::AsyncFlush:
-        {
-            if (RequestOp::Write == op)
-            {
-                try
-                {
-                    net_client->xio_send_write_request(gobjid_,
-                                                       ovs_aiocbp->aio_buf,
-                                                       ovs_aiocbp->aio_nbytes,
-                                                       reinterpret_cast<void*>(request));
-                }
-                catch (const std::bad_alloc&)
-                {
-                    GLOG_ERROR("xio_send_write_request() failed \n");
-                    errno = ENOMEM; r = -1;
-                }
-                catch (...)
-                {
-                    errno = EIO; r = -1;
-                    GLOG_ERROR("xio_send_write_request() failed \n");
-                }
-            }
-            else
-            {
-                try
-                {
-                    net_client->xio_send_flush_request(reinterpret_cast<void*>(request));
-                }
-                catch (const std::bad_alloc&)
-                {
-                    errno = ENOMEM; r = -1;
-                    GLOG_ERROR("xio_send_flush_request() failed \n");
-                }
-                catch (...)
-                {
-                    errno = EIO; r = -1;
-                    GLOG_ERROR("xio_send_flush_request() failed \n");
-                }
-            }
-        }
-        break;
     default:
         errno = EINVAL; r = -1;
         GLOG_ERROR("incorrect command \n");
@@ -581,24 +348,6 @@ ovs_aio_read(ovs_ctx_t *ctx,
     return err;
 }
 
-int
-ovs_aio_write(ovs_ctx_t *ctx,
-              uint64_t gobjid,
-              struct ovs_aiocb *ovs_aiocbp)
-{
-    int err = 0;
-    XXEnter();
-    err = _ovs_submit_aio_request(ctx,
-                                  gobjid,
-                                   ovs_aiocbp,
-                                   NULL,
-                                   RequestOp::Write);
-    if (err != 0) {
-        GLOG_ERROR("_ovs_submit_aio_request() returned with error " << err);
-    }
-    XXExit();
-    return err;
-}
 
 int
 ovs_aio_error(ovs_ctx_t *ctx,
@@ -939,48 +688,6 @@ ovs_aio_readcb(ovs_ctx_t *ctx,
                                    RequestOp::Read);
 }
 
-int
-ovs_aio_writecb(ovs_ctx_t *ctx,
-                uint64_t gobjid_,
-                struct ovs_aiocb *ovs_aiocbp,
-                ovs_completion_t *completion)
-{
-    return _ovs_submit_aio_request(ctx,
-                                   gobjid_,
-                                   ovs_aiocbp,
-                                   completion,
-                                   RequestOp::Write);
-}
-
-int
-ovs_aio_flushcb(ovs_ctx_t *ctx,
-                uint64_t gobjid_,
-                ovs_completion_t *completion)
-{
-
-    if (ctx == NULL)
-    {
-        errno = EINVAL;
-        return -1;
-    }
-
-    ovs_aiocb *aio = new ovs_aiocb;
-    if (aio == NULL)
-    {
-        errno = ENOMEM;
-        return -1;
-    }
-    aio->aio_nbytes = 0;
-    aio->aio_offset = 0;
-    aio->aio_buf = NULL;
-
-    return _ovs_submit_aio_request(ctx,
-                                   gobjid_,
-                                   aio,
-                                   completion,
-                                   RequestOp::AsyncFlush);
-}
-
 ssize_t
 ovs_read(ovs_ctx_t *ctx,
          uint64_t gobjid_,
@@ -1012,91 +719,6 @@ ovs_read(ovs_ctx_t *ctx,
     r = ovs_aio_return(ctx, &aio);
     if (ovs_aio_finish(ctx, &aio) < 0)
     {
-        r = -1;
-    }
-    return r;
-}
-
-ssize_t
-ovs_write(ovs_ctx_t *ctx,
-          uint64_t gobjid_,
-          const void *buf,
-          size_t nbytes,
-          off_t offset)
-{
-    XXEnter();
-    ssize_t r;
-    struct ovs_aiocb aio;
-    aio.aio_buf = const_cast<void*>(buf);
-    aio.aio_nbytes = nbytes;
-    aio.aio_offset = offset;
-
-    if (ctx == NULL)
-    {
-        errno = EINVAL;
-        GLOG_ERROR("Context passed is NULL. Returning with error ");
-        XXDone();
-    }
-
-    if ((r = ovs_aio_write(ctx, gobjid_, &aio)) < 0)
-    {
-        GLOG_ERROR("ovs_aio_write() failed with error " << errno);
-        XXDone();
-    }
-
-    if ((r = ovs_aio_suspend(ctx, &aio, NULL)) < 0)
-    {
-        GLOG_ERROR("ovs_aio_suspend() failed with error " << errno);
-        XXDone();
-    }
-
-    r = ovs_aio_return(ctx, &aio);
-    
-    if (ovs_aio_finish(ctx, &aio) < 0)
-    {
-        GLOG_ERROR("ovs_aio_finish() failed with error " << errno);
-        r = -1;
-    }
-done:
-    XXExit();
-    return r;
-}
-
-
-int
-ovs_flush(ovs_ctx_t *ctx, uint64_t gobjid_)
-{
-    int r = 0;
-
-
-    if (ctx == NULL)
-    {
-        errno = EINVAL;
-        return (r = -1);
-    }
-
-    struct ovs_aiocb aio;
-    aio.aio_nbytes = 0;
-    aio.aio_offset = 0;
-    aio.aio_buf = NULL;
-
-    if ((r = _ovs_submit_aio_request(ctx,
-                                     gobjid_,
-                                     &aio,
-                                     NULL,
-                                     RequestOp::Flush)) < 0)
-    {
-        return r;
-    }
-
-    if ((r = ovs_aio_suspend(ctx, &aio, NULL)) < 0)
-    {
-        return r;
-    }
-
-    r = ovs_aio_return(ctx, &aio);
-    if (ovs_aio_finish(ctx, &aio) < 0) {
-        GLOG_ERROR("ovs_aio_finish() failed with error ");
         r = -1;
     }
     return r;
