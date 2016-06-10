@@ -53,7 +53,6 @@ extern "C"
 typedef struct ovs_buffer ovs_buffer_t;
 typedef struct ovs_context_t ovs_ctx_t;
 typedef struct ovs_context_attr_t ovs_ctx_attr_t;
-typedef struct ovs_snapshot_info ovs_snapshot_info_t;
 typedef struct ovs_aio_request ovs_aio_request;
 typedef struct ovs_completion ovs_completion_t;
 typedef void (*ovs_callback_t)(ovs_completion_t *cb, void *arg);
@@ -66,11 +65,6 @@ struct ovs_aiocb
     ovs_aio_request *request_;
 };
 
-struct ovs_snapshot_info
-{
-    const char *name;
-    uint64_t size;
-};
 
 /*
  * Create context attributes object

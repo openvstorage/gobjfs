@@ -34,8 +34,6 @@
 
 #pragma once
 
-/*#include "../ShmControlChannelProtocol.h"
-#include "../ShmClient.h"*/
 #include "NetworkXioClient.h"
 
 struct ovs_context_t
@@ -48,6 +46,7 @@ struct ovs_context_t
     int oflag;
     gobjfs::xio::NetworkXioClientPtr net_client_;
 };
+
 static int
 ovs_xio_open_device(ovs_ctx_t *ctx, const char *dev_name);
 

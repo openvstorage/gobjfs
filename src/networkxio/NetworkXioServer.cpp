@@ -14,12 +14,11 @@
 
 #include <libxio.h>
 
-//#include <youtils/Assert.h>
 
 #include "NetworkXioServer.h"
 #include "NetworkXioProtocol.h"
 
-#define POLLING_TIME_USEC   20
+static constexpr int POLLING_TIME_USEC = 20;
 
 namespace gobjfs { namespace xio {
 /*

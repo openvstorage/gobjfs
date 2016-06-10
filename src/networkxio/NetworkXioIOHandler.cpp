@@ -13,10 +13,6 @@
 // limitations under the License.
 //
 
-//#include <youtils/Assert.h>
-//#include <youtils/Catchers.h>
-
-//#include <ObjectRouter.h>
 #include <unistd.h>
 
 #include "NetworkXioIOHandler.h"
@@ -26,7 +22,8 @@
 using namespace std;
 namespace gobjfs { namespace xio {
 
-#define XIO_COMPLETION_DEFAULT_MAX_EVENTS 100
+static constexpr int XIO_COMPLETION_DEFAULT_MAX_EVENTS = 100;
+
     static int 
     gxio_completion_handler(int epollfd, int efd);
 
@@ -163,6 +160,7 @@ namespace gobjfs { namespace xio {
                     pWorkQueue->worker_bottom_half(pWorkQueue, pXioReq);
                 }
                 break;
+
             default:{
                     GLOG_ERROR("Got an event for non rd/wr operation " << (int )pXioReq->op << ".. WTF ! Must fail assert");
                     assert(0);
@@ -235,12 +233,10 @@ namespace gobjfs { namespace xio {
         req->size = size;
         req->offset = offset;
         try {
-            //gRdObject_t RdObject_;
-            //gRdStatus_t *pReadStatus = new gRdStatus_t;
             bool eof = false;
-            //req->retval =  pread(handle_, static_cast<char*>(req->data),req->size,req->offset);
+
             memset(static_cast<char*>(req->data), 0, req->size);
-            //ret = ReadIOGetReadObjectInfoFromDB(gobjid_, &RdObject_);
+
             if (ret != 0) {
                 GLOG_ERROR("GetReadObjectInfo failed with error " << ret);
                 req->retval = -1;
@@ -248,11 +244,10 @@ namespace gobjfs { namespace xio {
                 XXDone();
             }
             GLOG_DEBUG("----- The WQ pointer is " << req->req_wq);
-            //RdObject_.completionId = (gCompletionID)req;
-            //RdObject_.subObjOffset = req->offset;
-            //ret = ObjectFS_Get(handle_, &RdObject_, pReadStatus, 1);
+
             IOExecFileHandle fileHandle = IOExecFileOpen(serviceHandle_, "/tmp/name", O_RDWR);
             gIOBatch batch;
+
             ret = IOExecFileRead(fileHandle, &batch, eventHandle_);
 
             if (ret != 0) {

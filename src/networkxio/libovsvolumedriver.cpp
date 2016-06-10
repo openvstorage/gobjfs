@@ -36,19 +36,12 @@
 #include <limits.h>
 #include <map>
 
-// #include <youtils/SpinLock.h>
-// #include <youtils/System.h>
-// #include <youtils/IOException.h>
-// #include <youtils/ScopeExit.h>
-
 #include "volumedriver.h"
 #include "common.h"
-//#include "ShmHandler.h"
 #include "NetworkXioHandler.h"
 #include "NetworkXioCommon.h"
-//#include "tracing.h"
 #include "context.h"
- #include <sys/types.h>
+#include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
 
@@ -148,7 +141,6 @@ ovs_ctx_new(const ovs_ctx_attr_t *attr)
         ctx->transport = attr->transport;
         ctx->host = std::string(attr->host ? attr->host : "");
         ctx->port = attr->port;
-        //ctx->shm_ctx_ = nullptr;
         ctx->net_client_ = nullptr;
     }
     catch (const std::bad_alloc&)
@@ -165,6 +157,7 @@ ovs_ctx_new(const ovs_ctx_attr_t *attr)
     case TransportType::RDMA:
         ctx->uri = "rdma://" + ctx->host + ":" + std::to_string(ctx->port);
         break;
+    case TransportType::SharedMemory: 
     case TransportType::Error: /* already catched */
         errno = EINVAL;
         return NULL;
@@ -530,7 +523,6 @@ int
 ovs_deallocate(ovs_ctx_t *ctx,
                ovs_buffer_t *ptr)
 {
-    //int r = ctx->shm_ctx_->cache_->deallocate(ptr);
     free(ptr);
     return 0;
     

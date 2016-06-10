@@ -17,7 +17,6 @@
 #include <atomic>
 #include <system_error>
 #include <sstream>
-//#include <youtils/Assert.h>
 
 #include "NetworkXioClient.h"
 

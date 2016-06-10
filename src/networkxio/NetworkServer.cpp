@@ -1,9 +1,8 @@
-//#include "NetworkXioInterface.h"
+
 #include "NetworkXioServer.h"
+
 #include <string>
-#include <assert.h>
-#include <glog/logging.h>
-#include <gtest/gtest.h>
+
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -11,30 +10,24 @@
 #include <unistd.h>
 
 #include <glog/logging.h>
-#include <gtest/gtest.h>
+
 #include <iostream>
+#include <fstream>
+
 #include <assert.h>
 #include <vector>
 #include <string.h>
-#include <math.h>
-#include <chrono>
-#include <sys/time.h>
-
-#include <mutex>
-#include <atomic>
-#include <condition_variable>
-#include <thread>
-#include <boost/program_options.hpp>
-#include <fstream>
-#include <gIOExecFile.h>
 #include <strings.h>
 
-using namespace boost::program_options;
+#include <gIOExecFile.h>
+
 using namespace gobjfs::xio;
 using namespace std;
 
 int main(int argc, char *argv[]) {
+
     string Url = "tcp://127.0.0.1:21321";
+
     // log files are in /tmp
     google::InitGoogleLogging(argv[0]);
     std::string configFileName = "./gioexecfile.conf";
