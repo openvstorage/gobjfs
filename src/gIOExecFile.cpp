@@ -35,9 +35,10 @@ using gobjfs::FileOp;
 using gobjfs::os::IsDirectIOAligned;
 
 // objpool holds freelist of batches with only one fragment
-static gobjfs::MempoolSPtr objpool =
-    gobjfs::MempoolFactory::createObjectMempool(
-        "object", sizeof(gIOBatch) + sizeof(gIOExecFragment));
+// Not used anymore
+//static gobjfs::MempoolSPtr objpool =
+    //gobjfs::MempoolFactory::createObjectMempool(
+        //"object", sizeof(gIOBatch) + sizeof(gIOExecFragment));
 
 // =======================================================
 
@@ -108,7 +109,7 @@ int32_t IOExecGetNumExecutors(IOExecServiceHandle serviceHandle) {
 int32_t IOExecGetStats(IOExecServiceHandle serviceHandle, char* buf,
   int32_t len)
 {
-  uint32_t curOffset = 0;
+  decltype(len) curOffset = 0;
 
   for (auto& elem : serviceHandle->ioexecVec) 
   {
@@ -327,67 +328,21 @@ int32_t IOExecFileTruncate(IOExecFileHandle fileHandle, size_t newSize) {
 }
 
 
-int32_t IOExecFileWrite(IOExecFileHandle fileHandle, const gIOBatch *batch,
-                        IOExecEventFdHandle eventFdHandle) {
-  int32_t retcode = 0;
+static int32_t IOExecFileOp(const char* name, 
+  FileOp optype,
+  IOExecFileHandle fileHandle, 
+  const gIOBatch *batch,
+  IOExecEventFdHandle eventFdHandle) {
 
-  if (!eventFdHandle || (eventFdHandle->fd[1] == gobjfs::os::FD_INVALID)) {
-    LOG(ERROR) << "Rejecting write with invalid eventfd";
-    return -EINVAL;
-  }
-
-  if (!fileHandle) {
-    LOG(ERROR) << "Rejecting write with invalid file handle";
-    return -EINVAL;
-  }
-
-  int jobFd = eventFdHandle->fd[1];
-
-  gobjfs::IOExecutorSPtr ioexecPtr;
-  try {
-    ioexecPtr = fileHandle->serviceHandle->ioexecVec.at(fileHandle->core);
-  } catch (const std::exception &e) {
-    LOG(ERROR) << "entry=" << fileHandle->core
-               << " doesnt exist in ioexec vector of size="
-               << fileHandle->serviceHandle->ioexecVec.size();
-    return -EINVAL;
-  }
-
-  // cache batch->count before the loop
-  // because the batch can be freed after submitTask
-  // making any read of batch->count incorrect
-  const decltype(batch->count) totalCount = batch->count;
-  for (decltype(batch->count) idx = 0; idx < totalCount; idx++) {
-    const gIOExecFragment &frag = batch->array[idx];
-    if ((frag.size == 0) || (frag.addr == nullptr)) {
-      continue;
-    }
-    auto job = new FilerJob(fileHandle->fd, FileOp::Write);
-    job->setBuffer(frag.offset, (char *)frag.addr, frag.size);
-    job->completionId_ = frag.completionId;
-    job->completionFd_ = jobFd;
-    job->canBeFreed_ = true; // free job after completion
-    retcode = ioexecPtr->submitTask(job, /*blocking*/ false);
-    if (retcode != 0) {
-      // delete job if not submitted
-      LOG(WARNING) << "job not submitted due to overflow";
-      delete job;
-    }
-  }
-  return retcode;
-}
-
-int32_t IOExecFileRead(IOExecFileHandle fileHandle, const gIOBatch *batch,
-                       IOExecEventFdHandle eventFdHandle) {
   int retcode = 0;
 
   if (!eventFdHandle || (eventFdHandle->fd[1] == gobjfs::os::FD_INVALID)) {
-    LOG(ERROR) << "Rejecting read with invalid eventfd";
+    LOG(ERROR) << "Rejecting " << name << " with invalid eventfd";
     return -EINVAL;
   }
 
   if (!fileHandle) {
-    LOG(ERROR) << "Rejecting write with invalid file handle";
+    LOG(ERROR) << "Rejecting " << name << " with invalid file handle";
     return -EINVAL;
   }
 
@@ -412,7 +367,7 @@ int32_t IOExecFileRead(IOExecFileHandle fileHandle, const gIOBatch *batch,
     if ((frag.size == 0) || (frag.addr == nullptr)) {
       continue;
     }
-    auto job = new FilerJob(fileHandle->fd, FileOp::Read);
+    auto job = new FilerJob(fileHandle->fd, optype);
     job->setBuffer(frag.offset, (char *)frag.addr, frag.size);
     job->completionId_ = frag.completionId;
     job->completionFd_ = jobFd;
@@ -424,6 +379,19 @@ int32_t IOExecFileRead(IOExecFileHandle fileHandle, const gIOBatch *batch,
     }
   }
   return retcode;
+}
+
+int32_t IOExecFileWrite(IOExecFileHandle fileHandle, const gIOBatch *batch,
+                        IOExecEventFdHandle eventFdHandle) {
+
+  return IOExecFileOp("write", FileOp::Write, fileHandle, batch, eventFdHandle);
+
+}
+
+int32_t IOExecFileRead(IOExecFileHandle fileHandle, const gIOBatch *batch,
+                       IOExecEventFdHandle eventFdHandle) {
+
+  return IOExecFileOp("read", FileOp::Read, fileHandle, batch, eventFdHandle);
 }
 
 int32_t IOExecFileDeleteSync(IOExecServiceHandle serviceHandle,
