@@ -15,6 +15,9 @@
 
 #include <unistd.h>
 
+#include "volumedriver.h"
+#include "common.h"
+
 #include "NetworkXioIOHandler.h"
 #include "NetworkXioClientData.h"
 #include "NetworkXioMsg.h"

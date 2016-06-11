@@ -36,6 +36,25 @@
 
 #define ATTRIBUTE_UNUSED __attribute__((unused))
 
+#define ATTRIBUTE_UNUSED     __attribute__((unused))
+
+#ifndef XXEnter
+    #define XXEnter() std::cout << "Entering function " << __FUNCTION__ << " , " << __FILE__ << " ( " << __LINE__ << " ) " << std::endl;
+#endif
+#ifndef XXExit
+    #define XXExit() std::cout << "Exiting function " << __FUNCTION__ << " , " << __FILE__ << " ( " << __LINE__ << " ) " << std::endl;
+#endif
+
+#ifndef XXDone
+    #define XXDone() goto done;
+#endif
+
+#define GLOG_ERROR(msg) std::cout  << " " << __FUNCTION__ << " , " << __FILE__ << " ( " << __LINE__ << " ) " << msg << std::endl;
+#define GLOG_INFO(msg) GLOG_ERROR(msg)
+#define GLOG_FATAL(msg) GLOG_ERROR(msg)
+#define GLOG_DEBUG(msg) GLOG_ERROR(msg)
+#define GLOG_TRACE(msg) GLOG_ERROR(msg)
+
 // TODO
 enum class RequestOp
 {
@@ -56,41 +75,41 @@ enum class TransportType
 struct ovs_context_attr_t
 {
     TransportType transport;
-    char *host;
-    int port;
+    char *host{nullptr};
+    int port{-1};
 };
 
 struct ovs_buffer
 {
-    void *buf;
+    void *buf{nullptr};
     size_t size;
 };
 
 struct ovs_completion
 {
     ovs_callback_t complete_cb;
-    void *cb_arg;
-    bool _on_wait;
-    bool _calling;
-    bool _signaled;
-    bool _failed;
-    ssize_t _rv;
+    void *cb_arg{nullptr};
+    bool _on_wait{false};
+    bool _calling{false};
+    bool _signaled{false};
+    bool _failed{false};
+    ssize_t _rv{0};
     pthread_cond_t _cond;
     pthread_mutex_t _mutex;
 };
 
 struct ovs_aio_request
 {
-    struct ovs_aiocb *ovs_aiocbp;
-    ovs_completion_t *completion;
-    RequestOp _op;
-    bool _on_suspend;
-    bool _canceled;
-    bool _completed;
-    bool _signaled;
-    bool _failed;
-    int _errno;
-    ssize_t _rv;
+    struct ovs_aiocb *ovs_aiocbp{nullptr};
+    ovs_completion_t *completion{nullptr};
+    RequestOp _op{RequestOp::Noop};
+    bool _on_suspend{false};
+    bool _canceled{false};
+    bool _completed{false};
+    bool _signaled{false};
+    bool _failed{false};
+    int _errno{0};
+    ssize_t _rv{0};
     pthread_cond_t _cond;
     pthread_mutex_t _mutex;
 };

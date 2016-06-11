@@ -27,14 +27,24 @@ class NetworkXioIOHandler;
 
 struct NetworkXioClientData
 {
-    xio_session *ncd_session;
-    xio_connection *ncd_conn;
-    xio_mempool *ncd_mpool;
-    std::atomic<bool> ncd_disconnected;
-    std::atomic<uint64_t> ncd_refcnt;
-    NetworkXioServer *ncd_server;
-    NetworkXioIOHandler *ncd_ioh;
+    xio_session *ncd_session{nullptr};
+    xio_connection *ncd_conn{nullptr};
+    xio_mempool *ncd_mpool{nullptr};
+    std::atomic<bool> ncd_disconnected{false};
+    std::atomic<uint64_t> ncd_refcnt{0};
+    NetworkXioServer *ncd_server{nullptr};
+    NetworkXioIOHandler *ncd_ioh{nullptr};
     std::list<NetworkXioRequest*> ncd_done_reqs;
+
+    NetworkXioClientData(xio_mempool* pool, 
+      NetworkXioServer* server,
+      xio_session* session,
+      xio_connection* conn)
+      : ncd_session(session)
+      , ncd_conn(conn)
+      , ncd_mpool(pool)
+      , ncd_server(server) 
+    { }
 };
 
 }} //namespace

@@ -1,7 +1,9 @@
 #include <assert.h>
-#include "volumedriver.h"
 #include <fcntl.h>
 #include <string.h>
+
+#include "volumedriver.h"
+#include "common.h"
 
 void NetworkServerWriteReadTest(void)
 {

@@ -15,6 +15,9 @@
 #include <libxio.h>
 
 
+#include "volumedriver.h"
+#include "common.h"
+
 #include "NetworkXioServer.h"
 #include "NetworkXioMsg.h"
 #include "NetworkXioClientData.h"
@@ -344,43 +347,20 @@ NetworkXioServer::run()
     XXExit();
 }
 
-NetworkXioClientData*
-NetworkXioServer::allocate_client_data()
-{
-    XXEnter();
-    try
-    {
-        NetworkXioClientData *clientData = new NetworkXioClientData;
-        clientData->ncd_disconnected = false;
-        clientData->ncd_refcnt = 0;
-        clientData->ncd_mpool = xio_mpool;
-        clientData->ncd_server = this;
-        XXExit();
-        return clientData;
-    }
-    catch (const std::bad_alloc&)
-    {
-        XXExit();
-        return NULL;
-    }
-}
-
 int
 NetworkXioServer::create_session_connection(xio_session *session,
                                             xio_session_event_data *evdata)
 {
     XXEnter();
-    NetworkXioClientData *cd = allocate_client_data();
+
+    NetworkXioClientData *cd = new NetworkXioClientData(xio_mpool, this, session, evdata->conn);
+
     if (cd)
     {
         try
         {
             NetworkXioIOHandler *ioh_ptr = new NetworkXioIOHandler(configFileName_, wq_);
-            
             cd->ncd_ioh = ioh_ptr;
-            cd->ncd_session = session;
-            cd->ncd_conn = evdata->conn;
-            
         }
         catch (...)
         {
@@ -396,14 +376,15 @@ NetworkXioServer::create_session_connection(xio_session *session,
         wq_->open_sessions_inc();
         XXExit();
         return 0;
-    }
+    } 
+
     GLOG_ERROR("cannot allocate client data");
     XXExit();
     return -1;
 }
 
 void
-NetworkXioServer::destroy_session_connection(xio_session *session ATTR_UNUSED,
+NetworkXioServer::destroy_session_connection(xio_session *session ATTRIBUTE_UNUSED,
                                              xio_session_event_data *evdata)
 {
     XXEnter();
@@ -539,8 +520,8 @@ NetworkXioServer::free_request(NetworkXioRequest *req)
 }
 
 int
-NetworkXioServer::on_msg_send_complete(xio_session *session ATTR_UNUSED,
-                                       xio_msg *msg ATTR_UNUSED,
+NetworkXioServer::on_msg_send_complete(xio_session *session ATTRIBUTE_UNUSED,
+                                       xio_msg *msg ATTRIBUTE_UNUSED,
                                        void *cb_user_ctx)
 {
     XXEnter();
@@ -593,9 +574,9 @@ NetworkXioServer::xio_send_reply(NetworkXioRequest *req)
 }
 
 int
-NetworkXioServer::on_request(xio_session *session ATTR_UNUSED,
+NetworkXioServer::on_request(xio_session *session ATTRIBUTE_UNUSED,
                              xio_msg *xio_req,
-                             int last_in_rxq ATTR_UNUSED,
+                             int last_in_rxq ATTRIBUTE_UNUSED,
                              void *cb_user_ctx)
 {
     XXEnter();

@@ -17,21 +17,6 @@
 #include <iostream>
 #include <sys/eventfd.h>
 
-#define ATTR_UNUSED     __attribute__((unused))
-#ifndef XXEnter
-    #define XXEnter() std::cout << "Entering function " << __FUNCTION__ << " , " << __FILE__ << " ( " << __LINE__ << " ) " << std::endl;
-#endif
-#ifndef XXExit
-    #define XXExit() std::cout << "Exiting function " << __FUNCTION__ << " , " << __FILE__ << " ( " << __LINE__ << " ) " << std::endl;
-#endif
-#ifndef XXDone
-    #define XXDone() goto done;
-#endif
-#define GLOG_ERROR(msg) std::cout  << " " << __FUNCTION__ << " , " << __FILE__ << " ( " << __LINE__ << " ) " << msg << std::endl;
-#define GLOG_INFO(msg) GLOG_ERROR(msg)
-#define GLOG_FATAL(msg) GLOG_ERROR(msg)
-#define GLOG_DEBUG(msg) GLOG_ERROR(msg)
-#define GLOG_TRACE(msg) GLOG_ERROR(msg)
 namespace gobjfs { namespace xio
 {
 

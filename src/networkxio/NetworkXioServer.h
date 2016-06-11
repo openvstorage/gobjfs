@@ -88,18 +88,18 @@ private:
     std::string uri_;
     std::string configFileName_; 
 
-    bool stopping;
+    bool stopping{false};
 
     std::mutex mutex_;
     std::condition_variable cv_;
-    bool stopped;
+    bool stopped{false};
 
     NetworkXioWorkQueuePtr wq_;
 
-    xio_context *ctx;
-    xio_server *server;
-    xio_mempool *xio_mpool;
-    int evfd;
+    xio_context *ctx{nullptr};
+    xio_server *server{nullptr};
+    xio_mempool *xio_mpool{nullptr};
+    int evfd{-1};
 
     int
     create_session_connection(xio_session *session,
@@ -117,9 +117,6 @@ private:
 
     void
     free_request(NetworkXioRequest *req);
-
-    NetworkXioClientData*
-    allocate_client_data();
 };
 
 }} //namespace

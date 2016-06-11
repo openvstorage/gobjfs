@@ -19,6 +19,8 @@
 #include <sstream>
 
 #include "NetworkXioClient.h"
+#include "volumedriver.h"
+#include "common.h"
 
 #define POLLING_TIME_USEC   20
 
@@ -125,8 +127,6 @@ static_evfd_stop_loop(int fd, int events, void *data)
 
 NetworkXioClient::NetworkXioClient(const std::string& uri)
     : uri_(uri)
-    , stopping(false)
-    , disconnected(false)
 {
     XXEnter();
     
@@ -531,11 +531,11 @@ NetworkXioClient::on_response(xio_session *session __attribute__((unused)),
 }
 
 int
-NetworkXioClient::on_msg_error_control(xio_session *session ATTR_UNUSED,
-                                       xio_status error ATTR_UNUSED,
+NetworkXioClient::on_msg_error_control(xio_session *session ATTRIBUTE_UNUSED,
+                                       xio_status error ATTRIBUTE_UNUSED,
                                        xio_msg_direction direction,
                                        xio_msg *msg,
-                                       void *cb_user_context ATTR_UNUSED)
+                                       void *cb_user_context ATTRIBUTE_UNUSED)
 {
     XXEnter();
     if (direction == XIO_MSG_DIRECTION_IN)
@@ -566,9 +566,9 @@ NetworkXioClient::on_msg_error_control(xio_session *session ATTR_UNUSED,
 }
 
 int
-NetworkXioClient::on_msg_control(xio_session *session ATTR_UNUSED,
+NetworkXioClient::on_msg_control(xio_session *session ATTRIBUTE_UNUSED,
                                  xio_msg *reply,
-                                 int last_in_rxq ATTR_UNUSED,
+                                 int last_in_rxq ATTRIBUTE_UNUSED,
                                  void *cb_user_context)
 {
     XXEnter();
@@ -631,7 +631,7 @@ NetworkXioClient::on_session_event_control(xio_session *session,
 
 int
 NetworkXioClient::assign_data_in_buf_control(xio_msg *msg,
-                                             void *cb_user_context ATTR_UNUSED)
+                                             void *cb_user_context ATTRIBUTE_UNUSED)
 {
     XXEnter();
     xio_iovec_ex *sglist = vmsg_sglist(&msg->in);

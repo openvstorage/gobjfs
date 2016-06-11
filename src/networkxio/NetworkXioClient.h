@@ -45,7 +45,7 @@ public:
     struct xio_msg_s
     {
         xio_msg xreq;
-        const void *opaque;
+        const void *opaque{nullptr};
         NetworkXioMsg msg;
         std::string s_msg;
     };
@@ -104,19 +104,20 @@ public:
     xstop_loop();
 
 private:
-    xio_context *ctx;
-    xio_session *session;
-    xio_connection *conn;
+    xio_context *ctx{nullptr};
+    xio_session *session{nullptr};
+    xio_connection *conn{nullptr};
     xio_session_params params;
     xio_connection_params cparams;
 
     std::string uri_;
-    bool stopping;
+    bool stopping{false};
     std::thread xio_thread_;
 
     //mutable fungi::SpinLock inflight_lock;
 
     std::atomic_flag  inflight_lock = ATOMIC_FLAG_INIT;
+
     inline void lock_ts() {
         while (inflight_lock.test_and_set(std::memory_order_acquire));
     }
@@ -124,12 +125,13 @@ private:
     inline void unlock_ts() {
         inflight_lock.clear(std::memory_order_release);
     }
+
     std::queue<xio_msg_s*> inflight_reqs;
 
     xio_session_ops ses_ops;
-    bool disconnected;
+    bool disconnected{false};
 
-    int evfd;
+    int evfd{-1};
 
     void
     xio_run_loop_worker(void *arg);
