@@ -40,40 +40,38 @@ static constexpr int XIO_COMPLETION_DEFAULT_MAX_EVENTS = 100;
     }
 
     void
-    NetworkXioIOHandler::handle_open(NetworkXioRequest *req,
-                                     const std::string& dev_name)
+    NetworkXioIOHandler::handle_open(NetworkXioRequest *req)
     {
         XXEnter();
         int err = 0;
-        GLOG_DEBUG("trying to open volume with name " << dev_name  );
+        GLOG_DEBUG("trying to open volume ");
+
         req->op = NetworkXioMsgOpcode::OpenRsp;
         if (serviceHandle_) {
-            GLOG_ERROR("Dev " << dev_name <<
-                       " is already open for this session");
+            GLOG_ERROR("Dev is already open for this session");
             req->retval = -1;
             req->errval = EIO;
             pack_msg(req);
             return;
         }
         try {
-            //err = ObjectFS_Open(dev_name.c_str(), O_WRONLY, &handle_);
-            if (err != 0) {
-                GLOG_ERROR("ObjectFS_Open failed with error " << err << " for device " << dev_name);
+            serviceHandle_ = IOExecFileServiceInit(configFileName_.c_str());
+            if (serviceHandle_ == nullptr) {
+                GLOG_ERROR("file service init failed");
                 req->retval = -1;
                 req->errval = err;
                 pack_msg(req);
                 XXExit();
                 return;
             }
-            dev_name_ = dev_name;
             req->retval = 0;
             req->errval = 0;
         } catch (...) {
-            GLOG_ERROR("failed to open volume " << dev_name );
+            GLOG_ERROR("failed to open volume ");
             req->retval = -1;
             req->errval = EIO;
         }
-        auto eventHandle_ = IOExecEventFdOpen(serviceHandle_);
+        eventHandle_ = IOExecEventFdOpen(serviceHandle_);
         if (eventHandle_ == nullptr) {
             GLOG_ERROR("ObjectFS_GetEventFd failed with error " << err);
             //ObjectFS_Close(&handle_);
@@ -83,8 +81,8 @@ static constexpr int XIO_COMPLETION_DEFAULT_MAX_EVENTS = 100;
         }
 
         auto efd = IOExecEventFdGetReadFd(eventHandle_);
-        if (efd != -1) {
-            GLOG_ERROR("GetReadFd failed with error " << err);
+        if (efd == -1) {
+            GLOG_ERROR("GetReadFd failed with ret " << efd);
             req->retval = -1;
             req->errval = EIO;
             // TODO return
@@ -110,8 +108,7 @@ static constexpr int XIO_COMPLETION_DEFAULT_MAX_EVENTS = 100;
     static int 
     gxio_completion_handler(int epollfd, int efd) {
         int ret = 0;
-        //gObjectMetadata_t *pxioCompObjMeta = NULL;
-        //gRdStatus *pxioCompRdStatus = NULL;
+
         NetworkXioWorkQueue* pWorkQueue = NULL;
         unsigned int max = XIO_COMPLETION_DEFAULT_MAX_EVENTS;
         XXEnter();
@@ -187,7 +184,7 @@ static constexpr int XIO_COMPLETION_DEFAULT_MAX_EVENTS = 100;
         XXEnter();
         req->op = NetworkXioMsgOpcode::CloseRsp;
         if (!serviceHandle_) {
-            GLOG_ERROR("Device handle null for device " << dev_name_ );
+            GLOG_ERROR("Device handle null for device ");
             req->retval = -1;
             req->errval = EIO;
         }
@@ -201,15 +198,15 @@ static constexpr int XIO_COMPLETION_DEFAULT_MAX_EVENTS = 100;
 
     void
     NetworkXioIOHandler::handle_read(NetworkXioRequest *req,
-                                     uint64_t gobjid_,
+                                     const std::string& filename, 
                                      size_t size,
-                                     uint64_t offset)
+                                     off_t offset)
     {
         XXEnter();
         int ret = 0;
         req->op = NetworkXioMsgOpcode::ReadRsp;
         req->req_wq = (void *)this->wq_.get();
-        GLOG_DEBUG("Received read request for object " << gobjid_ << " at offset " << offset << " for size " << size);
+        GLOG_DEBUG("Received read request for object " << filename << " at offset " << offset << " for size " << size);
         if (!serviceHandle_) {
             req->retval = -1;
             req->errval = EIO;
@@ -245,19 +242,27 @@ static constexpr int XIO_COMPLETION_DEFAULT_MAX_EVENTS = 100;
             }
             GLOG_DEBUG("----- The WQ pointer is " << req->req_wq);
 
-            IOExecFileHandle fileHandle = IOExecFileOpen(serviceHandle_, "/tmp/name", O_RDWR);
-            gIOBatch batch;
+            IOExecFileHandle fileHandle = IOExecFileOpen(serviceHandle_, filename.c_str(), O_RDWR);
 
-            ret = IOExecFileRead(fileHandle, &batch, eventHandle_);
+            gIOBatch* batch = gIOBatchAlloc(1);
+
+            gIOExecFragment& frag = batch->array[0];
+
+            frag.offset = offset;
+            frag.addr = reinterpret_cast<caddr_t>(req->reg_mem.addr);
+            frag.size = size;
+            frag.completionId = reinterpret_cast<uint64_t>(req);
+
+            ret = IOExecFileRead(fileHandle, batch, eventHandle_);
 
             if (ret != 0) {
-                GLOG_ERROR("ObjectFS_Get failed with error " << ret);
+                GLOG_ERROR("IOExecFileRead failed with error " << ret);
                 req->retval = -1;
                 req->errval = EIO;
                 XXDone();
             }
 
-            GLOG_DEBUG("Do object read for object " << gobjid_ << " at offset " << req->offset);
+            GLOG_DEBUG("Do object read for object " << filename << " at offset " << req->offset);
             req->errval = 0;
             req->retval = req->size;
             XXDone();
@@ -311,8 +316,7 @@ static constexpr int XIO_COMPLETION_DEFAULT_MAX_EVENTS = 100;
         case NetworkXioMsgOpcode::OpenReq:
             {
                 GLOG_DEBUG(" Command OpenReq");
-                handle_open(req,
-                            i_msg.device_name() );
+                handle_open(req);
                 break;
             }
         case NetworkXioMsgOpcode::CloseReq:
@@ -325,7 +329,7 @@ static constexpr int XIO_COMPLETION_DEFAULT_MAX_EVENTS = 100;
             {
                 GLOG_DEBUG(" Command ReadReq");
                 handle_read(req,
-                            i_msg.gobjid_,
+                            i_msg.filename_,
                             i_msg.size(),
                             i_msg.offset());
                 if (req->retval < 0) {

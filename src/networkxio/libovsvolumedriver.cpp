@@ -232,7 +232,7 @@ ovs_ctx_destroy(ovs_ctx_t *ctx)
 
 static int
 _ovs_submit_aio_request(ovs_ctx_t *ctx,
-                        uint64_t gobjid_,
+                        const std::string& filename,
                         struct ovs_aiocb *ovs_aiocbp,
                         ovs_completion_t *completion,
                         const RequestOp& op)
@@ -291,7 +291,7 @@ _ovs_submit_aio_request(ovs_ctx_t *ctx,
         {
             try
             {
-                net_client->xio_send_read_request(gobjid_,
+                net_client->xio_send_read_request(filename,
                                                   ovs_aiocbp->aio_buf,
                                                   ovs_aiocbp->aio_nbytes,
                                                   ovs_aiocbp->aio_offset,
@@ -328,12 +328,12 @@ _ovs_submit_aio_request(ovs_ctx_t *ctx,
 
 int
 ovs_aio_read(ovs_ctx_t *ctx,
-             uint64_t gobjid,
+             const std::string& filename,
              struct ovs_aiocb *ovs_aiocbp)
 {
     XXEnter();
     int err = _ovs_submit_aio_request(ctx,
-                                      gobjid,
+                                      filename,
                                        ovs_aiocbp,
                                        NULL,
                                        RequestOp::Read);
@@ -669,12 +669,12 @@ ovs_aio_release_completion(ovs_completion_t *completion)
 
 int
 ovs_aio_readcb(ovs_ctx_t *ctx,
-               uint64_t gobjid_,
+               const std::string& filename,
                struct ovs_aiocb *ovs_aiocbp,
                ovs_completion_t *completion)
 {
     return _ovs_submit_aio_request(ctx,
-                                   gobjid_,
+                                   filename,
                                    ovs_aiocbp,
                                    completion,
                                    RequestOp::Read);
@@ -682,7 +682,7 @@ ovs_aio_readcb(ovs_ctx_t *ctx,
 
 ssize_t
 ovs_read(ovs_ctx_t *ctx,
-         uint64_t gobjid_,
+         const std::string& filename, 
          void *buf,
          size_t nbytes,
          off_t offset)
@@ -698,7 +698,7 @@ ovs_read(ovs_ctx_t *ctx,
         return (r = -1);
     }
 
-    if ((r = ovs_aio_read(ctx, gobjid_, &aio)) < 0)
+    if ((r = ovs_aio_read(ctx, filename, &aio)) < 0)
     {
         return r;
     }

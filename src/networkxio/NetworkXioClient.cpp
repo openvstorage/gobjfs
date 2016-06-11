@@ -422,15 +422,13 @@ NetworkXioClient::on_session_event(xio_session *session __attribute__((unused)),
 }
 
 void
-NetworkXioClient::xio_send_open_request(const std::string& devname,
-                                        const void *opaque)
+NetworkXioClient::xio_send_open_request(const void *opaque)
 {
     XXEnter();
     xio_msg_s *xmsg = new xio_msg_s;
     xmsg->opaque = opaque;
     xmsg->msg.opcode(NetworkXioMsgOpcode::OpenReq);
     xmsg->msg.opaque((uintptr_t)xmsg);
-    xmsg->msg.devname_ = devname;
 
     xmsg->s_msg = xmsg->msg.pack_msg();
 
@@ -445,7 +443,7 @@ NetworkXioClient::xio_send_open_request(const std::string& devname,
 }
 
 void
-NetworkXioClient::xio_send_read_request(uint64_t gobjid_,
+NetworkXioClient::xio_send_read_request(const std::string& filename,
                                         void *buf,
                                         const uint64_t size_in_bytes,
                                         const uint64_t offset_in_bytes,
@@ -458,7 +456,7 @@ NetworkXioClient::xio_send_read_request(uint64_t gobjid_,
     xmsg->msg.opaque((uintptr_t)xmsg);
     xmsg->msg.size(size_in_bytes);
     xmsg->msg.offset(offset_in_bytes);
-    xmsg->msg.gobjid_ = gobjid_;
+    xmsg->msg.filename_ = filename;
 
     xmsg->s_msg = xmsg->msg.pack_msg();
 

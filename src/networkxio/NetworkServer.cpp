@@ -30,15 +30,13 @@ int main(int argc, char *argv[]) {
 
     // log files are in /tmp
     google::InitGoogleLogging(argv[0]);
+
     std::string configFileName = "./gioexecfile.conf";
+
     if (argc > 1) {
       configFileName = argv[1];
     }
     
-    if (IOExecFileServiceInit(configFileName.c_str()) < 0) {
-        LOG(ERROR) << "IOExecFileService init Failed";
-        return -1;
-    }
-    NetworkXioServer *xs = new NetworkXioServer(Url);
+    NetworkXioServer *xs = new NetworkXioServer(Url, configFileName);
     xs->run();
 }

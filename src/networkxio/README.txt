@@ -1,5 +1,32 @@
+CLIENT SIDE
 
-// server side structures
+struct ovs_context_t 
+{
+  NetworkXioClient net_client_
+}
+
+volumedriver wrapper calls ovs_send
+{
+  NetworkXioClient->xio_send_read_request()
+  {
+    push into inflight_reqs queue
+  }
+}
+
+another thread runs NetworkXioClient::xio_run_loop_worker()
+{
+  xio_context_run_loop()
+
+  while (pop from inflight_reqs queue)
+  {
+    xio_send_request
+  }
+}
+
+==========================
+
+SERVER SIDE 
+
 NetworkXioRequest 
 {
 }

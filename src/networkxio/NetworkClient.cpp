@@ -27,7 +27,7 @@ void NetworkServerWriteReadTest(void)
     assert(rbuf != nullptr);
 
     uint64_t objID = 0;
-    auto sz = ovs_read(ctx, objID, rbuf, 4096, 1024);
+    auto sz = ovs_read(ctx, "abcd", rbuf, 4096, 0);
 
     if (sz < 0) {
         GLOG_ERROR("OMG!!read failure with error  : " << sz);

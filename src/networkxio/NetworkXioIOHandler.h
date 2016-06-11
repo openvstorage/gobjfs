@@ -34,21 +34,17 @@ class NetworkXioIOHandler
 public:
     /*NetworkXioIOHandler(FileSystem& fs,
                         NetworkXioWorkQueuePtr wq)*/
-    NetworkXioIOHandler(NetworkXioWorkQueuePtr wq)
-    : wq_(wq) {
-        dev_name_ = "";
-     }
+    NetworkXioIOHandler(const std::string& configFileName, NetworkXioWorkQueuePtr wq)
+    : configFileName_(configFileName)
+    , wq_(wq) {}
 
     ~NetworkXioIOHandler()
     {
         if (serviceHandle_ )
         {
-          // TODO 
           IOExecFileServiceDestroy(serviceHandle_);
           serviceHandle_ = NULL;
         }
-        dev_name_ = "";
-
     }
 
     NetworkXioIOHandler(const NetworkXioIOHandler&) = delete;
@@ -64,17 +60,14 @@ public:
 
     std::thread CompletionThread;
 private:
-    void handle_open(NetworkXioRequest *req,
-                     const std::string& dev_name);
+    void handle_open(NetworkXioRequest *req);
 
     void handle_close(NetworkXioRequest *req);
 
     void handle_read(NetworkXioRequest *req,
-                     uint64_t gobjid_,
+                     const std::string& filename,
                      size_t size,
-                     uint64_t offset);
-
-    void handle_flush(NetworkXioRequest *req);
+                     off_t offset);
 
     void handle_error(NetworkXioRequest *req,
                       int errval);
@@ -82,22 +75,13 @@ private:
 private:
    // DECLARE_LOGGER("NetworkXioIOHandler");
 
-    //FileSystem& fs_;
     NetworkXioWorkQueuePtr wq_;
+    std::string configFileName_;
 
-    std::string dev_name_;
     IOExecServiceHandle    serviceHandle_{nullptr};
     IOExecEventFdHandle    eventHandle_{nullptr};
     int epollfd = -1 ; 
     std::thread *pioCompletionThread;
-
-    std::string
-    make_volume_path(const std::string& dev_name)
-    {
-        const std::string root_("/");
-        //return (root_ + dev_name + fs_.vdisk_format().volume_suffix());
-        return (root_ + dev_name);
-    }
 };
 
 typedef std::unique_ptr<NetworkXioIOHandler> NetworkXioIOHandlerPtr;

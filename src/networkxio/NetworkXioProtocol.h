@@ -22,8 +22,7 @@ class NetworkXioMsg
 {
 public:
         NetworkXioMsgOpcode opcode_;
-        std::string         devname_;
-        uint64_t         gobjid_;
+        std::string         filename_;
         size_t              size_;
         uint64_t            offset_;
         ssize_t             retval_;
@@ -34,8 +33,7 @@ public:
 public:
     explicit NetworkXioMsg(NetworkXioMsgOpcode opcode =
                                 NetworkXioMsgOpcode::Noop,
-                           const std::string& devname = "",
-                           const uint64_t gobjid = 0,
+                           const std::string& filename = "",
                            const size_t size = 0,
                            const uint32_t contid = 0,
                            const uint64_t offset = 0,
@@ -44,8 +42,7 @@ public:
                            const uintptr_t opaque = 0,
                            const int64_t timeout = 0)
     : opcode_(opcode)
-    , devname_(devname)
-    , gobjid_ (gobjid)
+    , filename_(filename)
     , size_(size)
     , offset_(offset)
     , retval_(retval)
@@ -69,15 +66,15 @@ public:
     }
 
     const std::string&
-    device_name() const
+    filename() const
     {
-        return devname_;
+        return filename_;
     }
 
     void
-    device_name(const std::string& deviceName)
+    filename(const std::string& fname)
     {
-        devname_ = deviceName;
+        filename_ = fname;
     }
 
     const uintptr_t&
@@ -184,8 +181,7 @@ public:
     clear()
     {
         opcode_ = NetworkXioMsgOpcode::Noop;
-        devname_.clear();
-        gobjid_ = 0;
+        filename_.clear();
         offset_ = 0;
         retval_ = 0;
         errval_ = 0;
@@ -194,8 +190,7 @@ public:
     }
 public:
     MSGPACK_DEFINE(opcode_,
-                   devname_,
-                   gobjid_,
+                   filename_,
                    size_,
                    offset_,
                    retval_,

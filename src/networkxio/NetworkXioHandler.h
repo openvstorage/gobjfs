@@ -40,7 +40,7 @@
 namespace gobjfs { namespace xio 
 {
 
-static void
+inline void
 _xio_aio_wake_up_suspended_aiocb(ovs_aio_request *request)
 {
     XXEnter();

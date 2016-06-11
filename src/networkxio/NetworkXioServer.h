@@ -31,9 +31,9 @@ namespace gobjfs { namespace xio
 class NetworkXioServer
 {
 public:
-    /*NetworkXioServer(FileSystem& fs,
-                     const std::string& uri);*/
-    NetworkXioServer(const std::string& uri);
+
+    NetworkXioServer(const std::string& uri,
+      const std::string& configFileName);
 
     ~NetworkXioServer();
 
@@ -84,8 +84,9 @@ public:
 private:
 //    DECLARE_LOGGER("NetworkXioServer");
 
-    //FileSystem& fs_;
     std::string uri_;
+    std::string configFileName_; 
+
     bool stopping;
 
     std::mutex mutex_;

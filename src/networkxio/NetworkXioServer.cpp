@@ -137,10 +137,11 @@ static_evfd_stop_loop(int fd, int events, void *data)
     XXExit();
 }
 
-NetworkXioServer::NetworkXioServer(//FileSystem& fs,
-                                   const std::string& uri)
-    : /*fs_(fs)
-    ,*/ uri_(uri)
+NetworkXioServer::NetworkXioServer(
+      const std::string& uri,
+      const std::string& configFileName)
+    : uri_(uri)
+    , configFileName_(configFileName)
     , stopping(false)
     , stopped(false)
 {
@@ -255,6 +256,7 @@ NetworkXioServer::NetworkXioServer(//FileSystem& fs,
 //        throw FailedCreateXioMempool("failed to create XIO memory pool");
     }
 
+    // TODO add slabs based on read sizes
     int ret = xio_mempool_add_slab(xio_mpool,
                                4096,
                                0,
@@ -372,9 +374,7 @@ NetworkXioServer::create_session_connection(xio_session *session,
     {
         try
         {
-            /*NetworkXioIOHandler *ioh_ptr = new NetworkXioIOHandler(fs_,
-                                                                   wq_);*/
-            NetworkXioIOHandler *ioh_ptr = new NetworkXioIOHandler(wq_);
+            NetworkXioIOHandler *ioh_ptr = new NetworkXioIOHandler(configFileName_, wq_);
             
             cd->ncd_ioh = ioh_ptr;
             cd->ncd_session = session;

@@ -170,7 +170,7 @@ ovs_deallocate(ovs_ctx_t *ctx,
  */
 ssize_t
 ovs_read(ovs_ctx_t *ctx,
-         uint64_t gobjid_,
+         const std::string& filename,
          void *buf,
          size_t nbytes,
          off_t offset);
@@ -236,7 +236,7 @@ ovs_aio_finish(ovs_ctx_t *ctx,
  */
 int
 ovs_aio_read(ovs_ctx_t *ctx,
-             const std::string  &gobjid,
+             const std::string  &filename,
              struct ovs_aiocb *ovs_aiocbp);
 
 
@@ -249,7 +249,7 @@ ovs_aio_read(ovs_ctx_t *ctx,
  */
 int
 ovs_aio_readcb(ovs_ctx_t *ctx,
-               uint64_t gobjid_,
+               const std::string &filename,
                struct ovs_aiocb *ovs_aiocbp,
                ovs_completion_t *completion);
 

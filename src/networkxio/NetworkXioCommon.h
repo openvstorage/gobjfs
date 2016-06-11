@@ -34,7 +34,8 @@
 #define GLOG_TRACE(msg) GLOG_ERROR(msg)
 namespace gobjfs { namespace xio
 {
-static inline int
+
+inline int
 xeventfd_read(int fd)
 {
     int ret;
@@ -54,7 +55,7 @@ xeventfd_read(int fd)
 }
 
 
-static inline int
+inline int
 xeventfd_write(int fd)
 {
     uint64_t u = 1;
@@ -71,7 +72,6 @@ xeventfd_write(int fd)
 
 }} //namespace
 
-// TODO Change
 enum class NetworkXioMsgOpcode
 {
     Noop,

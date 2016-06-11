@@ -61,15 +61,13 @@ public:
     };
 
     void
-    xio_send_open_request(const std::string& devname,
-                          const void *opaque);
+    xio_send_open_request(const void *opaque);
 
     void
     xio_send_close_request(const void *opaque);
 
-      // TODO - gobjid
     void
-    xio_send_read_request(uint64_t gobjid_,
+    xio_send_read_request(const std::string& filename,
                         void *buf,
                         const uint64_t size_in_bytes,
                         const uint64_t offset_in_bytes,

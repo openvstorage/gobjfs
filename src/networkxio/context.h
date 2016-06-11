@@ -47,10 +47,10 @@ struct ovs_context_t
     gobjfs::xio::NetworkXioClientPtr net_client_;
 };
 
-static int
+int
 ovs_xio_open_device(ovs_ctx_t *ctx, const char *dev_name);
 
-static bool
+inline bool
 _is_dev_name_valid(const char *dev_name)
 {
     if (dev_name == NULL || strlen(dev_name) == 0 ||
@@ -64,7 +64,7 @@ _is_dev_name_valid(const char *dev_name)
     }
 }
 
-static inline
+inline 
 ovs_aio_request* create_new_request(RequestOp op,
                                     struct ovs_aiocb *aio,
                                     ovs_completion_t *completion)
@@ -95,7 +95,7 @@ ovs_aio_request* create_new_request(RequestOp op,
     }
 }
 
-static int
+inline int
 ovs_xio_open_device(ovs_ctx_t *ctx, const char *dev_name)
 {
     XXEnter();
@@ -114,8 +114,8 @@ ovs_xio_open_device(ovs_ctx_t *ctx, const char *dev_name)
 
     try
     {
-        ctx->net_client_->xio_send_open_request(dev_name,
-                                                reinterpret_cast<void*>(request));
+        ctx->net_client_->xio_send_open_request(
+          reinterpret_cast<void*>(request));
     }
     catch (const std::bad_alloc&)
     {
