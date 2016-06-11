@@ -35,8 +35,8 @@
 #pragma once
 
 #include "common.h"
-//#include "AioCompletion.h"
 #include "NetworkXioCommon.h"
+
 namespace gobjfs { namespace xio 
 {
 

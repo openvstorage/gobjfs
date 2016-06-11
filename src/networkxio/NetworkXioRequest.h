@@ -14,12 +14,23 @@
 
 #pragma once 
 
-#include "NetworkXioWork.h"
+#include <libxio.h>
+#include <functional>
 #include "NetworkXioCommon.h"
 
 #include <list>
 namespace gobjfs { namespace xio 
 {
+
+struct Work;
+
+typedef std::function<void(Work*)> workitem_func_t;
+
+struct Work
+{
+    workitem_func_t func;
+    void *obj;
+};
 
 struct NetworkXioClientData;
 

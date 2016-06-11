@@ -17,7 +17,6 @@
 #include <atomic>
 #include <list>
 
-#include "NetworkXioWork.h"
 #include "NetworkXioCommon.h"
 
 namespace gobjfs { namespace xio 
