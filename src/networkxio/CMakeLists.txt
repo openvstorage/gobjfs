@@ -2,7 +2,7 @@ INCLUDE_DIRECTORIES(${PROJECT_SOURCE_DIR}/thirdparty/xio/include)
 INCLUDE_DIRECTORIES(${PROJECT_SOURCE_DIR}/thirdparty/msgpack/include)
 
 SET(SOURCES 
-    libovsvolumedriver.cpp
+    volumedriver.cpp
     NetworkXioClient.cpp
     NetworkXioIOHandler.cpp
     NetworkXioServer.cpp

@@ -47,22 +47,6 @@ struct ovs_context_t
     gobjfs::xio::NetworkXioClientPtr net_client_;
 };
 
-int
-ovs_xio_open_device(ovs_ctx_t *ctx, const char *dev_name);
-
-inline bool
-_is_dev_name_valid(const char *dev_name)
-{
-    if (dev_name == NULL || strlen(dev_name) == 0 ||
-        strlen(dev_name) >= NAME_MAX)
-    {
-        return false;
-    }
-    else
-    {
-        return true;
-    }
-}
 
 inline 
 ovs_aio_request* create_new_request(RequestOp op,

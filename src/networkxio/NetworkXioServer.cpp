@@ -16,7 +16,8 @@
 
 
 #include "NetworkXioServer.h"
-#include "NetworkXioProtocol.h"
+#include "NetworkXioMsg.h"
+#include "NetworkXioClientData.h"
 
 static constexpr int POLLING_TIME_USEC = 20;
 

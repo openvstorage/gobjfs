@@ -21,11 +21,8 @@
 #include <assert.h>
 #include <thread>
 #include <atomic>
-//#include <youtils/SpinLock.h>
 
-//#include <youtils/Logger.h>
-
-#include "NetworkXioProtocol.h"
+#include "NetworkXioMsg.h"
 
 namespace gobjfs { namespace xio 
 {

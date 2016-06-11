@@ -14,42 +14,28 @@
 
 #pragma once 
 
+#include <atomic>
+#include <list>
+
 #include "NetworkXioWork.h"
 #include "NetworkXioCommon.h"
 
-#include <list>
 namespace gobjfs { namespace xio 
 {
 
-struct NetworkXioClientData;
+class NetworkXioServer;
+class NetworkXioIOHandler;
 
-struct NetworkXioRequest
+struct NetworkXioClientData
 {
-    NetworkXioMsgOpcode     op;
-
-    void                    *req_wq;
-
-    void                    *data;
-    unsigned int            data_len; // DataLen of buffer pointed by data
-    size_t                  size; // Size to be written/read.
-    uint64_t                offset; // at which offset
-
-    ssize_t                 retval;
-    int                     errval;
-    uintptr_t               opaque;
-
-    Work                    work;
-
-    xio_msg *xio_req;
-    xio_msg xio_reply;
-    xio_reg_mem reg_mem;
-    bool from_pool;
-
-    NetworkXioClientData *pClientData;
-
-    void    *private_data;
-
-    std::string s_msg;
+    xio_session *ncd_session;
+    xio_connection *ncd_conn;
+    xio_mempool *ncd_mpool;
+    std::atomic<bool> ncd_disconnected;
+    std::atomic<uint64_t> ncd_refcnt;
+    NetworkXioServer *ncd_server;
+    NetworkXioIOHandler *ncd_ioh;
+    std::list<NetworkXioRequest*> ncd_done_reqs;
 };
 
 }} //namespace

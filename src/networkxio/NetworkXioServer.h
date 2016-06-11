@@ -20,13 +20,14 @@
 #include <libxio.h>
 #include <iostream>
 #include <atomic>
-//#include "FileSystem.h"
 #include "NetworkXioIOHandler.h"
 #include "NetworkXioWorkQueue.h"
 #include "NetworkXioRequest.h"
 
 namespace gobjfs { namespace xio 
 {
+
+class NetworkXioClientData;
 
 class NetworkXioServer
 {

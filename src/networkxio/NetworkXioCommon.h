@@ -72,17 +72,4 @@ xeventfd_write(int fd)
 
 }} //namespace
 
-enum class NetworkXioMsgOpcode
-{
-    Noop,
-    OpenReq,
-    OpenRsp,
-    CloseReq,
-    CloseRsp,
-    ReadReq,
-    ReadRsp,
-    ErrorRsp,
-    ShutdownRsp,
-};
-
 #define GetNegative(err) (err > 0) ? -err:err;

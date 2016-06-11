@@ -18,6 +18,20 @@
 #include <sstream>
 #include "NetworkXioCommon.h"
 #include <sys/epoll.h>
+
+enum class NetworkXioMsgOpcode
+{
+    Noop,
+    OpenReq,
+    OpenRsp,
+    CloseReq,
+    CloseRsp,
+    ReadReq,
+    ReadRsp,
+    ErrorRsp,
+    ShutdownRsp,
+};
+
 class NetworkXioMsg
 {
 public:

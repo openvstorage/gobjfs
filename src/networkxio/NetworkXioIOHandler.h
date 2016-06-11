@@ -16,8 +16,11 @@
 
 //#include "FileSystem.h"
 
+#include "NetworkXioMsg.h"
+
 #include "NetworkXioWorkQueue.h"
 #include "NetworkXioRequest.h"
+
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
@@ -40,6 +43,9 @@ public:
 
     ~NetworkXioIOHandler()
     {
+        // TODO signal exit
+        ioCompletionThread.join();
+
         if (serviceHandle_ )
         {
           IOExecFileServiceDestroy(serviceHandle_);
@@ -81,7 +87,7 @@ private:
     IOExecServiceHandle    serviceHandle_{nullptr};
     IOExecEventFdHandle    eventHandle_{nullptr};
     int epollfd = -1 ; 
-    std::thread *pioCompletionThread;
+    std::thread ioCompletionThread;
 };
 
 typedef std::unique_ptr<NetworkXioIOHandler> NetworkXioIOHandlerPtr;

@@ -172,12 +172,6 @@ ovs_ctx_init(ovs_ctx_t *ctx,
 {
     int err = 0;    
     XXEnter();
-    if (not _is_dev_name_valid(dev_name))
-    {
-        err = -EINVAL;
-        XXExit();
-        return err;
-    }
     if (oflag != O_RDONLY &&
         oflag != O_WRONLY &&
         oflag != O_RDWR) {

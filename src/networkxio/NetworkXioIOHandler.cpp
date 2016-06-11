@@ -16,9 +16,11 @@
 #include <unistd.h>
 
 #include "NetworkXioIOHandler.h"
-#include "NetworkXioProtocol.h"
+#include "NetworkXioClientData.h"
+#include "NetworkXioMsg.h"
 #include "NetworkXioCommon.h"
 #include "NetworkXioWorkQueue.h"
+
 using namespace std;
 namespace gobjfs { namespace xio {
 
@@ -99,7 +101,7 @@ static constexpr int XIO_COMPLETION_DEFAULT_MAX_EVENTS = 100;
             GLOG_ERROR("epoll_ctl() failed with error " << errno);
             assert(0);
         }
-        pioCompletionThread  = new std::thread(gxio_completion_handler, epollfd, efd);
+        ioCompletionThread  = std::thread(gxio_completion_handler, epollfd, efd);
 
         pack_msg(req);
         XXExit();
@@ -117,6 +119,7 @@ static constexpr int XIO_COMPLETION_DEFAULT_MAX_EVENTS = 100;
         // LEVELTRIGGERED is default
         // Edge triggerd
    while (1) {
+        // TODO handle clean exit 
         int n = epoll_wait (epollfd, events, max, -1);
         for (int i = 0; i < n ; i++) {
             if (efd != events[i].data.fd) {
