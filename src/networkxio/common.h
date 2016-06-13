@@ -36,8 +36,7 @@
 
 #define ATTRIBUTE_UNUSED __attribute__((unused))
 
-#define ATTRIBUTE_UNUSED     __attribute__((unused))
-
+#ifdef FUNC_TRACE 
 #ifndef XXEnter
     #define XXEnter() std::cout << "Entering function " << __FUNCTION__ << " , " << __FILE__ << " ( " << __LINE__ << " ) " << std::endl;
 #endif
@@ -48,6 +47,12 @@
 #ifndef XXDone
     #define XXDone() goto done;
 #endif
+#else
+#define XXEnter()
+#define XXExit()
+#define XXDone()
+#endif
+
 
 #define GLOG_ERROR(msg) std::cout  << " " << __FUNCTION__ << " , " << __FILE__ << " ( " << __LINE__ << " ) " << msg << std::endl;
 #define GLOG_INFO(msg) GLOG_ERROR(msg)

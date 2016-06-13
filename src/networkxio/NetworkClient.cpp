@@ -40,6 +40,7 @@ void NetworkServerWriteReadTest(void)
         assert(0);
     }
     GLOG_DEBUG("\n\n------------------- ovs_read Successful -------------- \n\n");
+    std::cout << std::string(rbuf, 20) << std::endl;
 
     ovs_ctx_destroy(ctx);
 

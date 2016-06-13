@@ -21,6 +21,8 @@
 #include "NetworkXioWorkQueue.h"
 #include "NetworkXioRequest.h"
 
+#include <util/ShutdownNotifier.h>
+
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
@@ -41,17 +43,7 @@ public:
     : configFileName_(configFileName)
     , wq_(wq) {}
 
-    ~NetworkXioIOHandler()
-    {
-        // TODO signal exit
-        ioCompletionThread.join();
-
-        if (serviceHandle_ )
-        {
-          IOExecFileServiceDestroy(serviceHandle_);
-          serviceHandle_ = NULL;
-        }
-    }
+    ~NetworkXioIOHandler();
 
     NetworkXioIOHandler(const NetworkXioIOHandler&) = delete;
 
@@ -64,7 +56,9 @@ public:
     void
     handle_request(NetworkXioRequest* req);
 
-    std::thread CompletionThread;
+    int 
+    gxio_completion_handler(int epollfd, int efd);
+
 private:
     void handle_open(NetworkXioRequest *req);
 
@@ -86,8 +80,11 @@ private:
 
     IOExecServiceHandle    serviceHandle_{nullptr};
     IOExecEventFdHandle    eventHandle_{nullptr};
+
     int epollfd = -1 ; 
+
     std::thread ioCompletionThread;
+    gobjfs::os::ShutdownNotifier ioCompletionThreadShutdown;
 };
 
 typedef std::unique_ptr<NetworkXioIOHandler> NetworkXioIOHandlerPtr;

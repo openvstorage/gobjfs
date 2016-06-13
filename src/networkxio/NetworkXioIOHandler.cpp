@@ -29,8 +29,6 @@ namespace gobjfs { namespace xio {
 
 static constexpr int XIO_COMPLETION_DEFAULT_MAX_EVENTS = 100;
 
-    static int 
-    gxio_completion_handler(int epollfd, int efd);
 
     static inline void
     pack_msg(NetworkXioRequest *req)
@@ -42,6 +40,32 @@ static constexpr int XIO_COMPLETION_DEFAULT_MAX_EVENTS = 100;
         o_msg.opaque(req->opaque);
         req->s_msg= o_msg.pack_msg();
         XXExit();
+    }
+
+    NetworkXioIOHandler::~NetworkXioIOHandler()
+    {
+
+      try {
+        int err = ioCompletionThreadShutdown.send();
+        if (err != 0) {
+          GLOG_ERROR("failed to notify completion thread");
+        } else {
+          ioCompletionThread.join();     
+        }
+
+        ioCompletionThreadShutdown.destroy();
+
+      } catch (const std::exception& e) {
+        GLOG_ERROR("failed to join completion thread");
+      }
+
+
+      if (serviceHandle_ )
+      {
+        IOExecFileServiceDestroy(serviceHandle_);
+        serviceHandle_ = NULL;
+      }
+
     }
 
     void
@@ -76,6 +100,7 @@ static constexpr int XIO_COMPLETION_DEFAULT_MAX_EVENTS = 100;
             req->retval = -1;
             req->errval = EIO;
         }
+
         eventHandle_ = IOExecEventFdOpen(serviceHandle_);
         if (eventHandle_ == nullptr) {
             GLOG_ERROR("ObjectFS_GetEventFd failed with error " << err);
@@ -98,90 +123,105 @@ static constexpr int XIO_COMPLETION_DEFAULT_MAX_EVENTS = 100;
 
         struct epoll_event event;
         event.data.fd = efd;
-        event.events = EPOLLIN | EPOLLONESHOT;
+        event.events = EPOLLIN;
         err = epoll_ctl(epollfd, EPOLL_CTL_ADD, efd, &event);
         if (err != 0) {
             GLOG_ERROR("epoll_ctl() failed with error " << errno);
             assert(0);
         }
-        ioCompletionThread  = std::thread(gxio_completion_handler, epollfd, efd);
+
+        err = ioCompletionThreadShutdown.init(epollfd);
+        if (err != 0) {
+          GLOG_ERROR("failed to init shutdown notifier " << err);
+          assert(0);
+        }
+
+        ioCompletionThread  = std::thread(
+          std::bind(&NetworkXioIOHandler::gxio_completion_handler, 
+            this, 
+            epollfd, 
+            efd));
 
         pack_msg(req);
         XXExit();
     }
 
-    static int 
-    gxio_completion_handler(int epollfd, int efd) {
-        int ret = 0;
+    int 
+    NetworkXioIOHandler::gxio_completion_handler(int epollfd, int efd) {
+      int ret = 0;
 
-        NetworkXioWorkQueue* pWorkQueue = NULL;
-        unsigned int max = XIO_COMPLETION_DEFAULT_MAX_EVENTS;
-        XXEnter();
-        epoll_event *events = (struct epoll_event *)calloc (max, sizeof (epoll_event));
+      XXEnter();
 
-        // LEVELTRIGGERED is default
-        // Edge triggerd
-   while (1) {
-        // TODO handle clean exit 
+      NetworkXioWorkQueue* pWorkQueue = NULL;
+      const unsigned int max = XIO_COMPLETION_DEFAULT_MAX_EVENTS;
+      epoll_event events[max];
+
+      bool mustExit = false;
+
+      while (!mustExit) {
+
         int n = epoll_wait (epollfd, events, max, -1);
+
         for (int i = 0; i < n ; i++) {
-            if (efd != events[i].data.fd) {
-                continue;
-            }
 
-            gIOStatus iostatus;
-            int ret = read(efd, &iostatus, sizeof (iostatus));
+          if (events[i].data.ptr == &ioCompletionThreadShutdown) {
+            uint64_t counter;
+            ioCompletionThreadShutdown.recv(counter);
+            mustExit = true;
+            GLOG_DEBUG("Received shutdown event for ptr=" << (void*)this);
+            continue;
+          }
 
-            if (ret != sizeof(iostatus)) {
-                GLOG_ERROR("!!! Partial read .. Cant handle it ... Need to think abt. TBD !! ");
-                continue;
-            }
+          if (efd != events[i].data.fd) {
+            GLOG_ERROR("Received event for unknown fd=" << events[i].data.fd);
+            continue;
+          }
 
-            GLOG_DEBUG("Recieved event" << " (completionId: " << (void *)iostatus.completionId << " status: " << iostatus.errorCode);
+          gIOStatus iostatus;
+          int ret = read(efd, &iostatus, sizeof (iostatus));
 
-            NetworkXioRequest *pXioReq = (NetworkXioRequest *)iostatus.completionId;
-            assert (pXioReq != nullptr);
+          if (ret != sizeof(iostatus)) {
+            GLOG_ERROR("!!! Partial read .. Cant handle it ... Need to think abt. TBD !! ");
+            continue;
+          }
 
-            if (iostatus.errorCode == 0 ) {
-                pXioReq->retval = 0;
-                pXioReq->errval = 0;
-            } else {
-                pXioReq->retval = -1;
-                pXioReq->errval = iostatus.errorCode;
-            }
+          GLOG_DEBUG("Recieved event" << " (completionId: " << (void *)iostatus.completionId << " status: " << iostatus.errorCode);
+
+          NetworkXioRequest *pXioReq = (NetworkXioRequest *)iostatus.completionId;
+          assert (pXioReq != nullptr);
+
+          if (iostatus.errorCode == 0 ) {
+              pXioReq->retval = 0;
+              pXioReq->errval = 0;
+          } else {
+              pXioReq->retval = -1;
+              pXioReq->errval = iostatus.errorCode;
+          }
 
 
-            switch (pXioReq->op) {
+          switch (pXioReq->op) {
 
-            case NetworkXioMsgOpcode::ReadRsp: {
-                    if (iostatus.errorCode == 0) {
-                        GLOG_DEBUG(" Read completed with completion ID" << iostatus.completionId);
-                    } else {
-                        GLOG_ERROR("Read completion error " << iostatus.errorCode << " For completion ID " << iostatus.completionId );
-                    }
-                    pWorkQueue = reinterpret_cast<NetworkXioWorkQueue*> (pXioReq->req_wq);
-                    pWorkQueue->worker_bottom_half(pWorkQueue, pXioReq);
-                }
-                break;
+          case NetworkXioMsgOpcode::ReadRsp: {
+                  if (iostatus.errorCode == 0) {
+                      GLOG_DEBUG(" Read completed with completion ID" << iostatus.completionId);
+                  } else {
+                      GLOG_ERROR("Read completion error " << iostatus.errorCode << " For completion ID " << iostatus.completionId );
+                  }
+                  pWorkQueue = reinterpret_cast<NetworkXioWorkQueue*> (pXioReq->req_wq);
+                  pWorkQueue->worker_bottom_half(pWorkQueue, pXioReq);
+              }
+              break;
 
-            default:{
-                    GLOG_ERROR("Got an event for non rd/wr operation " << (int )pXioReq->op << ".. WTF ! Must fail assert");
-                    assert(0);
-                }
+          default:{
+                  GLOG_ERROR("Got an event for non rd/wr operation " << (int )pXioReq->op << ".. WTF ! Must fail assert");
+                  assert(0);
+              }
 
-            }
-
-            
+          }
         }
-        struct epoll_event event;
-        event.data.fd = efd;
-        event.events = EPOLLIN | EPOLLONESHOT;
-        int s = epoll_ctl (epollfd, EPOLL_CTL_MOD, efd, &event);
-        assert(s == 0);
       }
 
-        free(events);
-        return 0;
+      return 0;
     }
 
     void
