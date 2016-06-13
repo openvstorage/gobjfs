@@ -5,6 +5,7 @@ SET(SOURCES
   IOExecutor.cpp
   FilerJob.cpp
   gIOExecFile.cpp
+  FileDistributor.cpp
   )
 
 SET(LIBRARY_LIST
