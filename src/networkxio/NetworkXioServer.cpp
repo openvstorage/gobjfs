@@ -25,13 +25,7 @@
 static constexpr int POLLING_TIME_USEC = 20;
 
 namespace gobjfs { namespace xio {
-/*
-MAKE_EXCEPTION(FailedBindXioServer, fungi::IOException);
-MAKE_EXCEPTION(FailedCreateXioContext, fungi::IOException);
-MAKE_EXCEPTION(FailedCreateXioMempool, fungi::IOException);
-MAKE_EXCEPTION(FailedCreateEventfd, fungi::IOException);
-MAKE_EXCEPTION(FailedRegisterEventHandler, fungi::IOException);
-*/
+
 template<class T>
 static int
 static_on_request(xio_session *session,

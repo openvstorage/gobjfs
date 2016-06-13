@@ -25,22 +25,23 @@ void NetworkServerWriteReadTest(void)
         return;
     }
 
-    auto rbuf = (char*)malloc(4096);
-    assert(rbuf != nullptr);
+    for (int i = 0; i < 100000; i ++) {
 
-    uint64_t objID = 0;
-    auto sz = ovs_read(ctx, "abcd", rbuf, 4096, 0);
-
-    if (sz < 0) {
+      auto rbuf = (char*)malloc(4096);
+      assert(rbuf != nullptr);
+  
+      auto sz = ovs_read(ctx, "abcd", rbuf, 4096, 0);
+  
+      if (sz < 0) {
         GLOG_ERROR("OMG!!read failure with error  : " << sz);
-        return;
-    }
-    if (sz != (ssize_t) 4096) {
+        break;
+      }
+      if (sz != (ssize_t) 4096) {
         GLOG_ERROR("Read Length and write length not matching \n");
-        assert(0);
+        break;
+      }
+      free(rbuf);
     }
-    GLOG_DEBUG("\n\n------------------- ovs_read Successful -------------- \n\n");
-    std::cout << std::string(rbuf, 20) << std::endl;
 
     ovs_ctx_destroy(ctx);
 

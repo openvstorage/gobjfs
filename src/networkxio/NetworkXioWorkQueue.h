@@ -14,7 +14,6 @@
 
 #pragma once
 
-//#include <youtils/IOException.h>
 #include <iostream>
 #include <mutex>
 #include <condition_variable>
@@ -25,13 +24,10 @@
 #include <string>
 #include <queue>
 #include <boost/thread/lock_guard.hpp>
-//#include <youtils/SpinLock.h>
 #include "NetworkXioRequest.h"
 
 namespace gobjfs { namespace xio
 {
-
-//MAKE_EXCEPTION(WorkQueueThreadsException, Exception);
 
 class NetworkXioWorkQueue
 {
