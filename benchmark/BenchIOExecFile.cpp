@@ -257,7 +257,7 @@ struct FixedSizeFileManager {
 
     try {
       auto str = Directory.at(index);
-      handle = IOExecFileOpen(serviceHandle, str.c_str(), O_RDWR);
+      handle = IOExecFileOpen(serviceHandle, str.c_str(), O_RDONLY);
       if (config.doMemCheck && actualNumber) {
         auto filename = basename(str.c_str());
         auto ret = parseFileName(filename, *actualNumber);
@@ -409,8 +409,7 @@ static int wait_for_iocompletion(int epollfd, int efd, ThreadCtx *ctx) {
             if (ext->isWrite()) {
               ctx->totalWriteLatency = ext->timer.elapsedMicroseconds();
               ctr++;
-              IOExecFileTruncate(ext->handle, ext->batch->array[0].size -
-config.shortenFileSize);
+              //IOExecFileTruncate(ext->handle, ext->batch->array[0].size - config.shortenFileSize); NonAligned Option2 truncate after write
               if (iostatus.errorCode != 0) {
                 ctx->failedWrites ++;        
               }
@@ -632,16 +631,15 @@ static void doRandomReadWrite(ThreadCtx *ctx) {
 
       if (ext->isWrite()) {
         frag.offset = 0;
-        frag.size = config.blockSize * config.maxBlocks;
+        frag.size = (config.blockSize * config.maxBlocks) - config.shortenFileSize; // TEST unaligned writes
         frag.addr = (caddr_t)gMempool_alloc(frag.size);
         memset(frag.addr, 'a' + (ext->actualFilenum % 26), frag.size);
         assert(frag.addr != nullptr);
       } else if (ext->isRead()) {
         uint64_t blockNum = blockGenerator(seedGen);
         frag.offset = blockNum * config.blockSize;
-        frag.size = config.blockSize;
+        frag.size = config.blockSize - config.shortenFileSize; // TEST unaligned reads
         frag.addr = (caddr_t)gMempool_alloc(frag.size);
-        frag.size -= config.shortenFileSize; // TEST unaligned reads
         assert(frag.addr != nullptr);
       } else if (ext->isDelete()) {
         // do nothing

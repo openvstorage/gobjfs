@@ -595,7 +595,7 @@ int IOExecutor::submitTask(FilerJob *job, bool blocking) {
       if (job->op_ == FileOp::Write) {
         job->op_ = FileOp::NonAlignedWrite;
       } else if (job->op_ == FileOp::Read) {
-        // TODO
+        // short reads work with O_DIRECT
       }
     }
 

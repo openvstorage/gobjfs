@@ -7,7 +7,8 @@ read if it was a short read.
 2) For writes there are 2 options
 
 a) write the 512 aligned buffer and then truncate to desired file size
+   in FilerJob::reset()
 
 b) if incoming job->size is not 512 aligned, then send job to 
    FdQueue and use pwrite().  This requires an fd which was not opened
-   with O_DIRECT.
+   with O_DIRECT, otherwise the pwrite() fails due to non-aligned size.
