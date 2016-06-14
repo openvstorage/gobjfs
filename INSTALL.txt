@@ -1,7 +1,17 @@
 # This file can be directly executed ! 
 
 # On a new machine
-sudo apt-get install -y g++-5 
+sudo add-apt-repository ppa:ubuntu-toolchain-r/test
+sudo apt-get update
+sudo apt-get install -y gcc-5 g++-5
+sudo update-alternatives 
+sudo update-alternatives --remove-all gcc
+sudo update-alternatives --remove-all g++
+sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-5 20
+sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-5 20
+sudo update-alternatives --config gcc
+sudo update-alternatives --config g++
+
 sudo apt-get install -y cmake git xfsprogs sysstat gdb
 
 # Packages to install
