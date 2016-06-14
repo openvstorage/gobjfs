@@ -4,7 +4,6 @@
 sudo add-apt-repository ppa:ubuntu-toolchain-r/test
 sudo apt-get update
 sudo apt-get install -y gcc-5 g++-5
-sudo update-alternatives 
 sudo update-alternatives --remove-all gcc
 sudo update-alternatives --remove-all g++
 sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-5 20
@@ -16,6 +15,7 @@ sudo apt-get install -y cmake git xfsprogs sysstat gdb
 
 # Packages to install
 
+sudo apt-get install libunwind8-dev
 sudo apt-get install -y libaio1 libaio1-dbg libaio-dev
 sudo apt-get install -y libz-dev libbz2-dev
 sudo apt-get install -y libboost-all-dev libgoogle-glog-dev
