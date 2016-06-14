@@ -26,8 +26,6 @@ but WITHOUT ANY WARRANTY of any kind.
 #include "NetworkXioServer.h"
 #include "NetworkXioProtocol.h"
 #include "NetworkXioRequest.h"
-//#include "NetworkXioMsg.h"
-//#include "NetworkXioClientData.h"
 
 static constexpr int POLLING_TIME_USEC = 20;
 

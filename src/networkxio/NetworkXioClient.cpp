@@ -289,13 +289,13 @@ NetworkXioClient::run(std::promise<bool>& promise)
     }
     catch (const std::bad_alloc&)
     {
-        xrefcnt_shutdown();
-        throw;
+      xrefcnt_shutdown();
+      throw;
     }
 
     if (ctx == nullptr)
     {
-        throw XioClientCreateException("failed to create XIO context");
+      throw XioClientCreateException("failed to create XIO context");
     }
 
     if(xio_context_add_ev_handler(ctx.get(),
@@ -311,8 +311,8 @@ NetworkXioClient::run(std::promise<bool>& promise)
                                            xio_session_destroy);
     if(session == nullptr)
     {
-        xio_context_del_ev_handler(ctx.get(), evfd);
-       // throw XioClientCreateException("failed to create XIO client");
+       xio_context_del_ev_handler(ctx.get(), evfd);
+       throw XioClientCreateException("failed to create XIO client");
     }
 
     cparams.session = session.get();
@@ -322,8 +322,8 @@ NetworkXioClient::run(std::promise<bool>& promise)
     conn = xio_connect(&cparams);
     if (conn == nullptr)
     {
-        xio_context_del_ev_handler(ctx.get(), evfd);
-        //throw XioClientCreateException("failed to connect");
+      xio_context_del_ev_handler(ctx.get(), evfd);
+      throw XioClientCreateException("failed to connect");
     }
 
     auto fp = std::bind(&NetworkXioClient::xio_run_loop_worker,
@@ -340,16 +340,16 @@ NetworkXioClient::shutdown()
     XXEnter();
     if (not stopped)
     {
-    stopping = true;
-        xio_context_del_ev_handler(ctx.get(), evfd);
-        xio_context_stop_loop(ctx.get());
-    xio_thread_.join();
-    while (not is_queue_empty())
-    {
+      stopping = true;
+      xio_context_del_ev_handler(ctx.get(), evfd);
+      xio_context_stop_loop(ctx.get());
+      xio_thread_.join();
+      while (not is_queue_empty())
+      {
         xio_msg_s *req = pop_request();
         delete req;
-    }
-        stopped = true;
+      }
+      stopped = true;
     }
 }
 
@@ -551,8 +551,8 @@ NetworkXioClient::req_queue_wait_until(xio_msg_s *xmsg)
                                           60s,
                                           [&]{return nr_req_queue >= 0;}))
         {
-            delete xmsg;
-           // throw XioClientQueueIsBusyException("request queue is busy");
+           delete xmsg;
+           throw XioClientQueueIsBusyException("request queue is busy");
         }
     }
 }

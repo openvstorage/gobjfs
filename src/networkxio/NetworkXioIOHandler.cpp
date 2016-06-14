@@ -22,8 +22,6 @@ but WITHOUT ANY WARRANTY of any kind.
 #include "common.h"
 
 #include "NetworkXioIOHandler.h"
-//#include "NetworkXioClientData.h"
-//#include "NetworkXioMsg.h"
 #include <sys/epoll.h>
 #include "NetworkXioCommon.h"
 #include "NetworkXioProtocol.h"
