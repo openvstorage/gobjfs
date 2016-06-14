@@ -144,7 +144,7 @@ private:
 
     std::string uri_;
     bool stopping{false};
-    bool stopped;
+    bool stopped{false};
     std::thread xio_thread_;
 
     std::atomic_flag  inflight_lock = ATOMIC_FLAG_INIT;

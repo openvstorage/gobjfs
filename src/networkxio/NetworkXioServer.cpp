@@ -41,7 +41,6 @@ static_on_request(xio_session *session,
     T *obj = reinterpret_cast<T*>(cb_user_context);
     if (obj == NULL)
     {
-        assert(obj != NULL);
         return -1;
     }
     return obj->ncd_server->on_request(session,
@@ -60,7 +59,6 @@ static_on_session_event(xio_session *session,
     T *obj = reinterpret_cast<T*>(cb_user_context);
     if (obj == NULL)
     {
-        assert(obj != NULL);
         return -1;
     }
     XXExit();
@@ -78,7 +76,6 @@ static_on_new_session(xio_session *session,
     T *obj = reinterpret_cast<T*>(cb_user_context);
     if (obj == NULL)
     {
-        assert(obj != NULL);
         XXExit();
         return -1;
     }
@@ -97,7 +94,6 @@ static_on_msg_send_complete(xio_session *session,
     T *obj = reinterpret_cast<T*>(cb_user_context);
     if (obj == NULL)
     {
-        assert(obj != NULL);
         XXExit();
         return -1;
     }
@@ -116,7 +112,6 @@ static_assign_data_in_buf(xio_msg *msg,
     T *obj = reinterpret_cast<T*>(cb_user_context);
     if (obj == NULL)
     {
-        assert(obj != NULL);
         XXExit();
         return -1;
     }
@@ -132,7 +127,6 @@ static_evfd_stop_loop(int fd, int events, void *data)
     T *obj = reinterpret_cast<T*>(data);
     if (obj == NULL)
     {
-        assert(obj != NULL);
         XXExit();
         return;
     }

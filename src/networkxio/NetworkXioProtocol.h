@@ -13,8 +13,7 @@
 // Open vStorage is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY of any kind.
 
-#ifndef __NETWORK_XIO_PROTOCOL_H_
-#define __NETWORK_XIO_PROTOCOL_H_
+#pragma once
 
 #include <msgpack.hpp>
 
@@ -201,4 +200,3 @@ public:
 
 MSGPACK_ADD_ENUM(NetworkXioMsgOpcode);
 
-#endif //__NETWORK_XIO_PROTOCOL_H_

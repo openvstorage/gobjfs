@@ -20,9 +20,6 @@ but WITHOUT ANY WARRANTY of any kind.
 #include <iostream>
 #include <sys/eventfd.h>
 
-#define ATTR_UNUSED     __attribute__((unused))
-#define ATTRIBUTE_UNUSED     __attribute__((unused))
-
 namespace gobjfs { namespace xio
 {
 
