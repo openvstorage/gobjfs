@@ -20,16 +20,45 @@ but WITHOUT ANY WARRANTY of any kind.
 #include <iostream>
 #include <sys/eventfd.h>
 
+#define ATTR_UNUSED     __attribute__((unused))
+#define ATTRIBUTE_UNUSED     __attribute__((unused))
+
 namespace gobjfs { namespace xio
 {
 
-inline int
-xeventfd_read(int fd)
+struct EventFD
 {
+    EventFD()
+    {
+        evfd_ = eventfd(0, EFD_NONBLOCK);
+        if (evfd_ < 0)
+        {
+            throw std::runtime_error("failed to create eventfd");
+        }
+    }
+
+    ~EventFD()
+    {
+        if (evfd_ != -1)
+        {
+            close(evfd_);
+        }
+    }
+
+    EventFD(const EventFD&) = delete;
+
+    EventFD&
+    operator=(const EventFD&) = delete;
+
+    operator int() const { return evfd_; }
+
+    int
+    readfd()
+    {
     int ret;
     eventfd_t value = 0;
     do {
-        ret = eventfd_read(fd, &value);
+            ret = eventfd_read(evfd_, &value);
     } while (ret < 0 && errno == EINTR);
     if (ret == 0)
     {
@@ -42,14 +71,13 @@ xeventfd_read(int fd)
     return ret;
 }
 
-
-inline int
-xeventfd_write(int fd)
-{
+    int
+    writefd()
+    {
     uint64_t u = 1;
     int ret;
     do {
-        ret = eventfd_write(fd, static_cast<eventfd_t>(u));
+            ret = eventfd_write(evfd_, static_cast<eventfd_t>(u));
     } while (ret < 0 && (errno == EINTR || errno == EAGAIN));
     if (ret < 0)
     {
@@ -57,7 +85,22 @@ xeventfd_write(int fd)
     }
     return ret;
 }
+private:
+    int evfd_;
+};
 
 }} //namespace
+enum class NetworkXioMsgOpcode
+{
+    Noop,
+    OpenReq,
+    OpenRsp,
+    CloseReq,
+    CloseRsp,
+    ReadReq,
+    ReadRsp,
+    ErrorRsp,
+    ShutdownRsp,
+};
 
 #define GetNegative(err) (err > 0) ? -err:err;

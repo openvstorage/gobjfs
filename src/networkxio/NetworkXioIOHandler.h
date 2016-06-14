@@ -17,7 +17,7 @@ but WITHOUT ANY WARRANTY of any kind.
 */
 #pragma once
 
-#include "NetworkXioMsg.h"
+//#include "NetworkXioMsg.h"
 
 #include "NetworkXioWorkQueue.h"
 #include "NetworkXioRequest.h"

@@ -17,14 +17,17 @@ but WITHOUT ANY WARRANTY of any kind.
 */
 
 #include <libxio.h>
-
+#include <future>
+#include <mutex>
 
 #include "volumedriver.h"
 #include "common.h"
 
 #include "NetworkXioServer.h"
-#include "NetworkXioMsg.h"
-#include "NetworkXioClientData.h"
+#include "NetworkXioProtocol.h"
+#include "NetworkXioRequest.h"
+//#include "NetworkXioMsg.h"
+//#include "NetworkXioClientData.h"
 
 static constexpr int POLLING_TIME_USEC = 20;
 
@@ -141,11 +144,36 @@ static_evfd_stop_loop(int fd, int events, void *data)
 
 NetworkXioServer::NetworkXioServer(
       const std::string& uri,
-      const std::string& configFileName)
+      const std::string& configFileName,
+      size_t snd_rcv_queue_depth)
     : uri_(uri)
     , configFileName_(configFileName)
     , stopping(false)
     , stopped(false)
+    , evfd()
+    , queue_depth(snd_rcv_queue_depth)
+{}
+void
+NetworkXioServer::xio_destroy_ctx_shutdown(xio_context *ctx)
+{
+    xio_context_destroy(ctx);
+    xio_shutdown();
+}
+
+NetworkXioServer::~NetworkXioServer()
+{
+    shutdown();
+}
+
+void
+NetworkXioServer::evfd_stop_loop(int /*fd*/, int /*events*/, void * /*data*/)
+{
+    evfd.readfd();
+    xio_context_stop_loop(ctx.get());
+}
+
+void
+NetworkXioServer::run(std::promise<void> &promise)
 {
     int xopt = 2;
     int queue_depth = 2048;
@@ -178,9 +206,12 @@ NetworkXioServer::NetworkXioServer(
                 XIO_OPTLEVEL_ACCELIO, XIO_OPTNAME_RCV_QUEUE_DEPTH_MSGS,
                 &xopt, sizeof(int));
 
-    ctx = xio_context_create(NULL, POLLING_TIME_USEC, -1);
+    ctx = std::shared_ptr<xio_context>(xio_context_create(NULL,
+                                                          POLLING_TIME_USEC,
+                                                          -1),
+                                       xio_destroy_ctx_shutdown);
 
-    if (ctx == NULL)
+    if (ctx == nullptr)
     {
         GLOG_FATAL("failed to create XIO context");
 //        throw FailedCreateXioContext("failed to create XIO context");
@@ -191,37 +222,30 @@ NetworkXioServer::NetworkXioServer(
     xio_s_ops.on_new_session = static_on_new_session<NetworkXioServer>;
     xio_s_ops.on_msg_send_complete = static_on_msg_send_complete<NetworkXioClientData>;
     xio_s_ops.on_msg = static_on_request<NetworkXioClientData>;
-    //xio_s_ops.assign_data_in_buf = static_assign_data_in_buf<NetworkXioClientData>;
     xio_s_ops.assign_data_in_buf = NULL;
     xio_s_ops.on_msg_error = NULL;
 
-    GLOG_INFO("bind XIO server to '" << uri << "'");
-    server = xio_bind(ctx, &xio_s_ops, uri.c_str(), NULL, 0, this);
-    if (server == NULL)
+    GLOG_INFO("bind XIO server to '" << uri_ << "'");
+    server = std::shared_ptr<xio_server>(xio_bind(ctx.get(),
+                                                  &xio_s_ops,
+                                                  uri_.c_str(),
+                                                  NULL,
+                                                  0,
+                                                  this),
+                                         xio_unbind);
+    if (server == nullptr)
     {
-        GLOG_FATAL("failed to bind XIO server to '" << uri << "'");
+        GLOG_FATAL("failed to bind XIO server to '" << uri_ << "'");
         //throw FailedBindXioServer("failed to bind XIO server");
     }
 
-    evfd = eventfd(0, EFD_NONBLOCK);
-    if (evfd < 0)
-    {
-        GLOG_FATAL("failed to create eventfd");
-        xio_unbind(server);
-        xio_context_destroy(ctx);
-//        throw FailedCreateEventfd("failed to create eventfd");
-    }
-
-    if(xio_context_add_ev_handler(ctx,
+    if(xio_context_add_ev_handler(ctx.get(),
                                   evfd,
                                   XIO_POLLIN,
                                   static_evfd_stop_loop<NetworkXioServer>,
                                   this))
     {
         GLOG_FATAL("failed to register event handler");
-        close(evfd);
-        xio_unbind(server);
-        xio_context_destroy(ctx);
 //        throw FailedRegisterEventHandler("failed to register event handler");
     }
 
@@ -234,115 +258,85 @@ NetworkXioServer::NetworkXioServer(
     catch (const std::bad_alloc&)
     {
         GLOG_FATAL("failed to allocate requested storage space for workqueue");
-        close(evfd);
-        xio_unbind(server);
-        xio_context_destroy(ctx);
-//        throw;
-    }
-    catch (...)
-    {
-        GLOG_FATAL("failed to create workqueue thread pool");
-        close(evfd);
-        xio_unbind(server);
-        xio_context_destroy(ctx);
+        xio_context_del_ev_handler(ctx.get(), evfd);
 //        throw;
     }
 
-    xio_mpool = xio_mempool_create(-1, XIO_MEMPOOL_FLAG_REG_MR);
-    if (!xio_mpool)
+    xio_mpool = std::shared_ptr<xio_mempool>(
+            xio_mempool_create(-1, XIO_MEMPOOL_FLAG_REG_MR),
+            xio_mempool_destroy);
+    if (xio_mpool == nullptr)
     {
-        close(evfd);
-        xio_unbind(server);
-        xio_context_destroy(ctx);
         GLOG_FATAL("failed to create XIO memory pool");
+        xio_context_del_ev_handler(ctx.get(), evfd);
 //        throw FailedCreateXioMempool("failed to create XIO memory pool");
     }
-
-    // TODO add slabs based on read sizes
-    int ret = xio_mempool_add_slab(xio_mpool,
+    (void) xio_mempool_add_slab(xio_mpool.get(),
                                4096,
                                0,
                                queue_depth,
                                32,
                                0);
-    if (ret < 0)
-    {
-        GLOG_ERROR("cannot allocate 4KB slab");
-    }
-    ret = xio_mempool_add_slab(xio_mpool,
+    (void) xio_mempool_add_slab(xio_mpool.get(),
                                32768,
                                0,
                                queue_depth,
                                32,
                                0);
-    if (ret < 0)
-    {
-        GLOG_ERROR("cannot allocate 32KB slab");
-    }
-    ret = xio_mempool_add_slab(xio_mpool,
+    (void) xio_mempool_add_slab(xio_mpool.get(),
                                65536,
                                0,
                                queue_depth,
                                32,
                                0);
-    if (ret < 0)
-    {
-        GLOG_ERROR("cannot allocate 64KB slab");
-    }
-    ret = xio_mempool_add_slab(xio_mpool,
+    (void) xio_mempool_add_slab(xio_mpool.get(),
                                131072,
                                0,
                                256,
                                32,
                                0);
-    if (ret < 0)
-    {
-        GLOG_ERROR("cannot allocate 128KB slab");
-    }
-    ret = xio_mempool_add_slab(xio_mpool,
+    (void) xio_mempool_add_slab(xio_mpool.get(),
                                1048576,
                                0,
                                32,
                                4,
                                0);
-    if (ret < 0)
-    {
-        GLOG_ERROR("cannot allocate 1MB slab");
-    }
-    XXExit();
-}
-
-NetworkXioServer::~NetworkXioServer()
-{
-    shutdown();
-}
-
-void
-NetworkXioServer::evfd_stop_loop(int fd, int /*events*/, void * /*data*/)
-{
-    xeventfd_read(fd);
-    xio_context_stop_loop(ctx);
-}
-
-void
-NetworkXioServer::run()
-{
-    XXEnter();
+    promise.set_value();
     while (not stopping)
     {
-        int ret = xio_context_run_loop(ctx, XIO_INFINITE);
+        int ret = xio_context_run_loop(ctx.get(), XIO_INFINITE);
         //VERIFY(ret == 0);
         assert(ret == 0);
         while (not wq_->is_finished_empty())
         {
             xio_send_reply(wq_->get_finished());
-            wq_->queued_work_dec();
         }
     }
+    server.reset();
+    ctx.reset();
+    xio_mpool.reset();
     std::lock_guard<std::mutex> lock_(mutex_);
     stopped = true;
     cv_.notify_one();
     XXExit();
+}
+
+NetworkXioClientData*
+NetworkXioServer::allocate_client_data()
+{
+    try
+    {
+        NetworkXioClientData *cd = new NetworkXioClientData();
+        cd->ncd_disconnected = false;
+        cd->ncd_refcnt = 0;
+        cd->ncd_mpool = xio_mpool.get();
+        cd->ncd_server = this;
+        return cd;
+    }
+    catch (const std::bad_alloc&)
+    {
+        return NULL;
+    }
 }
 
 int
@@ -351,14 +345,16 @@ NetworkXioServer::create_session_connection(xio_session *session,
 {
     XXEnter();
 
-    NetworkXioClientData *cd = new NetworkXioClientData(xio_mpool, this, session, evdata->conn);
+    NetworkXioClientData *cd = allocate_client_data();
 
     if (cd)
     {
         try
         {
-            NetworkXioIOHandler *ioh_ptr = new NetworkXioIOHandler(configFileName_, wq_);
+            NetworkXioIOHandler *ioh_ptr = new NetworkXioIOHandler(this->configFileName_, wq_);
             cd->ncd_ioh = ioh_ptr;
+            cd->ncd_session = session;
+            cd->ncd_conn = evdata->conn;
         }
         catch (...)
         {
@@ -371,7 +367,6 @@ NetworkXioServer::create_session_connection(xio_session *session,
         (void) xio_modify_connection(evdata->conn,
                                      &xconattr,
                                      XIO_CONNECTION_ATTR_USER_CTX);
-        wq_->open_sessions_inc();
         XXExit();
         return 0;
     } 
@@ -391,7 +386,6 @@ NetworkXioServer::destroy_session_connection(xio_session *session ATTRIBUTE_UNUS
     if (!cd->ncd_refcnt)
     {
         xio_connection_destroy(cd->ncd_conn);
-        wq_->open_sessions_dec();
         delete cd->ncd_ioh;
         delete cd;
     }
@@ -439,21 +433,6 @@ NetworkXioServer::on_session_event(xio_session *session,
     return 0;
 }
 
-int
-NetworkXioServer::assign_data_in_buf(struct xio_msg *msg)
-{
-    XXEnter();
-    xio_iovec_ex *isglist = vmsg_sglist(&msg->in);
-
-    GLOG_DEBUG("assign buffer, len: " << isglist[0].iov_len);
-
-    xio_reg_mem in_xbuf;
-    xio_mem_alloc(isglist[0].iov_len, &in_xbuf);
-    isglist[0].iov_base = in_xbuf.addr;
-    isglist[0].mr = in_xbuf.mr;
-    XXExit();
-    return 0;
-}
 
 NetworkXioRequest*
 NetworkXioServer::allocate_request(NetworkXioClientData *pClientData,
@@ -509,7 +488,6 @@ NetworkXioServer::free_request(NetworkXioRequest *req)
    if (clientData->ncd_disconnected && !clientData->ncd_refcnt)
    {
        xio_connection_destroy(clientData->ncd_conn);
-       wq_->open_sessions_dec();
        delete clientData->ncd_ioh;
        delete clientData;
    }
@@ -600,19 +578,14 @@ NetworkXioServer::shutdown()
     XXEnter();
     if (not stopped)
     {
-        xio_unbind(server);
         wq_->shutdown();
         stopping = true;
-        xio_context_del_ev_handler(ctx, evfd);
-        close(evfd);
-        xio_context_stop_loop(ctx);
+        xio_context_del_ev_handler(ctx.get(), evfd);
+        xio_context_stop_loop(ctx.get());
         {
             std::unique_lock<std::mutex> lock_(mutex_);
             cv_.wait(lock_, [&]{return stopped == true;});
         }
-        xio_mempool_destroy(xio_mpool);
-        xio_context_destroy(ctx);
-        xio_shutdown();
     }
     XXExit();
 }

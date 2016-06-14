@@ -55,7 +55,7 @@ int main(int argc, char *argv[]) {
     if (argc > 1) {
       configFileName = argv[1];
     }
-    
+    std::promise<void> _pr;
     NetworkXioServer *xs = new NetworkXioServer(Url, configFileName);
-    xs->run();
+    xs->run(_pr);
 }

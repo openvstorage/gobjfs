@@ -66,5 +66,20 @@ struct NetworkXioRequest
     std::string s_msg;
 };
 
+class NetworkXioServer;
+class NetworkXioIOHandler;
+
+struct NetworkXioClientData
+{
+    xio_session *ncd_session{nullptr};
+    xio_connection *ncd_conn{nullptr};
+    xio_mempool *ncd_mpool{nullptr};
+    std::atomic<bool> ncd_disconnected{false};
+    std::atomic<uint64_t> ncd_refcnt{0};
+    NetworkXioServer *ncd_server{nullptr};
+    NetworkXioIOHandler *ncd_ioh{nullptr};
+    std::list<NetworkXioRequest*> ncd_done_reqs;
+
+};
 }} //namespace
 

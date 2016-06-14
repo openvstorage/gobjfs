@@ -20,15 +20,26 @@ but WITHOUT ANY WARRANTY of any kind.
 #include <libxio.h>
 #include <iostream>
 #include <queue>
+#include <future>
+#include <mutex>
 #include <boost/thread/lock_guard.hpp>
 #include <assert.h>
 #include <thread>
 #include <atomic>
-
-#include "NetworkXioMsg.h"
-
+#include <exception>
+#include "NetworkXioProtocol.h"
 namespace gobjfs { namespace xio 
 {
+#define MAKE_EXCEPTION(A) \
+    class A: public std::exception{ \
+        public:\
+            A(std::string AA) {\
+            }\
+    } 
+
+MAKE_EXCEPTION(XioClientCreateException);
+MAKE_EXCEPTION(XioClientRegHandlerException);
+MAKE_EXCEPTION(XioClientQueueIsBusyException);
 
 extern void ovs_xio_aio_complete_request(void *request,
                                          ssize_t retval,
@@ -41,14 +52,21 @@ extern void ovs_xio_complete_request_control(void *request,
 class NetworkXioClient
 {
 public:
-    NetworkXioClient(const std::string& uri);
+    NetworkXioClient(const std::string& uri, const uint64_t qd);
 
     ~NetworkXioClient();
+
+    struct session_data
+    {
+        xio_context *ctx;
+        bool disconnected;
+        bool disconnecting;
+    };
 
     struct xio_msg_s
     {
         xio_msg xreq;
-        const void *opaque{nullptr};
+        const void *opaque;
         NetworkXioMsg msg;
         std::string s_msg;
     };
@@ -56,6 +74,7 @@ public:
     struct xio_ctl_s
     {
         xio_msg_s xmsg;
+        session_data sdata;
         std::vector<std::string> *vec;
         uint64_t size;
     };
@@ -74,6 +93,13 @@ public:
                         const void *opaque);
 
     int
+    allocate(xio_reg_mem *mem,
+             const uint64_t size);
+
+    void
+    deallocate(xio_reg_mem *reg_mem);
+
+    int
     on_session_event(xio_session *session,
                      xio_session_event_data *event_data);
 
@@ -82,8 +108,7 @@ public:
                 xio_msg* reply,
                 int last_in_rxq);
 
-    int
-    assign_data_in_buf(xio_msg *msg);
+   
 
     int
     on_msg_error(xio_session *session,
@@ -93,6 +118,9 @@ public:
 
     void
     evfd_stop_loop(int fd, int events, void *data);
+
+    void
+    run(std::promise<bool>& promise);
 
     bool
     is_queue_empty();
@@ -106,15 +134,19 @@ public:
     void
     xstop_loop();
 
+    static void
+    xio_destroy_ctx_shutdown(xio_context *ctx);
+
 private:
-    xio_context *ctx{nullptr};
-    xio_session *session{nullptr};
+    std::shared_ptr<xio_context> ctx;
+    std::shared_ptr<xio_session> session;
     xio_connection *conn{nullptr};
     xio_session_params params;
     xio_connection_params cparams;
 
     std::string uri_;
     bool stopping{false};
+    bool stopped;
     std::thread xio_thread_;
 
     std::atomic_flag  inflight_lock = ATOMIC_FLAG_INIT;
@@ -131,14 +163,33 @@ private:
 
     xio_session_ops ses_ops;
     bool disconnected{false};
+    bool disconnecting;
 
-    int evfd{-1};
+    int64_t nr_req_queue;
+    std::mutex req_queue_lock;
+    std::condition_variable req_queue_cond;
+
+    EventFD evfd;
+
+    std::shared_ptr<xio_mempool> mpool;
 
     void
     xio_run_loop_worker(void *arg);
 
+    void
+    req_queue_wait_until(xio_msg_s *xmsg);
+
+    void
+    req_queue_release();
+
+    void
+    shutdown();
+
+    template<class E>
+    void set_exception_ptr(E e);
+
     static xio_connection*
-    create_connection_control(xio_context *ctx,
+    create_connection_control(session_data *sdata,
                               const std::string& uri);
 
     static int
@@ -159,10 +210,6 @@ private:
                              xio_session_event_data *event_data,
                              void *cb_user_context);
 
-    static int
-    assign_data_in_buf_control(xio_msg *msg,
-                               void *cb_user_context);
-
     static void
     xio_submit_request(const std::string& uri,
                        xio_ctl_s *xctl,
@@ -170,6 +217,11 @@ private:
 
     static void
     xio_msg_prepare(xio_msg_s *xmsg);
+
+    static void
+    create_vec_from_buf(xio_ctl_s *xctl,
+                        xio_iovec_ex *sglist,
+                        int vec_size);
 
 };
 

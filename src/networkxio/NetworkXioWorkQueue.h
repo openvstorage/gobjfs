@@ -36,12 +36,11 @@ namespace gobjfs { namespace xio
 class NetworkXioWorkQueue
 {
 public:
-    NetworkXioWorkQueue(const std::string& name, int evfd_)
+    NetworkXioWorkQueue(const std::string& name, EventFD& evfd_)
     : name_(name)
     , nr_threads_(0)
     , nr_queued_work(0)
     , protection_period_(5000)
-    , wq_open_sessions_(0)
     , stopping(false)
     , stopped(false)
     , evfd(evfd_)
@@ -92,18 +91,6 @@ public:
         inflight_lock.unlock();
         inflight_cond.notify_one();
         XXExit();
-    }
-
-    void
-    open_sessions_inc()
-    {
-        wq_open_sessions_++;
-    }
-
-    void
-    open_sessions_dec()
-    {
-        wq_open_sessions_--;
     }
 
     void
@@ -172,16 +159,15 @@ private:
 
     std::chrono::steady_clock::time_point thread_life_period_;
     uint64_t protection_period_;
-    std::atomic<uint64_t> wq_open_sessions_;
 
     bool stopping;
     bool stopped;
-    int evfd;
+    EventFD& evfd;
 
     void xstop_loop(NetworkXioWorkQueue *wq)
     {
         XXEnter();
-        xeventfd_write(wq->evfd);
+        wq->evfd.writefd();
         XXExit();
     }
 
@@ -206,7 +192,7 @@ private:
     get_max_wq_depth()
     {
         XXEnter();
-        size_t Max_Q_depth = std::thread::hardware_concurrency() + 2 * wq_open_sessions_;
+        size_t Max_Q_depth = std::thread::hardware_concurrency();
         GLOG_DEBUG("Max WQ Depth = " << Max_Q_depth );
         XXExit();
         return Max_Q_depth;

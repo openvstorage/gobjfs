@@ -19,6 +19,7 @@ but WITHOUT ANY WARRANTY of any kind.
 #pragma once
 
 #include <map>
+#include <future>
 #include <tuple>
 #include <memory>
 #include <libxio.h>
@@ -38,7 +39,8 @@ class NetworkXioServer
 public:
 
     NetworkXioServer(const std::string& uri,
-      const std::string& configFileName);
+                    const std::string& configFileName,
+                    size_t snd_rcv_queue_depth = 256);
 
     ~NetworkXioServer();
 
@@ -76,7 +78,7 @@ public:
     assign_data_in_buf(xio_msg *msg);
 
     void
-    run();
+    run(std::promise<void> &promise);
 
     void
     shutdown();
@@ -86,6 +88,10 @@ public:
 
     void
     evfd_stop_loop(int fd, int events, void *data);
+
+    static void
+    xio_destroy_ctx_shutdown(xio_context *ctx);
+
 private:
 //    DECLARE_LOGGER("NetworkXioServer");
 
@@ -97,13 +103,14 @@ private:
     std::mutex mutex_;
     std::condition_variable cv_;
     bool stopped{false};
+    EventFD evfd;
+    int queue_depth;
 
     NetworkXioWorkQueuePtr wq_;
 
-    xio_context *ctx{nullptr};
-    xio_server *server{nullptr};
-    xio_mempool *xio_mpool{nullptr};
-    int evfd{-1};
+    std::shared_ptr<xio_context> ctx;
+    std::shared_ptr<xio_server> server;
+    std::shared_ptr<xio_mempool> xio_mpool;
 
     int
     create_session_connection(xio_session *session,
@@ -121,6 +128,9 @@ private:
 
     void
     free_request(NetworkXioRequest *req);
+
+    NetworkXioClientData*
+    allocate_client_data();
 };
 
 }} //namespace

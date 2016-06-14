@@ -171,7 +171,7 @@ ovs_ctx_init(ovs_ctx_t *ctx,
         try
         {
             ctx->net_client_ =
-                std::make_shared<gobjfs::xio::NetworkXioClient>(ctx->uri);
+                std::make_shared<gobjfs::xio::NetworkXioClient>(ctx->uri, 256);
         }
         catch (...)
         {
