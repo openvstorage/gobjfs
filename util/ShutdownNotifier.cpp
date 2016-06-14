@@ -57,7 +57,12 @@ int32_t ShutdownNotifier::init(int epollFD) {
 }
 
 int32_t ShutdownNotifier::recv(uint64_t &counter) {
-  int ret = eventfd_read(fd_, &counter);
+  int ret = 0;
+
+  do {
+    ret = eventfd_read(fd_, &counter);
+  } while ((ret < 0) && ((errno == EINTR) || (errno == EAGAIN)));
+
   if (ret != 0) {
     ret = -errno;
     LOG(ERROR) << "failed to read fd=" << fd_ << " errno=" << ret;
@@ -68,9 +73,14 @@ int32_t ShutdownNotifier::recv(uint64_t &counter) {
 int32_t ShutdownNotifier::send() {
   // add one to counter
   uint64_t counter = 1;
+  
+  int ret = 0;
 
-  int ret = eventfd_write(fd_, counter);
-  if (ret != 0) {
+  do {
+    ret = eventfd_write(fd_, counter);
+  } while ((ret < 0) && ((errno == EINTR) || (errno == EAGAIN)));
+
+  if (ret < 0) {
     ret = -errno;
     LOG(ERROR) << "failed to write fd=" << fd_ << " errno=" << ret;
     return ret;

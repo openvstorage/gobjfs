@@ -290,7 +290,10 @@ IOExecFileHandle IOExecFileOpen(IOExecServiceHandle serviceHandle,
     return newHandle;
   }
 
-  int newFlags = flags; // TODO : add O_DIRECT
+  // NonAligned Option1 
+  // add O_DIRECT fd will be used for io_submit
+  // do not add O_DIRECT for pwrite() 
+  int newFlags = flags | O_DIRECT;
 
   int mode = S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH;
 
