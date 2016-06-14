@@ -551,6 +551,8 @@ static void doRandomReadWrite(ThreadCtx *ctx) {
 
   uint64_t totalIO = 0;
 
+  uint32_t sleepTimeMicrosec = 1;
+
   while (totalIO < ctx->perThreadIO) {
     IOExecFileHandle handle{nullptr};
 
@@ -664,8 +666,10 @@ static void doRandomReadWrite(ThreadCtx *ctx) {
       }
 
       if (ret == -EAGAIN) {
-        usleep(1);
-        LOG(WARNING) << "too fast";
+	if (sleepTimeMicrosec < 10) 
+          sleepTimeMicrosec *= 2;
+        usleep(sleepTimeMicrosec);
+        LOG(WARNING) << "too fast sleep=" << sleepTimeMicrosec;
       } else {
         if (StartCounting) {
           totalIO++;

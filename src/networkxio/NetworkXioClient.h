@@ -108,8 +108,6 @@ public:
                 xio_msg* reply,
                 int last_in_rxq);
 
-   
-
     int
     on_msg_error(xio_session *session,
                  xio_status error,

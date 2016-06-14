@@ -111,6 +111,8 @@ public:
     // maxRequestQueueSize need not be more than io contexts available
     uint32_t maxRequestQueueSize_;
 
+    uint32_t maxFdQueueSize_;
+
     void setDerivedParam();
 
     explicit Config(); // use defaults
@@ -129,7 +131,7 @@ public:
 
     std::atomic<uint64_t> numQueued_{0};    // multi-thread writers
     std::atomic<uint64_t> numSubmitted_{0}; // multi-thread writers
-    uint64_t numCompleted_{0};
+    std::atomic<uint64_t> numCompleted_{0}; // multi-thread writers
 
     // updated by completionThread
     struct OpStats {
@@ -147,11 +149,12 @@ public:
 
     // maintain per-op statistics
     OpStats write_; 
+    OpStats nonAlignedWrite_; 
     OpStats read_; 
     OpStats delete_;
 
     gobjfs::stats::MaxValue<uint32_t> maxRequestQueueSize_;
-    gobjfs::stats::MaxValue<uint32_t> maxFinishQueueSize_;
+    gobjfs::stats::MaxValue<uint32_t> maxFdQueueSize_;
 
     gobjfs::stats::StatsCounter<int64_t> numProcessedInLoop_;
 
@@ -225,6 +228,7 @@ private:
 
   // for metadata ops (create, delete, sync)
   std::thread fdQueueThread_;
+  ConditionWrapper fdQueueHasSpace_;
   SemaphoreWrapper fdQueueCond_; // signals if fdQueue has new elem
   boost::lockfree::queue<FilerJob *> fdQueue_;
   std::atomic<int32_t> fdQueueSize_{0};

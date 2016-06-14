@@ -123,11 +123,13 @@ IOExecutor::Config::Config(uint32_t queueDepth) : queueDepth_(queueDepth) {
 
 void IOExecutor::Config::setDerivedParam() {
   maxRequestQueueSize_ = queueDepth_ / 5;
+  maxFdQueueSize_ = queueDepth_;
 }
 
 void IOExecutor::Config::print() const {
   LOG(INFO) << " \"queueDepth\":" << queueDepth_
             << ",\"maxRequestQueueSize\":" << maxRequestQueueSize_
+            << ",\"maxFdQueueSize\":" << maxFdQueueSize_
             << ",\"minSubmitSize\":" << minSubmitSize_
             << ",\"noSubmitterThread\":" << noSubmitterThread_;
 }
@@ -136,7 +138,7 @@ void IOExecutor::Config::print() const {
 
 void IOExecutor::Statistics::incrementOps(FilerJob *job) {
 
-  if ((job->op_ == FileOp::Write) || (job->op_ == FileOp::NonAlignedWrite)) {
+  if (job->op_ == FileOp::Write) {
 
     assert(job->size_);
     write_.numOps_ ++;
@@ -145,6 +147,16 @@ void IOExecutor::Statistics::incrementOps(FilerJob *job) {
     write_.serviceTime_ = job->serviceTime();
     write_.waitHist_ = job->waitTime();
     write_.serviceHist_ = job->serviceTime();
+
+  } else if (job->op_ == FileOp::NonAlignedWrite) {
+
+    assert(job->size_);
+    nonAlignedWrite_.numOps_ ++;
+    nonAlignedWrite_.numBytes_ += job->size_;
+    nonAlignedWrite_.waitTime_ = job->waitTime();
+    nonAlignedWrite_.serviceTime_ = job->serviceTime();
+    nonAlignedWrite_.waitHist_ = job->waitTime();
+    nonAlignedWrite_.serviceHist_ = job->serviceTime();
 
   } else if (job->op_ == FileOp::Read) {
 
@@ -186,13 +198,16 @@ std::string IOExecutor::Statistics::getState() const {
   std::ostringstream s;
 
   // json format
-  s << "{\"stats\":{\"write\":"   << write_.getState() 
+  s << "{\"stats\":{"
+    << "\"write\":"   << write_.getState() 
+    << ",\"nonAlignedWrite\":"   << nonAlignedWrite_.getState() 
     << ",\"read\":"    << read_.getState() 
     << ",\"delete\":"  << delete_.getState() 
     << ",\"numQueued\":" << numQueued_
     << ",\"numSubmitted\":" << numSubmitted_ 
     << ",\"numCompleted\":" << numCompleted_
     << ",\"maxRequestQueueSize\":" << maxRequestQueueSize_
+    << ",\"maxFdQueueSize\":" << maxFdQueueSize_
     << ",\"idleLoop\":" << idleLoop_
     << ",\"numProcessedInLoop\":" << numProcessedInLoop_
     << ",\"numCompletionEvents\":" << numCompletionEvents_
@@ -323,6 +338,7 @@ void IOExecutor::execute() {
                 << ":minSubmitSize=" << minSubmitSize_
                 << ":numReads=" << stats_.read_.numOps_
                 << ":numWrites=" << stats_.write_.numOps_ 
+                << ":numNonAlignedWrites=" << stats_.nonAlignedWrite_.numOps_ 
                 << ":state=" << state_;
             submitterWaitingForNewRequests_ = false;
           }
@@ -551,12 +567,14 @@ int32_t IOExecutor::ProcessFdQueue() {
       } else if (job->op_ == FileOp::NonAlignedWrite) {
         job->setWaitTime();
         stats_.numSubmitted_ ++;
-        ssize_t writeSz = ::pwrite(job->fd_, job->buffer_, job->size_, job->offset_);
-        if (writeSz != job->size_) {
+        ssize_t writeSz = ::pwrite(job->fd_, job->buffer_, job->userSize_, job->offset_);
+        if (writeSz != job->userSize_) {
           job->retcode_ = -errno;
           LOG(ERROR) << "op=" << job->op_ 
             << " failed for job=" << (void *)job
             << " errno=" << job->retcode_;
+        } else {
+          job->retcode_ = 0;
         }
       } else {
         LOG(ERROR) << "unknown op=" << job->op_ << " for job=" << (void *)job;
@@ -573,6 +591,9 @@ int32_t IOExecutor::ProcessFdQueue() {
     }
 
     fdQueueSize_--;
+    if (fdQueueSize_ >= (int32_t)config_.maxRequestQueueSize_) {
+      fdQueueHasSpace_.wakeup();
+    }
   }
 
   stats_.fdQueueThread_.getThreadStats();
@@ -591,21 +612,36 @@ int IOExecutor::submitTask(FilerJob *job, bool blocking) {
       break;
     }
 
-    if (!IsDirectIOAligned(job->size_)) {
+    if (!IsDirectIOAligned(job->userSize_)) {
       if (job->op_ == FileOp::Write) {
         job->op_ = FileOp::NonAlignedWrite;
+        blocking = true;
       } else if (job->op_ == FileOp::Read) {
         // short reads work with O_DIRECT
       }
     }
 
-    if ((job->op_ == FileOp::Delete) || (job->op_ == FileOp::Sync)) {
+    if ((job->op_ == FileOp::Delete) || 
+      (job->op_ == FileOp::Sync) ||
+      (job->op_ == FileOp::NonAlignedWrite)) {
+
+      if (fdQueueSize_ > (int32_t)config_.maxRequestQueueSize_) {
+        if (!blocking) {
+          LOG(ERROR) << "FD Queue full.  rejecting nonblocking job=" << (void *)job;
+          ret = job->retcode_ = -EAGAIN;
+          break;
+        } else {
+          stats_.requestQueueFull_++;
+          fdQueueHasSpace_.pause();
+        }
+      }
+
       // increment size before push, to prevent race conditions
       job->setSubmitTime();
       job->executor_ = this;
       stats_.numQueued_++;
 
-      fdQueueSize_++;
+      stats_.maxFdQueueSize_ = ++fdQueueSize_;
 
       bool pushReturn = false;
       do {
@@ -618,49 +654,56 @@ int IOExecutor::submitTask(FilerJob *job, bool blocking) {
       break;
     }
 
-    if (requestQueueSize_ > (int32_t)config_.maxRequestQueueSize_) {
-      if (!blocking) {
-        LOG(ERROR) << "Queue full.  rejecting nonblocking job=" << (void *)job;
-        ret = job->retcode_ = -EAGAIN;
-        break;
-      } else {
-        stats_.requestQueueFull_++;
-        requestQueueHasSpace_.pause();
-      }
-    }
+    else if ((job->op_ == FileOp::Write) || 
+      (job->op_ == FileOp::Read)) {
 
-    // set FilerJob variables and increment queue size,
-    // before pushing into queue
-    // otherwise asserts fail because completion thread
-    // also changes FilerJob
-    stats_.maxRequestQueueSize_ = ++requestQueueSize_;
-    job->setSubmitTime();
-    job->executor_ = this;
-    stats_.numQueued_++;
-
-    bool pushReturn = false;
-    do {
-      pushReturn = requestQueue_.push(job);
-      if (pushReturn == false) {
-        LOG_EVERY_N(WARNING, 10) << "push into requestQueue failing";
-      }
-    } while (pushReturn == false);
-
-    // if context is free & num jobs > min, wakeup
-
-    if (config_.noSubmitterThread_) {
-      if (requestQueueSize_ >= (int32_t)minSubmitSize_) {
-        std::unique_lock<std::mutex> lck(submitterCond_.mutex_);
-        if (requestQueueSize_ >= (int32_t)minSubmitSize_)
-          ProcessRequestQueue();
-      }
-    } else {
-      if (submitterWaitingForNewRequests_) {
-        std::unique_lock<std::mutex> lck(submitterCond_.mutex_);
-        if (submitterWaitingForNewRequests_) {
-          submitterCond_.cond_.notify_one();
+      if (requestQueueSize_ > (int32_t)config_.maxRequestQueueSize_) {
+        if (!blocking) {
+          LOG(ERROR) << "Async Queue full.  rejecting nonblocking job=" << (void *)job;
+          ret = job->retcode_ = -EAGAIN;
+          break;
+        } else {
+          stats_.requestQueueFull_++;
+          requestQueueHasSpace_.pause();
         }
       }
+
+      // set FilerJob variables and increment queue size,
+      // before pushing into queue
+      // otherwise asserts fail because completion thread
+      // also changes FilerJob
+      stats_.maxRequestQueueSize_ = ++requestQueueSize_;
+      job->setSubmitTime();
+      job->executor_ = this;
+      stats_.numQueued_++;
+
+      bool pushReturn = false;
+      do {
+        pushReturn = requestQueue_.push(job);
+        if (pushReturn == false) {
+          LOG_EVERY_N(WARNING, 10) << "push into requestQueue failing";
+        }
+      } while (pushReturn == false);
+
+      // if context is free & num jobs > min, wakeup
+
+      if (config_.noSubmitterThread_) {
+        if (requestQueueSize_ >= (int32_t)minSubmitSize_) {
+          std::unique_lock<std::mutex> lck(submitterCond_.mutex_);
+          if (requestQueueSize_ >= (int32_t)minSubmitSize_)
+            ProcessRequestQueue();
+        }
+      } else {
+        if (submitterWaitingForNewRequests_) {
+          std::unique_lock<std::mutex> lck(submitterCond_.mutex_);
+          if (submitterWaitingForNewRequests_) {
+            submitterCond_.cond_.notify_one();
+          }
+        }
+      }
+    } else {
+      LOG(ERROR) << "bad op=" << job->op_;
+      ret = -EAGAIN;
     }
   } while (0);
 

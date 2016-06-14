@@ -22,7 +22,6 @@ but WITHOUT ANY WARRANTY of any kind.
 
 #include "volumedriver.h"
 #include "common.h"
-#include "NetworkXioHandler.h"
 #include "NetworkXioCommon.h"
 #include "context.h"
 #include <sys/types.h>
@@ -307,13 +306,14 @@ _ovs_submit_aio_request(ovs_ctx_t *ctx,
 int
 ovs_aio_read(ovs_ctx_t *ctx,
              const std::string& filename,
+             ovs_completion_t* completion,
              struct ovs_aiocb *ovs_aiocbp)
 {
     XXEnter();
     int err = _ovs_submit_aio_request(ctx,
                                       filename,
                                        ovs_aiocbp,
-                                       NULL,
+                                       completion,
                                        RequestOp::Read);
     XXExit();
     return err;
@@ -643,6 +643,18 @@ ovs_aio_release_completion(ovs_completion_t *completion)
     pthread_cond_destroy(&completion->_cond);
     delete completion;
     return 0;
+}
+
+int
+ovs_aio_read(ovs_ctx_t *ctx,
+               const std::string& filename,
+               struct ovs_aiocb *ovs_aiocbp)
+{
+    return _ovs_submit_aio_request(ctx,
+                                   filename,
+                                   ovs_aiocbp,
+                                   NULL,
+                                   RequestOp::Read);
 }
 
 int

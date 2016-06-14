@@ -50,12 +50,69 @@ xrefcnt_shutdown()
     }
 }
 
+
+
 namespace gobjfs { namespace xio {
-/*
-MAKE_EXCEPTION(FailedCreateXioClient, fungi::IOException);
-MAKE_EXCEPTION(FailedCreateEventfd, fungi::IOException);
-MAKE_EXCEPTION(FailedRegisterEventHandler, fungi::IOException);
-*/
+
+inline void
+_xio_aio_wake_up_suspended_aiocb(ovs_aio_request *request)
+{
+    XXEnter();
+    if (not __sync_bool_compare_and_swap(&request->_on_suspend,
+                                         false,
+                                         true,
+                                         __ATOMIC_RELAXED))
+    {
+        pthread_mutex_lock(&request->_mutex);
+        request->_signaled = true;
+        GLOG_DEBUG("waking up the suspended thread");
+        pthread_cond_signal(&request->_cond);
+        pthread_mutex_unlock(&request->_mutex);
+    }
+    XXExit();
+}
+
+/* called when response is received by NetworkXioClient */
+void
+ovs_xio_aio_complete_request(void* opaque, ssize_t retval, int errval)
+{
+    XXEnter();
+    ovs_aio_request *request = reinterpret_cast<ovs_aio_request*>(opaque);
+    ovs_completion_t *completion = request->completion;
+    RequestOp op = request->_op;
+    request->_errno = errval;
+    request->_rv = retval;
+    request->_failed = (retval == -1 ? true : false);
+    request->_completed = true;
+    {
+        _xio_aio_wake_up_suspended_aiocb(request);
+    }
+    if (completion)
+    {
+        completion->_rv = retval;
+        completion->_failed = (retval == -1 ? true : false);
+        std::cout << "signalling completion" << std::endl;
+        // first invoke the callback, then signal completion
+        // caller must free the completion in main loop - not in callback!
+        completion->complete_cb(completion, completion->cb_arg);
+        ovs_aio_signal_completion(completion);
+    }
+    XXExit();
+}
+
+void
+ovs_xio_complete_request_control(void *opaque, ssize_t retval, int errval)
+{
+    XXEnter();
+    ovs_aio_request *request = reinterpret_cast<ovs_aio_request*>(opaque);
+    if (request)
+    {
+        request->_errno = errval;
+        request->_rv = retval;
+    }
+    XXExit();
+}
+
 template<class T>
 static int
 static_on_session_event(xio_session *session,
@@ -65,7 +122,6 @@ static_on_session_event(xio_session *session,
     T *obj = reinterpret_cast<T*>(cb_user_context);
     if (obj == NULL)
     {
-        assert(obj != NULL);
         return -1;
     }
     return obj->on_session_event(session, event_data);
@@ -81,7 +137,6 @@ static_on_response(xio_session *session,
     T *obj = reinterpret_cast<T*>(cb_user_context);
     if (obj == NULL)
     {
-        assert(obj != NULL);
         return -1;
     }
     return obj->on_response(session, req, last_in_rxq);
@@ -98,7 +153,6 @@ static_on_msg_error(xio_session *session,
     T *obj = reinterpret_cast<T*>(cb_user_context);
     if (obj == NULL)
     {
-        assert(obj != NULL);
         return -1;
     }
     return obj->on_msg_error(session, error, direction, msg);
@@ -111,7 +165,6 @@ static_evfd_stop_loop(int fd, int events, void *data)
     T *obj = reinterpret_cast<T*>(data);
     if (obj == NULL)
     {
-        assert(obj != NULL);
         return;
     }
     obj->evfd_stop_loop(fd, events, data);
@@ -730,7 +783,6 @@ NetworkXioClient::on_session_event_control(xio_session *session,
     XXExit();
     return 0;
 }
-
 
 xio_connection*
 NetworkXioClient::create_connection_control(session_data *sdata,

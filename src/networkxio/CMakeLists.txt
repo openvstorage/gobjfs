@@ -18,7 +18,6 @@ SET(LIBRARY_LIST
     glog 
     gflags 
     unwind
-    tcmalloc
     pthread
 	bz2 pthread rt z)
 
@@ -28,10 +27,10 @@ SET_TARGET_PROPERTIES(networkServer
   PROPERTIES LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/lib)
 
 ADD_EXECUTABLE(NetworkServer NetworkServer.cpp)
-
 TARGET_LINK_LIBRARIES(NetworkServer networkServer ${LIBRARY_LIST})
 
 ADD_EXECUTABLE(NetworkClient NetworkClient.cpp)
-
 TARGET_LINK_LIBRARIES(NetworkClient networkServer ${LIBRARY_LIST})
 
+ADD_EXECUTABLE(AsyncClient AsyncClient.cpp)
+TARGET_LINK_LIBRARIES(AsyncClient networkServer ${LIBRARY_LIST})
