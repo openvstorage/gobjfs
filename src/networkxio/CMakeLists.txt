@@ -18,7 +18,6 @@ SET(LIBRARY_LIST
     glog 
     gflags 
     unwind
-    tcmalloc
     pthread
 	bz2 pthread rt z)
 
