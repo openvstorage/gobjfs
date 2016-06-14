@@ -1,13 +1,14 @@
 # This file can be directly executed ! 
 
 # On a new machine
-sudo apt-get install g++-5 cmake git xfsprogs sysstat gdb
+sudo apt-get install -y g++-5 
+sudo apt-get install -y cmake git xfsprogs sysstat gdb
 
 # Packages to install
 
-sudo apt-get install libaio1 libaio1-dbg libaio-dev
-sudo apt-get install libz-dev libbz2-dev
-sudo apt-get install libboost-all-dev libgoogle-glog-dev
+sudo apt-get install -y libaio1 libaio1-dbg libaio-dev
+sudo apt-get install -y libz-dev libbz2-dev
+sudo apt-get install -y libboost-all-dev libgoogle-glog-dev
 
 # Install google test
 cd ~
@@ -27,7 +28,7 @@ cd -
 
 sudo apt-add-repository "deb http://llvm.org/apt/trusty/llvm-toolchain-trusty-3.8 main"
 sudo apt-get update
-sudo apt-get install clang-3.8 lldb-3.8
+sudo apt-get install -y clang-3.8 lldb-3.8
 
 
 (cd gobjfs; cd build; \
@@ -46,7 +47,7 @@ To run address sanitizer
 
 To run cppcheck
 
-sudo apt-get install cppcheck
+sudo apt-get install -y cppcheck
 
 (cd gobjfs; cd build; make cppcheck)
 
@@ -56,6 +57,6 @@ To run clang-format
 
 sudo apt-add-repository "deb http://llvm.org/apt/trusty/llvm-toolchain-trusty-3.8 main"
 sudo apt-get update
-sudo apt-get install clang-format-3.8
+sudo apt-get install -y clang-format-3.8
 
 (cd gobjfs; cd build; make clangformat)
