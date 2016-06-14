@@ -23,19 +23,16 @@ but WITHOUT ANY WARRANTY of any kind.
 #include "volumedriver.h"
 #include "common.h"
 
+int times = 10;
 
-/*
-DISABLED - where NetworkXioClient calls the completion?
+
 void callback_func(ovs_completion_t *cb, void* arg)
 {
-  free(arg); 
-  ovs_aio_release_completion(cb);
   std::cout << "callback with " << (void*)cb << ":" << (void*)arg << std::endl;
 }
-*/
 
 
-void NetworkServerWriteReadTest(void)
+void NetworkServerWriteReadTest(bool use_completion)
 {
     ovs_ctx_attr_t *ctx_attr = ovs_ctx_attr_new();
 
@@ -56,8 +53,9 @@ void NetworkServerWriteReadTest(void)
     }
 
     std::vector<ovs_aiocb*> vec;
+    std::vector<ovs_completion_t*> cvec;
 
-    for (int i = 0; i < 1000; i ++) {
+    for (int i = 0; i < times; i ++) {
 
       auto rbuf = (char*)malloc(4096);
       assert(rbuf != nullptr);
@@ -67,30 +65,37 @@ void NetworkServerWriteReadTest(void)
       iocb->aio_buf = rbuf;
       iocb->aio_offset = 0;
       iocb->aio_nbytes = 4096;
-/*
-      ovs_completion_t* comp = ovs_aio_create_completion(callback_func, iocb);
-  
+
+      ovs_completion_t* comp = nullptr;
+
+      if (use_completion) {
+        comp = ovs_aio_create_completion(callback_func, iocb);
+      }
+
       auto ret = ovs_aio_readcb(ctx, "abcd", iocb, comp);
 
-      if (ret == 0) {
-        ovs_aio_wait_completion(comp, nullptr);
-        std::cout << "waiting for req=" << i << std::endl;
-      } else {
-        free(iocb);
-        ovs_aio_release_completion(comp);
-      }
-*/
-      auto ret = ovs_aio_read(ctx, "abcd", iocb);
       if (ret != 0) {
         free(iocb);
         free(rbuf);
+        if (comp)
+          ovs_aio_release_completion(comp);
       } else {
+        if (comp) 
+          cvec.push_back(comp);
         vec.push_back(iocb);
       }
     }
 
+    // if completions are in use, wait for them
+    for (auto& elem : cvec) {
+      ovs_aio_wait_completion(elem, nullptr);
+      ovs_aio_release_completion(elem);
+    }
+
     for (auto& elem : vec) {
-      ovs_aio_suspend(ctx, elem, nullptr);
+      // if completions not used, call suspend
+      if (!use_completion) 
+        ovs_aio_suspend(ctx, elem, nullptr); 
       ovs_aio_finish(ctx, elem);
       free(elem->aio_buf);
       free(elem);
@@ -105,6 +110,11 @@ void NetworkServerWriteReadTest(void)
 
 int main(int argc, char *argv[]) {
 
-    NetworkServerWriteReadTest();
+    times = atoi(argv[1]);
+
+    // To use completions, pass non-zero 2nd arg
+    bool use_completion = (atoi(argv[2]) > 0) ? true : false;
+
+    NetworkServerWriteReadTest(use_completion);
 
 }
