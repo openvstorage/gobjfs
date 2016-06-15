@@ -903,6 +903,9 @@ int32_t IOExecutor::doPostProcessingOfJob(FilerJob *job) {
   // incrementOps() has to be done after reset() because
   // reset() sets serviceTime , which is used by stats
   stats_.incrementOps(job);
+  if (job->closeFileHandle_) {
+    close(job->fd_);
+  }
   if (job->canBeFreed_) {
     delete job;
   }
