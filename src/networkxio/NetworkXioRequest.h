@@ -27,7 +27,7 @@ namespace gobjfs { namespace xio
 
 struct Work;
 
-typedef std::function<void(Work*)> workitem_func_t;
+typedef std::function<bool(Work*)> workitem_func_t;
 
 struct Work
 {

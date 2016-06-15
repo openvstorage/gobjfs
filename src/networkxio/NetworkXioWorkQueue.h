@@ -295,12 +295,14 @@ retry:
             wq->inflight_queue.pop();
             lock_.unlock();
             GLOG_DEBUG("Popped request from inflight queue");
+            bool finishNow = true;
             if (req->work.func)
             {
-                req->work.func(&req->work);
+              finishNow = req->work.func(&req->work);
             }
             //wq->finished_lock.lock();
-            if (req->op != NetworkXioMsgOpcode::ReadRsp) {
+            // for sync requests, push in finished queue right here
+            if (finishNow) {
                 wq->lock_ts(); 
                 wq->finished.push(req);
                 wq->unlock_ts(); 

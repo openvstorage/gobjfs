@@ -335,9 +335,10 @@ static constexpr int XIO_COMPLETION_DEFAULT_MAX_EVENTS = 100;
         pack_msg(req);
     }
 
-    void
+    bool
     NetworkXioIOHandler::process_request(NetworkXioRequest *req)
     {
+      bool finishNow = true;
         XXEnter();
         NetworkXioWorkQueue *pWorkQueue = NULL;
         xio_msg *xio_req = req->xio_req;
@@ -352,7 +353,7 @@ static constexpr int XIO_COMPLETION_DEFAULT_MAX_EVENTS = 100;
         } catch (...) {
             GLOG_ERROR("cannot unpack message");
             handle_error(req, EBADMSG);
-            return;
+            return finishNow;
         }
 
         req->opaque = i_msg.opaque();
@@ -377,8 +378,10 @@ static constexpr int XIO_COMPLETION_DEFAULT_MAX_EVENTS = 100;
                             i_msg.size(),
                             i_msg.offset());
                 if (ret != 0) {
-                    pWorkQueue = reinterpret_cast<NetworkXioWorkQueue*> (req->req_wq);
-                    pWorkQueue->worker_bottom_half(pWorkQueue, req);
+                  pWorkQueue = reinterpret_cast<NetworkXioWorkQueue*> (req->req_wq);
+                  pWorkQueue->worker_bottom_half(pWorkQueue, req);
+                } else {
+                  finishNow = false;
                 }
                 break;
             }
@@ -386,9 +389,9 @@ static constexpr int XIO_COMPLETION_DEFAULT_MAX_EVENTS = 100;
             XXExit();
             GLOG_ERROR("Unknown command");
             handle_error(req, EIO);
-            return;
         }; 
         XXExit();
+        return finishNow;
     }
 
     void
