@@ -46,7 +46,8 @@ public:
     NetworkXioIOHandler&
     operator=(const NetworkXioIOHandler&) = delete;
 
-    void
+    // @return whether req is finished into workQueue on func return
+    bool
     process_request(NetworkXioRequest *req);
 
     void
