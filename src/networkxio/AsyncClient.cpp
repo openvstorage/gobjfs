@@ -28,7 +28,7 @@ int times = 10;
 
 void callback_func(ovs_completion_t *cb, void* arg)
 {
-  std::cout << "callback with " << (void*)cb << ":" << (void*)arg << std::endl;
+  GLOG_DEBUG( "callback with " << (void*)cb << ":" << (void*)arg);
 }
 
 
