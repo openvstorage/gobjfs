@@ -391,8 +391,6 @@ ovs_aio_finish(ovs_ctx_t *ctx,
         return -1;
     }
 
-    pthread_cond_destroy(&ovs_aiocbp->request_->_cond);
-    pthread_mutex_destroy(&ovs_aiocbp->request_->_mutex);
     delete ovs_aiocbp->request_;
     XXExit();
     return 0;
@@ -416,26 +414,33 @@ ovs_aio_suspend(ovs_ctx_t *ctx,
                                      true,
                                      __ATOMIC_RELAXED))
     {
-        pthread_mutex_lock(&ovs_aiocbp->request_->_mutex);
-        while (not ovs_aiocbp->request_->_signaled && r == 0)
+        std::unique_lock<std::mutex> l_(ovs_aiocbp->request_->_mutex);
+
+        auto func = [&] () { return ovs_aiocbp->request_->_signaled; };
+
         {
             if (timeout)
             {
                 GLOG_DEBUG("Now going to wait on _cond ");
-                r = pthread_cond_timedwait(&ovs_aiocbp->request_->_cond,
-                                           &ovs_aiocbp->request_->_mutex,
-                                           timeout);
+
+                ovs_aiocbp->request_->_cond.wait_for(
+                  l_, 
+                  std::chrono::nanoseconds(
+                    ((uint64_t)timeout->tv_sec * 1000000000) + 
+                      timeout->tv_nsec), 
+                  func);
+
                 GLOG_DEBUG("Woken Up");
             }
             else
             {
                 GLOG_DEBUG("Now going to wait on _cond ");
-                r = pthread_cond_wait(&ovs_aiocbp->request_->_cond,
-                                      &ovs_aiocbp->request_->_mutex);
+
+                ovs_aiocbp->request_->_cond.wait(l_);
+
                 GLOG_DEBUG("Woken Up");
             }
         }
-        pthread_mutex_unlock(&ovs_aiocbp->request_->_mutex);
     }
     if (r == ETIMEDOUT)
     {
@@ -527,8 +532,6 @@ ovs_aio_create_completion(ovs_callback_t complete_cb,
         completion->_on_wait = false;
         completion->_signaled = false;
         completion->_failed = false;
-        pthread_cond_init(&completion->_cond, NULL);
-        pthread_mutex_init(&completion->_mutex, NULL);
         return completion;
     }
     catch (const std::bad_alloc&)
@@ -583,22 +586,25 @@ ovs_aio_wait_completion(ovs_completion_t *completion,
                                      true,
                                      __ATOMIC_RELAXED))
     {
-        pthread_mutex_lock(&completion->_mutex);
-        while (not completion->_signaled && r == 0)
+        std::unique_lock<std::mutex> l_(completion->_mutex);
+
+        auto func = [&] () { return completion->_signaled; };
+
         {
             if (timeout)
             {
-                r = pthread_cond_timedwait(&completion->_cond,
-                                           &completion->_mutex,
-                                           timeout);
+                completion->_cond.wait_for(
+                  l_, 
+                  std::chrono::nanoseconds(
+                    ((uint64_t)timeout->tv_sec * 1000000000) + 
+                      timeout->tv_nsec), 
+                  func);
             }
             else
             {
-                r = pthread_cond_wait(&completion->_cond,
-                                      &completion->_mutex);
+                completion->_cond.wait(l_);
             }
         }
-        pthread_mutex_unlock(&completion->_mutex);
     }
     if (r == ETIMEDOUT)
     {
@@ -622,10 +628,9 @@ ovs_aio_signal_completion(ovs_completion_t *completion)
                                          true,
                                          __ATOMIC_RELAXED))
     {
-        pthread_mutex_lock(&completion->_mutex);
+        std::unique_lock<std::mutex> l_(completion->_mutex);
         completion->_signaled = true;
-        pthread_cond_signal(&completion->_cond);
-        pthread_mutex_unlock(&completion->_mutex);
+        completion->_cond.notify_all();
     }
     return 0;
 }
@@ -639,8 +644,6 @@ ovs_aio_release_completion(ovs_completion_t *completion)
         errno = EINVAL;
         return -1;
     }
-    pthread_mutex_destroy(&completion->_mutex);
-    pthread_cond_destroy(&completion->_cond);
     delete completion;
     return 0;
 }

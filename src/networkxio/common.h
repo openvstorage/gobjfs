@@ -17,6 +17,9 @@ but WITHOUT ANY WARRANTY of any kind.
 */
 #pragma once
 
+#include <mutex>
+#include <condition_variable>
+
 #define ATTRIBUTE_UNUSED __attribute__((unused))
 
 #ifdef FUNC_TRACE 
@@ -82,8 +85,8 @@ struct ovs_completion
     bool _signaled{false};
     bool _failed{false};
     ssize_t _rv{0};
-    pthread_cond_t _cond;
-    pthread_mutex_t _mutex;
+    std::condition_variable _cond;
+    std::mutex _mutex;
 };
 
 struct ovs_aio_request
@@ -98,7 +101,7 @@ struct ovs_aio_request
     bool _failed{false};
     int _errno{0};
     ssize_t _rv{0};
-    pthread_cond_t _cond;
-    pthread_mutex_t _mutex;
+    std::condition_variable _cond;
+    std::mutex _mutex;
 };
 

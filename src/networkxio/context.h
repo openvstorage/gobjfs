@@ -43,8 +43,6 @@ ovs_aio_request* create_new_request(RequestOp op,
         request->ovs_aiocbp = aio;
         request->completion = completion;
         /*cnanakos TODO: err handling */
-        pthread_cond_init(&request->_cond, NULL);
-        pthread_mutex_init(&request->_mutex, NULL);
         request->_on_suspend = false;
         request->_canceled = false;
         request->_completed = false;

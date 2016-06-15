@@ -28,10 +28,6 @@ but WITHOUT ANY WARRANTY of any kind.
 
 #include "NetworkXioCommon.h"
 
-#ifdef __cplusplus
-extern "C"
-{
-#endif
 
 typedef struct ovs_buffer ovs_buffer_t;
 typedef struct ovs_context_t ovs_ctx_t;
@@ -280,8 +276,4 @@ ovs_aio_signal_completion(ovs_completion_t *completion);
  */
 int
 ovs_aio_release_completion(ovs_completion_t *completion);
-
-#ifdef __cplusplus
-} //extern "C" endif
-#endif
 
