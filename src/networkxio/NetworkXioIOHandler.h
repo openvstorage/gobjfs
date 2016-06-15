@@ -36,9 +36,8 @@ namespace gobjfs { namespace xio
 class NetworkXioIOHandler
 {
 public:
-    NetworkXioIOHandler(const std::string& configFileName, NetworkXioWorkQueuePtr wq)
-    : configFileName_(configFileName)
-    , wq_(wq) {}
+    NetworkXioIOHandler(const std::string& configFileName,
+      NetworkXioWorkQueuePtr wq);
 
     ~NetworkXioIOHandler();
 

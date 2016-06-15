@@ -45,9 +45,59 @@ static constexpr int XIO_COMPLETION_DEFAULT_MAX_EVENTS = 100;
         XXExit();
     }
 
+    NetworkXioIOHandler::NetworkXioIOHandler(const std::string& configFileName,
+      NetworkXioWorkQueuePtr wq)
+    : configFileName_(configFileName)
+    , wq_(wq) 
+    {
+        try {
+
+          serviceHandle_ = IOExecFileServiceInit(configFileName_.c_str());
+          if (serviceHandle_ == nullptr) {
+              throw std::bad_alloc();
+          }
+
+          eventHandle_ = IOExecEventFdOpen(serviceHandle_);
+          if (eventHandle_ == nullptr) {
+            GLOG_ERROR("ObjectFS_GetEventFd failed with error ");
+          }
+
+          auto efd = IOExecEventFdGetReadFd(eventHandle_);
+          if (efd == -1) {
+            GLOG_ERROR("GetReadFd failed with ret " << efd);
+          }
+
+          epollfd = epoll_create1(0);
+          assert(epollfd >= 0);
+
+          struct epoll_event event;
+          event.data.fd = efd;
+          event.events = EPOLLIN;
+          int err = epoll_ctl(epollfd, EPOLL_CTL_ADD, efd, &event);
+          if (err != 0) {
+            GLOG_ERROR("epoll_ctl() failed with error " << errno);
+            assert(0);
+          }
+
+          err = ioCompletionThreadShutdown.init(epollfd);
+          if (err != 0) {
+            GLOG_ERROR("failed to init shutdown notifier " << err);
+            assert(0);
+          }
+
+          ioCompletionThread  = std::thread(
+            std::bind(&NetworkXioIOHandler::gxio_completion_handler, 
+              this, 
+              epollfd, 
+              efd));
+
+        } catch (...) {
+            GLOG_ERROR("failed to init handler");
+        }
+    }
+
     NetworkXioIOHandler::~NetworkXioIOHandler()
     {
-
       try {
         int err = ioCompletionThreadShutdown.send();
         if (err != 0) {
@@ -62,13 +112,20 @@ static constexpr int XIO_COMPLETION_DEFAULT_MAX_EVENTS = 100;
         GLOG_ERROR("failed to join completion thread");
       }
 
-
-      if (serviceHandle_ )
-      {
-        IOExecFileServiceDestroy(serviceHandle_);
-        serviceHandle_ = NULL;
+      if (eventHandle_) {
+        IOExecEventFdClose(eventHandle_);
+        eventHandle_ = nullptr;
       }
 
+      if (epollfd != -1) {
+        close(epollfd);
+        epollfd = -1;
+      }
+
+      if (serviceHandle_ ) {
+        IOExecFileServiceDestroy(serviceHandle_);
+        serviceHandle_ = nullptr;
+      }
     }
 
     void
@@ -79,71 +136,8 @@ static constexpr int XIO_COMPLETION_DEFAULT_MAX_EVENTS = 100;
         GLOG_DEBUG("trying to open volume ");
 
         req->op = NetworkXioMsgOpcode::OpenRsp;
-        if (serviceHandle_) {
-            GLOG_ERROR("Dev is already open for this session");
-            req->retval = -1;
-            req->errval = EIO;
-            pack_msg(req);
-            return;
-        }
-        try {
-            serviceHandle_ = IOExecFileServiceInit(configFileName_.c_str());
-            if (serviceHandle_ == nullptr) {
-                GLOG_ERROR("file service init failed");
-                req->retval = -1;
-                req->errval = err;
-                pack_msg(req);
-                XXExit();
-                return;
-            }
-            req->retval = 0;
-            req->errval = 0;
-        } catch (...) {
-            GLOG_ERROR("failed to open volume ");
-            req->retval = -1;
-            req->errval = EIO;
-        }
-
-        eventHandle_ = IOExecEventFdOpen(serviceHandle_);
-        if (eventHandle_ == nullptr) {
-            GLOG_ERROR("ObjectFS_GetEventFd failed with error " << err);
-            //ObjectFS_Close(&handle_);
-            req->retval = -1;
-            req->errval = EIO;
-            // TODO return
-        }
-
-        auto efd = IOExecEventFdGetReadFd(eventHandle_);
-        if (efd == -1) {
-            GLOG_ERROR("GetReadFd failed with ret " << efd);
-            req->retval = -1;
-            req->errval = EIO;
-            // TODO return
-        }
-
-        epollfd = epoll_create1(0);
-        assert(epollfd >= 0);
-
-        struct epoll_event event;
-        event.data.fd = efd;
-        event.events = EPOLLIN;
-        err = epoll_ctl(epollfd, EPOLL_CTL_ADD, efd, &event);
-        if (err != 0) {
-            GLOG_ERROR("epoll_ctl() failed with error " << errno);
-            assert(0);
-        }
-
-        err = ioCompletionThreadShutdown.init(epollfd);
-        if (err != 0) {
-          GLOG_ERROR("failed to init shutdown notifier " << err);
-          assert(0);
-        }
-
-        ioCompletionThread  = std::thread(
-          std::bind(&NetworkXioIOHandler::gxio_completion_handler, 
-            this, 
-            epollfd, 
-            efd));
+        req->retval = 0;
+        req->errval = 0;
 
         pack_msg(req);
         XXExit();
@@ -238,7 +232,6 @@ static constexpr int XIO_COMPLETION_DEFAULT_MAX_EVENTS = 100;
             req->retval = -1;
             req->errval = EIO;
         }
-        IOExecFileServiceDestroy(serviceHandle_);
         req->retval = 0;
         req->errval = 0;
         done:
