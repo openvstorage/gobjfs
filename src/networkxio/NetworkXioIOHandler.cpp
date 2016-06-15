@@ -210,6 +210,7 @@ static constexpr int XIO_COMPLETION_DEFAULT_MAX_EVENTS = 100;
                   } else {
                       GLOG_ERROR("Read completion error " << iostatus.errorCode << " For completion ID " << iostatus.completionId );
                   }
+                  pack_msg(pXioReq);
                   pWorkQueue = reinterpret_cast<NetworkXioWorkQueue*> (pXioReq->req_wq);
                   pWorkQueue->worker_bottom_half(pWorkQueue, pXioReq);
               }
@@ -245,7 +246,7 @@ static constexpr int XIO_COMPLETION_DEFAULT_MAX_EVENTS = 100;
         XXExit();
     }
 
-    void
+    int
     NetworkXioIOHandler::handle_read(NetworkXioRequest *req,
                                      const std::string& filename, 
                                      size_t size,
@@ -291,8 +292,6 @@ static constexpr int XIO_COMPLETION_DEFAULT_MAX_EVENTS = 100;
             }
             GLOG_DEBUG("----- The WQ pointer is " << req->req_wq);
 
-            IOExecFileHandle fileHandle = IOExecFileOpen(serviceHandle_, filename.c_str(), O_RDWR);
-
             gIOBatch* batch = gIOBatchAlloc(1);
 
             gIOExecFragment& frag = batch->array[0];
@@ -302,7 +301,7 @@ static constexpr int XIO_COMPLETION_DEFAULT_MAX_EVENTS = 100;
             frag.size = size;
             frag.completionId = reinterpret_cast<uint64_t>(req);
 
-            ret = IOExecFileRead(fileHandle, batch, eventHandle_);
+            ret = IOExecFileRead(serviceHandle_, filename.c_str(), batch, eventHandle_);
 
             if (ret != 0) {
                 GLOG_ERROR("IOExecFileRead failed with error " << ret);
@@ -311,9 +310,9 @@ static constexpr int XIO_COMPLETION_DEFAULT_MAX_EVENTS = 100;
                 XXDone();
             }
 
-            GLOG_DEBUG("Do object read for object " << filename << " at offset " << req->offset);
-            req->errval = 0;
-            req->retval = req->size;
+            // CAUTION : only touch "req" after this if ret is non-zero
+            // because "req" can get freed by the other thread if the IO completed
+            // leading to a "use-after-free" memory error 
             XXDone();
         }
         /*CATCH_STD_ALL_EWHAT({
@@ -327,8 +326,11 @@ static constexpr int XIO_COMPLETION_DEFAULT_MAX_EVENTS = 100;
             req->errval = EIO;
         }
         done:
-        pack_msg(req);
+        if (ret != 0) { 
+          pack_msg(req);
+        }
         XXExit();
+        return ret;
     }
 
     void
@@ -377,11 +379,11 @@ static constexpr int XIO_COMPLETION_DEFAULT_MAX_EVENTS = 100;
         case NetworkXioMsgOpcode::ReadReq:
             {
                 GLOG_DEBUG(" Command ReadReq");
-                handle_read(req,
+                auto ret = handle_read(req,
                             i_msg.filename_,
                             i_msg.size(),
                             i_msg.offset());
-                if (req->retval < 0) {
+                if (ret != 0) {
                     pWorkQueue = reinterpret_cast<NetworkXioWorkQueue*> (req->req_wq);
                     pWorkQueue->worker_bottom_half(pWorkQueue, req);
                 }
