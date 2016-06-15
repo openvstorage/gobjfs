@@ -54,7 +54,7 @@ void NetworkServerWriteReadTest()
 
       ovs_aiocb* iocb = (ovs_aiocb*)malloc(sizeof(ovs_aiocb));
       iocb->aio_buf = rbuf;
-      iocb->aio_offset = 0;
+      iocb->aio_offset = times * 4096;
       iocb->aio_nbytes = 4096;
 
       iocb_vec.push_back(iocb);
