@@ -29,8 +29,8 @@ SET_TARGET_PROPERTIES(networkServer
 ADD_EXECUTABLE(NetworkServer NetworkServer.cpp)
 TARGET_LINK_LIBRARIES(NetworkServer networkServer ${LIBRARY_LIST})
 
-ADD_EXECUTABLE(NetworkClient NetworkClient.cpp)
-TARGET_LINK_LIBRARIES(NetworkClient networkServer ${LIBRARY_LIST})
+ADD_EXECUTABLE(SyncClient SyncClient.cpp)
+TARGET_LINK_LIBRARIES(SyncClient networkServer ${LIBRARY_LIST})
 
 ADD_EXECUTABLE(AsyncClient AsyncClient.cpp)
 TARGET_LINK_LIBRARIES(AsyncClient networkServer ${LIBRARY_LIST})
