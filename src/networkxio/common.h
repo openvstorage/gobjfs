@@ -19,6 +19,7 @@ but WITHOUT ANY WARRANTY of any kind.
 
 #include <mutex>
 #include <condition_variable>
+#include <assert.h>
 
 #define ATTRIBUTE_UNUSED __attribute__((unused))
 
@@ -92,11 +93,13 @@ struct ovs_completion
 struct notifier
 {
   private:
-    int count{0};
+    int _count{0};
     std::condition_variable _cond;
     std::mutex _mutex;
 
   public:
+    notifier(int c = 1) : _count(c) {}
+
     void wait()
     {
       std::unique_lock<std::mutex> l(_mutex);
@@ -128,10 +131,19 @@ struct notifier
 
     void signal()
     {
-      std::unique_lock<std::mutex> l(_mutex);
-      _cond.notify_all();
+      // count doesnt need to be std::atomic since its single-threaded here ?
+      assert(_count);
+      _count --;
+      GLOG_DEBUG("signal at count=" << _count);
+      if (0 == _count) 
+      {
+        std::unique_lock<std::mutex> l(_mutex);
+        _cond.notify_all();
+      }
     }
 };
+
+typedef std::shared_ptr<notifier> notifier_sptr;
 
 struct ovs_aio_request
 {
@@ -146,6 +158,6 @@ struct ovs_aio_request
     int _errno{0};
     ssize_t _rv{0};
 
-    notifier _cv;
+    notifier_sptr _cvp;
 };
 

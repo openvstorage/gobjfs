@@ -23,8 +23,9 @@ but WITHOUT ANY WARRANTY of any kind.
 #include <unistd.h>
 #include <stdint.h>
 #include <stdbool.h>
-#include <string>
 #include <sys/types.h>
+#include <vector>
+#include <string>
 
 #include "NetworkXioCommon.h"
 
@@ -168,6 +169,18 @@ ovs_aio_suspend(ovs_ctx_t *ctx,
                 const struct timespec *timeout);
 
 /*
+ * Suspend until asynchronous I/O operation or timeout complete
+ * param ctx: Open vStorage context
+ * param ovs_aiocb_vec: Pointer to vector of AIO Control Block structure
+ * param timeout: Pointer to a timespec structure
+ * return: 0 on success, -1 on fail
+ */
+
+int
+ovs_aio_suspendv(ovs_ctx_t *ctx,
+                const std::vector<ovs_aiocb*> &ovs_aiocbp_vec,
+                const struct timespec *timeout);
+/*
  * Retrieve error status of asynchronous I/O operation
  * param ctx: Open vStorage context
  * param ovs_aiocb: Pointer to an AIO Control Block structure
@@ -218,6 +231,16 @@ ovs_aio_read(ovs_ctx_t *ctx,
              const std::string  &filename,
              struct ovs_aiocb *ovs_aiocbp);
 
+/*
+ * Asynchronous readv from a volume
+ * param ctx: Open vStorage context
+ * param ovs_aiocb_vec: Pointer to vector of AIO Control Block structure
+ * return: 0 on success, -1 on fail
+ */
+int
+ovs_aio_readv(ovs_ctx_t *ctx,
+             const std::string  &filename,
+             const std::vector<ovs_aiocb*> &ovs_aiocbp_vec);
 
 /*
  * Asynchronous read from a volume with completion

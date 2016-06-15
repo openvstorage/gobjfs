@@ -71,8 +71,8 @@ private:
 
 private:
 
-    NetworkXioWorkQueuePtr wq_;
     std::string configFileName_;
+    NetworkXioWorkQueuePtr wq_;
 
     IOExecServiceHandle    serviceHandle_{nullptr};
     IOExecEventFdHandle    eventHandle_{nullptr};

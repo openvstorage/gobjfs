@@ -34,6 +34,7 @@ struct ovs_context_t
 inline 
 ovs_aio_request* create_new_request(RequestOp op,
                                     struct ovs_aiocb *aio,
+                                    notifier_sptr cvp,
                                     ovs_completion_t *completion)
 {
     try
@@ -48,6 +49,7 @@ ovs_aio_request* create_new_request(RequestOp op,
         request->_completed = false;
         request->_signaled = false;
         request->_rv = 0;
+        request->_cvp = cvp;
         if (aio and op != RequestOp::Noop)
         {
             aio->request_ = request;
@@ -67,8 +69,11 @@ ovs_xio_open_device(ovs_ctx_t *ctx, const char *dev_name)
     ssize_t r;
     struct ovs_aiocb aio;
 
+    auto cvp = std::make_shared<notifier>();
+
     ovs_aio_request *request = create_new_request(RequestOp::Open,
                                                   &aio,
+                                                  cvp,
                                                   NULL);
     if (request == NULL)
     {

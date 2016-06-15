@@ -65,7 +65,7 @@ _xio_aio_wake_up_suspended_aiocb(ovs_aio_request *request)
     {
         request->_signaled = true;
         GLOG_DEBUG("waking up the suspended thread");
-        request->_cv.signal();
+        request->_cvp->signal();
     }
     XXExit();
 }
@@ -77,7 +77,6 @@ ovs_xio_aio_complete_request(void* opaque, ssize_t retval, int errval)
     XXEnter();
     ovs_aio_request *request = reinterpret_cast<ovs_aio_request*>(opaque);
     ovs_completion_t *completion = request->completion;
-    RequestOp op = request->_op;
     request->_errno = errval;
     request->_rv = retval;
     request->_failed = (retval == -1 ? true : false);

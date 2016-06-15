@@ -211,6 +211,7 @@ static int
 _ovs_submit_aio_request(ovs_ctx_t *ctx,
                         const std::string& filename,
                         struct ovs_aiocb *ovs_aiocbp,
+                        notifier_sptr& cvp,
                         ovs_completion_t *completion,
                         const RequestOp& op)
 {
@@ -253,6 +254,7 @@ _ovs_submit_aio_request(ovs_ctx_t *ctx,
 
     ovs_aio_request *request = create_new_request(op, 
                                                   ovs_aiocbp, 
+                                                  cvp, 
                                                   completion);
     if (request == NULL)
     {
@@ -302,23 +304,6 @@ _ovs_submit_aio_request(ovs_ctx_t *ctx,
     }
     return r;
 }
-
-int
-ovs_aio_read(ovs_ctx_t *ctx,
-             const std::string& filename,
-             ovs_completion_t* completion,
-             struct ovs_aiocb *ovs_aiocbp)
-{
-    XXEnter();
-    int err = _ovs_submit_aio_request(ctx,
-                                      filename,
-                                       ovs_aiocbp,
-                                       completion,
-                                       RequestOp::Read);
-    XXExit();
-    return err;
-}
-
 
 int
 ovs_aio_error(ovs_ctx_t *ctx,
@@ -397,6 +382,51 @@ ovs_aio_finish(ovs_ctx_t *ctx,
 }
 
 int
+ovs_aio_suspendv(ovs_ctx_t *ctx,
+                const std::vector<ovs_aiocb*> &ovs_aiocbp_vec,
+                const struct timespec *timeout)
+{
+    XXEnter();
+    int r = 0;
+    if (ctx == NULL || ovs_aiocbp_vec.size() == NULL)
+    {
+        errno = EINVAL;
+        XXExit();
+        return (r = -1);
+    }
+
+    for (auto elem : ovs_aiocbp_vec) {
+      __sync_bool_compare_and_swap(&elem->request_->_on_suspend,
+                                     false,
+                                     true,
+                                     __ATOMIC_RELAXED);
+    }
+
+    auto cvp = ovs_aiocbp_vec[0]->request_->_cvp;
+
+    {
+      if (timeout)
+      {
+          // TODO add func
+          cvp->wait_for(timeout);
+      }
+      else
+      {
+          cvp->wait();
+      }
+    }
+
+    if (r == ETIMEDOUT)
+    {
+        r = -1;
+        errno = EAGAIN;
+        GLOG_DEBUG("TimeOut");
+    }
+    XXExit();
+    return r;
+}
+
+int
 ovs_aio_suspend(ovs_ctx_t *ctx,
                 ovs_aiocb *ovs_aiocbp,
                 const struct timespec *timeout)
@@ -418,11 +448,11 @@ ovs_aio_suspend(ovs_ctx_t *ctx,
       {
           auto func = [&] () { return ovs_aiocbp->request_->_signaled; };
           // TODO add func
-          ovs_aiocbp->request_->_cv.wait_for(timeout);
+          ovs_aiocbp->request_->_cvp->wait_for(timeout);
       }
       else
       {
-          ovs_aiocbp->request_->_cv.wait();
+          ovs_aiocbp->request_->_cvp->wait();
       }
     }
     if (r == ETIMEDOUT)
@@ -636,11 +666,35 @@ ovs_aio_read(ovs_ctx_t *ctx,
                const std::string& filename,
                struct ovs_aiocb *ovs_aiocbp)
 {
-    return _ovs_submit_aio_request(ctx,
+  auto cv = std::make_shared<notifier>();
+
+  return _ovs_submit_aio_request(ctx,
                                    filename,
                                    ovs_aiocbp,
+                                   cv,
                                    NULL,
                                    RequestOp::Read);
+}
+
+int
+ovs_aio_readv(ovs_ctx_t *ctx,
+               const std::string& filename,
+               const std::vector<ovs_aiocb*> &ovs_aiocbp_vec)
+{
+  int err = 0;
+
+  auto cv = std::make_shared<notifier>(ovs_aiocbp_vec.size());
+
+  for (auto elem : ovs_aiocbp_vec) {
+    err |= _ovs_submit_aio_request(ctx,
+                                   filename,
+                                   elem,
+                                   cv,
+                                   NULL,
+                                   RequestOp::Read);
+  }
+
+  return err;
 }
 
 int
@@ -649,9 +703,12 @@ ovs_aio_readcb(ovs_ctx_t *ctx,
                struct ovs_aiocb *ovs_aiocbp,
                ovs_completion_t *completion)
 {
-    return _ovs_submit_aio_request(ctx,
+  auto cv = std::make_shared<notifier>();
+
+  return _ovs_submit_aio_request(ctx,
                                    filename,
                                    ovs_aiocbp,
+                                   cv,
                                    completion,
                                    RequestOp::Read);
 }

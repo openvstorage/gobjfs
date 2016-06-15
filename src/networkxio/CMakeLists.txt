@@ -32,5 +32,8 @@ TARGET_LINK_LIBRARIES(NetworkServer networkServer ${LIBRARY_LIST})
 ADD_EXECUTABLE(SyncClient SyncClient.cpp)
 TARGET_LINK_LIBRARIES(SyncClient networkServer ${LIBRARY_LIST})
 
+ADD_EXECUTABLE(MultiAsyncClient MultiAsyncClient.cpp)
+TARGET_LINK_LIBRARIES(MultiAsyncClient networkServer ${LIBRARY_LIST})
+
 ADD_EXECUTABLE(AsyncClient AsyncClient.cpp)
 TARGET_LINK_LIBRARIES(AsyncClient networkServer ${LIBRARY_LIST})
