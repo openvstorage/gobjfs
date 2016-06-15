@@ -414,33 +414,16 @@ ovs_aio_suspend(ovs_ctx_t *ctx,
                                      true,
                                      __ATOMIC_RELAXED))
     {
-        std::unique_lock<std::mutex> l_(ovs_aiocbp->request_->_mutex);
-
-        auto func = [&] () { return ovs_aiocbp->request_->_signaled; };
-
-        {
-            if (timeout)
-            {
-                GLOG_DEBUG("Now going to wait on _cond ");
-
-                ovs_aiocbp->request_->_cond.wait_for(
-                  l_, 
-                  std::chrono::nanoseconds(
-                    ((uint64_t)timeout->tv_sec * 1000000000) + 
-                      timeout->tv_nsec), 
-                  func);
-
-                GLOG_DEBUG("Woken Up");
-            }
-            else
-            {
-                GLOG_DEBUG("Now going to wait on _cond ");
-
-                ovs_aiocbp->request_->_cond.wait(l_);
-
-                GLOG_DEBUG("Woken Up");
-            }
-        }
+      if (timeout)
+      {
+          auto func = [&] () { return ovs_aiocbp->request_->_signaled; };
+          // TODO add func
+          ovs_aiocbp->request_->_cv.wait_for(timeout);
+      }
+      else
+      {
+          ovs_aiocbp->request_->_cv.wait();
+      }
     }
     if (r == ETIMEDOUT)
     {

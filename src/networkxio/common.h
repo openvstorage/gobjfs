@@ -89,6 +89,50 @@ struct ovs_completion
     std::mutex _mutex;
 };
 
+struct notifier
+{
+  private:
+    int count{0};
+    std::condition_variable _cond;
+    std::mutex _mutex;
+
+  public:
+    void wait()
+    {
+      std::unique_lock<std::mutex> l(_mutex);
+      _cond.wait(l);
+    }
+
+    void wait_for(const timespec* timeout)
+    {
+      std::unique_lock<std::mutex> l(_mutex);
+      _cond.wait_for(
+          l, 
+          std::chrono::nanoseconds(
+            ((uint64_t)timeout->tv_sec * 1000000000) + 
+            timeout->tv_nsec));
+    }
+
+    /*
+    void wait_for(struct timespec* timeout)
+    {
+      std::unique_lock<std::mutex> l(_mutex);
+      _cond.wait_for(
+          l_, 
+          std::chrono::nanoseconds(
+            ((uint64_t)timeout->tv_sec * 1000000000) + 
+            timeout->tv_nsec), 
+          func);
+    }
+    */
+
+    void signal()
+    {
+      std::unique_lock<std::mutex> l(_mutex);
+      _cond.notify_all();
+    }
+};
+
 struct ovs_aio_request
 {
     struct ovs_aiocb *ovs_aiocbp{nullptr};
@@ -101,7 +145,7 @@ struct ovs_aio_request
     bool _failed{false};
     int _errno{0};
     ssize_t _rv{0};
-    std::condition_variable _cond;
-    std::mutex _mutex;
+
+    notifier _cv;
 };
 

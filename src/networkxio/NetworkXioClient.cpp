@@ -63,10 +63,9 @@ _xio_aio_wake_up_suspended_aiocb(ovs_aio_request *request)
                                          true,
                                          __ATOMIC_RELAXED))
     {
-        std::unique_lock<std::mutex> l_(request->_mutex);
         request->_signaled = true;
         GLOG_DEBUG("waking up the suspended thread");
-        request->_cond.notify_all();
+        request->_cv.signal();
     }
     XXExit();
 }
