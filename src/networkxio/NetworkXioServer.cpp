@@ -20,7 +20,7 @@ but WITHOUT ANY WARRANTY of any kind.
 #include <future>
 #include <mutex>
 
-#include "volumedriver.h"
+#include <gobjfs_client.h>
 #include "common.h"
 
 #include "NetworkXioServer.h"

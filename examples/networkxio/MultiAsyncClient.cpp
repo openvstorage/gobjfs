@@ -20,86 +20,57 @@ but WITHOUT ANY WARRANTY of any kind.
 #include <string.h>
 #include <vector>
 
-#include "volumedriver.h"
-#include "common.h"
-#include "context.h"
+#include <gobjfs_client.h>
+#include <networkxio/common.h>
+#include <networkxio/context.h>
 
 int times = 10;
 
-
-void callback_func(ovs_completion_t *cb, void* arg)
-{
-  std::cout << "callback with " << (void*)cb << ":" << (void*)arg << std::endl;
-}
-
-
-void NetworkServerWriteReadTest(bool use_completion)
+void NetworkServerWriteReadTest()
 {
   Context::Attr ctx_attr;
 
-    ctx_attr.setTransport("tcp",
+  ctx_attr.setTransport("tcp",
                                          "127.0.0.1",
                                          21321);
 
-    Context ctx(ctx_attr);
+    Context ctx (ctx_attr);
 
     int err = ovs_ctx_init(&ctx,
                "/dev/sdb",
                O_RDWR);
-
     if (err < 0) {
         GLOG_ERROR("Volume open failed ");
         return;
     }
 
-    std::vector<ovs_aiocb*> vec;
-    std::vector<ovs_completion_t*> cvec;
+    std::vector<ovs_aiocb*> iocb_vec;
 
     for (int i = 0; i < times; i ++) {
 
       auto rbuf = (char*)malloc(4096);
       assert(rbuf != nullptr);
 
-
       ovs_aiocb* iocb = (ovs_aiocb*)malloc(sizeof(ovs_aiocb));
       iocb->aio_buf = rbuf;
-      iocb->aio_offset = 0;
+      iocb->aio_offset = times * 4096;
       iocb->aio_nbytes = 4096;
 
-      ovs_completion_t* comp = nullptr;
-
-      if (use_completion) {
-        comp = ovs_aio_create_completion(callback_func, iocb);
-      }
-
-      auto ret = ovs_aio_readcb(&ctx, "abcd", iocb, comp);
-
-      if (ret != 0) {
-        free(iocb);
-        free(rbuf);
-        if (comp)
-          ovs_aio_release_completion(comp);
-      } else {
-        if (comp) 
-          cvec.push_back(comp);
-        vec.push_back(iocb);
-      }
+      iocb_vec.push_back(iocb);
     }
 
-    // if completions are in use, wait for them
-    for (auto& elem : cvec) {
-      ovs_aio_wait_completion(elem, nullptr);
-      ovs_aio_release_completion(elem);
-    }
+    auto ret = ovs_aio_readv(&ctx, "abcd", iocb_vec);
 
-    for (auto& elem : vec) {
-      // if completions not used, call suspend
-      if (!use_completion) 
-        ovs_aio_suspend(&ctx, elem, nullptr); 
+    if (ret == 0) {
+      ret = ovs_aio_suspendv(&ctx, iocb_vec, nullptr); 
+    } 
+
+    for (auto& elem : iocb_vec) {
       ovs_aio_finish(&ctx, elem);
       free(elem->aio_buf);
       free(elem);
     }
+
 
     GLOG_DEBUG("\n\n------------------- ovs_ctx_destroy Successful -------------- \n\n");
 }
@@ -108,9 +79,6 @@ int main(int argc, char *argv[]) {
 
     times = atoi(argv[1]);
 
-    // To use completions, pass non-zero 2nd arg
-    bool use_completion = (atoi(argv[2]) > 0) ? true : false;
-
-    NetworkServerWriteReadTest(use_completion);
+    NetworkServerWriteReadTest();
 
 }

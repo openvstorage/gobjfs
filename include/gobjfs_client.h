@@ -27,7 +27,7 @@ but WITHOUT ANY WARRANTY of any kind.
 #include <vector>
 #include <string>
 
-#include "NetworkXioCommon.h"
+#include <networkxio/NetworkXioCommon.h>
 
 
 typedef struct ovs_buffer ovs_buffer_t;

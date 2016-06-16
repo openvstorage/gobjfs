@@ -36,9 +36,8 @@ namespace gobjfs { namespace xio
 class NetworkXioIOHandler
 {
 public:
-    NetworkXioIOHandler(const std::string& configFileName, NetworkXioWorkQueuePtr wq)
-    : configFileName_(configFileName)
-    , wq_(wq) {}
+    NetworkXioIOHandler(const std::string& configFileName,
+      NetworkXioWorkQueuePtr wq);
 
     ~NetworkXioIOHandler();
 
@@ -47,7 +46,8 @@ public:
     NetworkXioIOHandler&
     operator=(const NetworkXioIOHandler&) = delete;
 
-    void
+    // @return whether req is finished into workQueue on func return
+    bool
     process_request(NetworkXioRequest *req);
 
     void
@@ -61,7 +61,7 @@ private:
 
     void handle_close(NetworkXioRequest *req);
 
-    void handle_read(NetworkXioRequest *req,
+    int handle_read(NetworkXioRequest *req,
                      const std::string& filename,
                      size_t size,
                      off_t offset);

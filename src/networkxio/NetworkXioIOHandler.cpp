@@ -18,7 +18,7 @@ but WITHOUT ANY WARRANTY of any kind.
 
 #include <unistd.h>
 
-#include "volumedriver.h"
+#include <gobjfs_client.h>
 #include "common.h"
 
 #include "NetworkXioIOHandler.h"
@@ -45,9 +45,59 @@ static constexpr int XIO_COMPLETION_DEFAULT_MAX_EVENTS = 100;
         XXExit();
     }
 
+    NetworkXioIOHandler::NetworkXioIOHandler(const std::string& configFileName,
+      NetworkXioWorkQueuePtr wq)
+    : configFileName_(configFileName)
+    , wq_(wq) 
+    {
+        try {
+
+          serviceHandle_ = IOExecFileServiceInit(configFileName_.c_str());
+          if (serviceHandle_ == nullptr) {
+              throw std::bad_alloc();
+          }
+
+          eventHandle_ = IOExecEventFdOpen(serviceHandle_);
+          if (eventHandle_ == nullptr) {
+            GLOG_ERROR("ObjectFS_GetEventFd failed with error ");
+          }
+
+          auto efd = IOExecEventFdGetReadFd(eventHandle_);
+          if (efd == -1) {
+            GLOG_ERROR("GetReadFd failed with ret " << efd);
+          }
+
+          epollfd = epoll_create1(0);
+          assert(epollfd >= 0);
+
+          struct epoll_event event;
+          event.data.fd = efd;
+          event.events = EPOLLIN;
+          int err = epoll_ctl(epollfd, EPOLL_CTL_ADD, efd, &event);
+          if (err != 0) {
+            GLOG_ERROR("epoll_ctl() failed with error " << errno);
+            assert(0);
+          }
+
+          err = ioCompletionThreadShutdown.init(epollfd);
+          if (err != 0) {
+            GLOG_ERROR("failed to init shutdown notifier " << err);
+            assert(0);
+          }
+
+          ioCompletionThread  = std::thread(
+            std::bind(&NetworkXioIOHandler::gxio_completion_handler, 
+              this, 
+              epollfd, 
+              efd));
+
+        } catch (...) {
+            GLOG_ERROR("failed to init handler");
+        }
+    }
+
     NetworkXioIOHandler::~NetworkXioIOHandler()
     {
-
       try {
         int err = ioCompletionThreadShutdown.send();
         if (err != 0) {
@@ -62,13 +112,20 @@ static constexpr int XIO_COMPLETION_DEFAULT_MAX_EVENTS = 100;
         GLOG_ERROR("failed to join completion thread");
       }
 
-
-      if (serviceHandle_ )
-      {
-        IOExecFileServiceDestroy(serviceHandle_);
-        serviceHandle_ = NULL;
+      if (eventHandle_) {
+        IOExecEventFdClose(eventHandle_);
+        eventHandle_ = nullptr;
       }
 
+      if (epollfd != -1) {
+        close(epollfd);
+        epollfd = -1;
+      }
+
+      if (serviceHandle_ ) {
+        IOExecFileServiceDestroy(serviceHandle_);
+        serviceHandle_ = nullptr;
+      }
     }
 
     void
@@ -79,71 +136,8 @@ static constexpr int XIO_COMPLETION_DEFAULT_MAX_EVENTS = 100;
         GLOG_DEBUG("trying to open volume ");
 
         req->op = NetworkXioMsgOpcode::OpenRsp;
-        if (serviceHandle_) {
-            GLOG_ERROR("Dev is already open for this session");
-            req->retval = -1;
-            req->errval = EIO;
-            pack_msg(req);
-            return;
-        }
-        try {
-            serviceHandle_ = IOExecFileServiceInit(configFileName_.c_str());
-            if (serviceHandle_ == nullptr) {
-                GLOG_ERROR("file service init failed");
-                req->retval = -1;
-                req->errval = err;
-                pack_msg(req);
-                XXExit();
-                return;
-            }
-            req->retval = 0;
-            req->errval = 0;
-        } catch (...) {
-            GLOG_ERROR("failed to open volume ");
-            req->retval = -1;
-            req->errval = EIO;
-        }
-
-        eventHandle_ = IOExecEventFdOpen(serviceHandle_);
-        if (eventHandle_ == nullptr) {
-            GLOG_ERROR("ObjectFS_GetEventFd failed with error " << err);
-            //ObjectFS_Close(&handle_);
-            req->retval = -1;
-            req->errval = EIO;
-            // TODO return
-        }
-
-        auto efd = IOExecEventFdGetReadFd(eventHandle_);
-        if (efd == -1) {
-            GLOG_ERROR("GetReadFd failed with ret " << efd);
-            req->retval = -1;
-            req->errval = EIO;
-            // TODO return
-        }
-
-        epollfd = epoll_create1(0);
-        assert(epollfd >= 0);
-
-        struct epoll_event event;
-        event.data.fd = efd;
-        event.events = EPOLLIN;
-        err = epoll_ctl(epollfd, EPOLL_CTL_ADD, efd, &event);
-        if (err != 0) {
-            GLOG_ERROR("epoll_ctl() failed with error " << errno);
-            assert(0);
-        }
-
-        err = ioCompletionThreadShutdown.init(epollfd);
-        if (err != 0) {
-          GLOG_ERROR("failed to init shutdown notifier " << err);
-          assert(0);
-        }
-
-        ioCompletionThread  = std::thread(
-          std::bind(&NetworkXioIOHandler::gxio_completion_handler, 
-            this, 
-            epollfd, 
-            efd));
+        req->retval = 0;
+        req->errval = 0;
 
         pack_msg(req);
         XXExit();
@@ -210,6 +204,7 @@ static constexpr int XIO_COMPLETION_DEFAULT_MAX_EVENTS = 100;
                   } else {
                       GLOG_ERROR("Read completion error " << iostatus.errorCode << " For completion ID " << iostatus.completionId );
                   }
+                  pack_msg(pXioReq);
                   pWorkQueue = reinterpret_cast<NetworkXioWorkQueue*> (pXioReq->req_wq);
                   pWorkQueue->worker_bottom_half(pWorkQueue, pXioReq);
               }
@@ -237,7 +232,6 @@ static constexpr int XIO_COMPLETION_DEFAULT_MAX_EVENTS = 100;
             req->retval = -1;
             req->errval = EIO;
         }
-        IOExecFileServiceDestroy(serviceHandle_);
         req->retval = 0;
         req->errval = 0;
         done:
@@ -245,7 +239,7 @@ static constexpr int XIO_COMPLETION_DEFAULT_MAX_EVENTS = 100;
         XXExit();
     }
 
-    void
+    int
     NetworkXioIOHandler::handle_read(NetworkXioRequest *req,
                                      const std::string& filename, 
                                      size_t size,
@@ -291,8 +285,6 @@ static constexpr int XIO_COMPLETION_DEFAULT_MAX_EVENTS = 100;
             }
             GLOG_DEBUG("----- The WQ pointer is " << req->req_wq);
 
-            IOExecFileHandle fileHandle = IOExecFileOpen(serviceHandle_, filename.c_str(), O_RDWR);
-
             gIOBatch* batch = gIOBatchAlloc(1);
 
             gIOExecFragment& frag = batch->array[0];
@@ -302,7 +294,7 @@ static constexpr int XIO_COMPLETION_DEFAULT_MAX_EVENTS = 100;
             frag.size = size;
             frag.completionId = reinterpret_cast<uint64_t>(req);
 
-            ret = IOExecFileRead(fileHandle, batch, eventHandle_);
+            ret = IOExecFileRead(serviceHandle_, filename.c_str(), batch, eventHandle_);
 
             if (ret != 0) {
                 GLOG_ERROR("IOExecFileRead failed with error " << ret);
@@ -311,9 +303,9 @@ static constexpr int XIO_COMPLETION_DEFAULT_MAX_EVENTS = 100;
                 XXDone();
             }
 
-            GLOG_DEBUG("Do object read for object " << filename << " at offset " << req->offset);
-            req->errval = 0;
-            req->retval = req->size;
+            // CAUTION : only touch "req" after this if ret is non-zero
+            // because "req" can get freed by the other thread if the IO completed
+            // leading to a "use-after-free" memory error 
             XXDone();
         }
         /*CATCH_STD_ALL_EWHAT({
@@ -327,8 +319,11 @@ static constexpr int XIO_COMPLETION_DEFAULT_MAX_EVENTS = 100;
             req->errval = EIO;
         }
         done:
-        pack_msg(req);
+        if (ret != 0) { 
+          pack_msg(req);
+        }
         XXExit();
+        return ret;
     }
 
     void
@@ -340,9 +335,10 @@ static constexpr int XIO_COMPLETION_DEFAULT_MAX_EVENTS = 100;
         pack_msg(req);
     }
 
-    void
+    bool
     NetworkXioIOHandler::process_request(NetworkXioRequest *req)
     {
+      bool finishNow = true;
         XXEnter();
         NetworkXioWorkQueue *pWorkQueue = NULL;
         xio_msg *xio_req = req->xio_req;
@@ -357,7 +353,7 @@ static constexpr int XIO_COMPLETION_DEFAULT_MAX_EVENTS = 100;
         } catch (...) {
             GLOG_ERROR("cannot unpack message");
             handle_error(req, EBADMSG);
-            return;
+            return finishNow;
         }
 
         req->opaque = i_msg.opaque();
@@ -377,13 +373,15 @@ static constexpr int XIO_COMPLETION_DEFAULT_MAX_EVENTS = 100;
         case NetworkXioMsgOpcode::ReadReq:
             {
                 GLOG_DEBUG(" Command ReadReq");
-                handle_read(req,
+                auto ret = handle_read(req,
                             i_msg.filename_,
                             i_msg.size(),
                             i_msg.offset());
-                if (req->retval < 0) {
-                    pWorkQueue = reinterpret_cast<NetworkXioWorkQueue*> (req->req_wq);
-                    pWorkQueue->worker_bottom_half(pWorkQueue, req);
+                if (ret != 0) {
+                  pWorkQueue = reinterpret_cast<NetworkXioWorkQueue*> (req->req_wq);
+                  pWorkQueue->worker_bottom_half(pWorkQueue, req);
+                } else {
+                  finishNow = false;
                 }
                 break;
             }
@@ -391,9 +389,9 @@ static constexpr int XIO_COMPLETION_DEFAULT_MAX_EVENTS = 100;
             XXExit();
             GLOG_ERROR("Unknown command");
             handle_error(req, EIO);
-            return;
         }; 
         XXExit();
+        return finishNow;
     }
 
     void

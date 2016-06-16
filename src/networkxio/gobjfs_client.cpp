@@ -20,7 +20,7 @@ but WITHOUT ANY WARRANTY of any kind.
 #include <limits.h>
 #include <map>
 
-#include "volumedriver.h"
+#include <gobjfs_client.h>
 #include "common.h"
 #include "NetworkXioCommon.h"
 #include "context.h"

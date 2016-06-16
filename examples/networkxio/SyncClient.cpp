@@ -19,9 +19,9 @@ but WITHOUT ANY WARRANTY of any kind.
 #include <fcntl.h>
 #include <string.h>
 
-#include "volumedriver.h"
-#include "common.h"
-#include "context.h"
+#include <gobjfs_client.h>
+#include <networkxio/common.h>
+#include <networkxio/context.h>
 
 void NetworkServerWriteReadTest(void)
 {

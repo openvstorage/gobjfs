@@ -25,7 +25,7 @@ but WITHOUT ANY WARRANTY of any kind.
 #include <sstream>
 
 #include "NetworkXioClient.h"
-#include "volumedriver.h"
+#include <gobjfs_client.h>
 #include "common.h"
 
 #define POLLING_TIME_USEC   20
@@ -88,7 +88,7 @@ ovs_xio_aio_complete_request(void* opaque, ssize_t retval, int errval)
     {
         completion->_rv = retval;
         completion->_failed = (retval == -1 ? true : false);
-        std::cout << "signalling completion" << std::endl;
+        GLOG_DEBUG( "signalling completion" << std::endl);
         // first invoke the callback, then signal completion
         // caller must free the completion in main loop - not in callback!
         completion->complete_cb(completion, completion->cb_arg);

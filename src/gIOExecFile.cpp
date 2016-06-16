@@ -273,9 +273,11 @@ struct IOExecFileInt {
   }
 
   ~IOExecFileInt() {
-    int ret = close(fd);
-    if (ret != 0) {
-      LOG(ERROR) << "failed to close fd=" << fd << " errno=" << errno;
+    if (fd != -1) {
+      int ret = close(fd);
+      if (ret != 0) {
+        LOG(ERROR) << "failed to close fd=" << fd << " errno=" << errno;
+      }
     }
   }
 };
@@ -335,6 +337,7 @@ int32_t IOExecFileTruncate(IOExecFileHandle fileHandle, size_t newSize) {
 static int32_t IOExecFileOp(const char* name, 
   FileOp optype,
   IOExecFileHandle fileHandle, 
+  bool closeFileHandle,
   const gIOBatch *batch,
   IOExecEventFdHandle eventFdHandle) {
 
@@ -376,6 +379,7 @@ static int32_t IOExecFileOp(const char* name,
     job->completionId_ = frag.completionId;
     job->completionFd_ = jobFd;
     job->canBeFreed_ = true; // free job after completion
+    job->closeFileHandle_ = closeFileHandle;
     retcode = ioexecPtr->submitTask(job, /*blocking*/ false);
     if (retcode != 0) {
       LOG(WARNING) << "job not submitted due to overflow";
@@ -388,15 +392,39 @@ static int32_t IOExecFileOp(const char* name,
 int32_t IOExecFileWrite(IOExecFileHandle fileHandle, const gIOBatch *batch,
                         IOExecEventFdHandle eventFdHandle) {
 
-  return IOExecFileOp("write", FileOp::Write, fileHandle, batch, eventFdHandle);
+  bool closeFileHandle = false;
+  return IOExecFileOp("write", FileOp::Write, fileHandle, closeFileHandle, batch, eventFdHandle);
 
 }
 
 int32_t IOExecFileRead(IOExecFileHandle fileHandle, const gIOBatch *batch,
                        IOExecEventFdHandle eventFdHandle) {
 
-  return IOExecFileOp("read", FileOp::Read, fileHandle, batch, eventFdHandle);
+  bool closeFileHandle = false;
+  return IOExecFileOp("read", FileOp::Read, fileHandle, closeFileHandle, batch, eventFdHandle);
 }
+
+
+int32_t IOExecFileRead(IOExecServiceHandle serviceHandle, 
+  const char* fileName, 
+  const gIOBatch *batch,
+  IOExecEventFdHandle eventFdHandle) {
+
+  auto fileHandle = IOExecFileOpen(serviceHandle, fileName, O_RDONLY);
+  if (fileHandle == nullptr) {
+    return -EIO;
+  }
+
+  bool closeFileHandle = true;
+  auto ret =  IOExecFileOp("read", FileOp::Read, fileHandle, closeFileHandle, batch, eventFdHandle);
+
+  // close fileHandle but do not close fd which is still in use
+  // because the fd will be closed after FilerJob::reset
+  fileHandle->fd = gobjfs::os::FD_INVALID;
+  IOExecFileClose(fileHandle);
+  return ret;
+}
+
 
 int32_t IOExecFileDeleteSync(IOExecServiceHandle serviceHandle,
                              const char *filename) {

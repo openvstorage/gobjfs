@@ -1,11 +1,9 @@
 INCLUDE_DIRECTORIES(${PROJECT_SOURCE_DIR}/thirdparty/xio/include)
 INCLUDE_DIRECTORIES(${PROJECT_SOURCE_DIR}/thirdparty/msgpack/include)
 
-SET(SOURCES 
-    volumedriver.cpp
+SET(CLIENT_SOURCES 
+    gobjfs_client.cpp
     NetworkXioClient.cpp
-    NetworkXioIOHandler.cpp
-    NetworkXioServer.cpp
    )
 
 SET(LIBRARY_LIST
@@ -21,19 +19,13 @@ SET(LIBRARY_LIST
     pthread
 	bz2 pthread rt z)
 
-ADD_LIBRARY(networkServer SHARED ${SOURCES})
-
-SET_TARGET_PROPERTIES(networkServer 
+ADD_LIBRARY(gobjfs_client SHARED ${CLIENT_SOURCES})
+SET_TARGET_PROPERTIES(gobjfs_client 
   PROPERTIES LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/lib)
 
-ADD_EXECUTABLE(NetworkServer NetworkServer.cpp)
-TARGET_LINK_LIBRARIES(NetworkServer networkServer ${LIBRARY_LIST})
+ADD_EXECUTABLE(NetworkServer 
+  NetworkServer.cpp 
+  NetworkXioIOHandler.cpp
+  NetworkXioServer.cpp)
 
-ADD_EXECUTABLE(SyncClient SyncClient.cpp)
-TARGET_LINK_LIBRARIES(SyncClient networkServer ${LIBRARY_LIST})
-
-ADD_EXECUTABLE(MultiAsyncClient MultiAsyncClient.cpp)
-TARGET_LINK_LIBRARIES(MultiAsyncClient networkServer ${LIBRARY_LIST})
-
-ADD_EXECUTABLE(AsyncClient AsyncClient.cpp)
-TARGET_LINK_LIBRARIES(AsyncClient networkServer ${LIBRARY_LIST})
+TARGET_LINK_LIBRARIES(NetworkServer ${LIBRARY_LIST})

@@ -34,7 +34,7 @@ but WITHOUT ANY WARRANTY of any kind.
 #include <string.h>
 #include <strings.h>
 
-#include "volumedriver.h"
+#include <gobjfs_client.h>
 #include "common.h"
 #include "NetworkXioServer.h"
 

@@ -119,6 +119,18 @@ int32_t IOExecFileRead(IOExecFileHandle fileHandle, const gIOBatch *pIOBatch,
                        IOExecEventFdHandle eventFdHandle);
 
 /**
+ * @param serviceHandle returned from ServiceInit
+ * @param fileName absolute path of file to read
+ * @param pIOBatch batch containing offset, size and buffer to read
+ * @param fd the pipe on which callback notification should be sent
+ *           when job is completed
+ */
+int32_t IOExecFileRead(IOExecServiceHandle serviceHandle, 
+  const char* fileName, 
+  const gIOBatch *pIOBatch,
+  IOExecEventFdHandle eventFdHandle);
+
+/**
  *
  */
 int32_t IOExecFileDelete(IOExecServiceHandle serviceHandle,
