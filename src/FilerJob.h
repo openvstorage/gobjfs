@@ -58,10 +58,7 @@ public:
   // Fd used to Notify on completion to application
   int completionFd_{gobjfs::os::FD_INVALID};
   // ID points to I/O
-  void *private_{nullptr};
   gCompletionID completionId_{0};
-  gContainerID containerId_{0};
-  gSegmentID segmentId_{0};
 
 public:
   FilerJob(const char *filename, FileOp op);

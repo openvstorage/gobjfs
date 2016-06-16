@@ -43,9 +43,16 @@ but WITHOUT ANY WARRANTY of any kind.
 
 #define GLOG_ERROR(msg) std::cout  << " " << __FUNCTION__ << " , " << __FILE__ << " ( " << __LINE__ << " ) " << msg << std::endl;
 #define GLOG_FATAL(msg) GLOG_ERROR(msg)
+
+#ifdef FUNC_TRACE
 #define GLOG_INFO(msg) GLOG_ERROR(msg)
 #define GLOG_DEBUG(msg) GLOG_ERROR(msg)
 #define GLOG_TRACE(msg) GLOG_ERROR(msg)
+#else
+#define GLOG_INFO(msg) 
+#define GLOG_DEBUG(msg) 
+#define GLOG_TRACE(msg) 
+#endif
 
 // TODO
 enum class RequestOp
