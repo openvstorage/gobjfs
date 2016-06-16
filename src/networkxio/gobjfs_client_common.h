@@ -20,6 +20,7 @@ but WITHOUT ANY WARRANTY of any kind.
 #include <mutex>
 #include <condition_variable>
 #include <assert.h>
+#include <gobjfs_client.h>
 
 #define ATTRIBUTE_UNUSED __attribute__((unused))
 

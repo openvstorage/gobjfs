@@ -20,8 +20,8 @@ but WITHOUT ANY WARRANTY of any kind.
 #include <future>
 #include <mutex>
 
+#include <networkxio/gobjfs_client_common.h>
 #include <gobjfs_client.h>
-#include "common.h"
 
 #include "NetworkXioServer.h"
 #include "NetworkXioProtocol.h"

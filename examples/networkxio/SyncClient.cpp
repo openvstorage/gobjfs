@@ -16,11 +16,12 @@ Open vStorage is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY of any kind.
 */
 #include <assert.h>
+#include <iostream>
 #include <fcntl.h>
 #include <string.h>
 
 #include <gobjfs_client.h>
-#include <networkxio/common.h>
+#include <networkxio/gobjfs_client_common.h> // GLOG_DEBUG
 
 void NetworkServerWriteReadTest(void)
 {

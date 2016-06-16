@@ -19,7 +19,7 @@ but WITHOUT ANY WARRANTY of any kind.
 
 #include <libxio.h>
 #include <functional>
-#include "NetworkXioCommon.h"
+#include <networkxio/NetworkXioCommon.h>
 
 #include <list>
 namespace gobjfs { namespace xio 

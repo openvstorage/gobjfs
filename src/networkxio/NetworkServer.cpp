@@ -34,8 +34,8 @@ but WITHOUT ANY WARRANTY of any kind.
 #include <string.h>
 #include <strings.h>
 
+#include <networkxio/gobjfs_client_common.h>
 #include <gobjfs_client.h>
-#include "common.h"
 #include "NetworkXioServer.h"
 
 #include <gIOExecFile.h>

@@ -17,7 +17,7 @@
 
 #include <msgpack.hpp>
 
-#include "NetworkXioCommon.h"
+#include <networkxio/NetworkXioCommon.h>
 
 class NetworkXioMsg
 {

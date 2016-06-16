@@ -20,9 +20,9 @@ but WITHOUT ANY WARRANTY of any kind.
 #include <limits.h>
 #include <map>
 
+#include <networkxio/gobjfs_client_common.h>
 #include <gobjfs_client.h>
-#include "common.h"
-#include "NetworkXioCommon.h"
+#include <networkxio/NetworkXioCommon.h>
 #include "context.h"
 #include <sys/types.h>
 #include <sys/stat.h>

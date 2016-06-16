@@ -24,9 +24,9 @@ but WITHOUT ANY WARRANTY of any kind.
 
 #include <sstream>
 
-#include "NetworkXioClient.h"
+#include <networkxio/gobjfs_client_common.h>
 #include <gobjfs_client.h>
-#include "common.h"
+#include "NetworkXioClient.h"
 
 #define POLLING_TIME_USEC   20
 
