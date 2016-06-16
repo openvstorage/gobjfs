@@ -1,7 +1,5 @@
 
 SET(LIBRARY_LIST
-    gobjfs
-    gobjfs_util
     aio
     msgpack
     xio
