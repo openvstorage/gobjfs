@@ -22,22 +22,21 @@ but WITHOUT ANY WARRANTY of any kind.
 
 #include "volumedriver.h"
 #include "common.h"
+#include "context.h"
 
 int times = 10;
 
 void NetworkServerWriteReadTest()
 {
-    ovs_ctx_attr_t *ctx_attr = ovs_ctx_attr_new();
+  Context::Attr ctx_attr;
 
-    ovs_ctx_attr_set_transport(ctx_attr,
-                                         "tcp",
+  ctx_attr.setTransport("tcp",
                                          "127.0.0.1",
                                          21321);
 
-    ovs_ctx_t *ctx = ovs_ctx_new(ctx_attr);
-    assert(ctx != nullptr);
+    Context ctx (ctx_attr);
 
-    int err = ovs_ctx_init(ctx,
+    int err = ovs_ctx_init(&ctx,
                "/dev/sdb",
                O_RDWR);
     if (err < 0) {
@@ -60,23 +59,20 @@ void NetworkServerWriteReadTest()
       iocb_vec.push_back(iocb);
     }
 
-    auto ret = ovs_aio_readv(ctx, "abcd", iocb_vec);
+    auto ret = ovs_aio_readv(&ctx, "abcd", iocb_vec);
 
     if (ret == 0) {
-      ret = ovs_aio_suspendv(ctx, iocb_vec, nullptr); 
+      ret = ovs_aio_suspendv(&ctx, iocb_vec, nullptr); 
     } 
 
     for (auto& elem : iocb_vec) {
-      ovs_aio_finish(ctx, elem);
+      ovs_aio_finish(&ctx, elem);
       free(elem->aio_buf);
       free(elem);
     }
 
-    ovs_ctx_destroy(ctx);
 
     GLOG_DEBUG("\n\n------------------- ovs_ctx_destroy Successful -------------- \n\n");
-
-    ovs_ctx_attr_destroy(ctx_attr);
 }
 
 int main(int argc, char *argv[]) {

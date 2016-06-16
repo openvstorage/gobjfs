@@ -31,8 +31,7 @@ but WITHOUT ANY WARRANTY of any kind.
 
 
 typedef struct ovs_buffer ovs_buffer_t;
-typedef struct ovs_context_t ovs_ctx_t;
-typedef struct ovs_context_attr_t ovs_ctx_attr_t;
+class Context;
 typedef struct ovs_aio_request ovs_aio_request;
 typedef struct ovs_completion ovs_completion_t;
 typedef void (*ovs_callback_t)(ovs_completion_t *cb, void *arg);
@@ -46,65 +45,10 @@ struct ovs_aiocb
 };
 
 
-/*
- * Create context attributes object
- * param attr: Context attributes object
- * return: This function always succeeds returning 0
- * return: Context attributes object on success, or NULL on fail
- */
-ovs_ctx_attr_t*
-ovs_ctx_attr_new();
-
-/*
- * Destroy context attributes object
- * param attr: Context attributes object
- * return: This function always succeeds returning 0
- */
 int
-ovs_ctx_attr_destroy(ovs_ctx_attr_t *attr);
-
-/*
- * Set transport type
- * param attr: Context attributes object
- * param transport: Transport string ("shm", "tcp", "rdma)
- * param host: Host string (FQDN or ASCII)
- * param port: TCP/RDMA port number
- * return: 0 on success, -1 on fail
- */
-int
-ovs_ctx_attr_set_transport(ovs_ctx_attr_t *attr,
-                           const char *transport,
-                           const char *host,
-                           int port);
-
-/*
- * Create Open vStorage context
- * param attr: Context attributes object
- * return: Open vStorage context on success, or NULL on fail
- */
-ovs_ctx_t*
-ovs_ctx_new(const ovs_ctx_attr_t *attr);
-
-/*
- * Initialize Open vStorage context
- * param ctx: Open vStorage context
- * param dev_name: Volume name
- * param oflag: Open flags
- * return: Open vStorage context on success, or NULL on fail
- */
-int
-ovs_ctx_init(ovs_ctx_t *ctx,
-             const char *dev_name,
+ovs_ctx_init(Context *ctx,
+             const char* dev_name,
              int oflag);
-
-/*
- * Destroy Open vStorage context
- * param: Open vStorage context
- * return: 0 on success, -1 on fail
- */
-int
-ovs_ctx_destroy(ovs_ctx_t *ctx);
-
 
 /*
  * Allocate buffer from the shared memory segment
@@ -113,7 +57,7 @@ ovs_ctx_destroy(ovs_ctx_t *ctx);
  * return: Buffer pointer on success, or NULL on fail
  */
 ovs_buffer_t*
-ovs_allocate(ovs_ctx_t *ctx,
+ovs_allocate(Context *ctx,
              size_t size);
 
 /* Retrieve pointer to buffer content
@@ -137,7 +81,7 @@ ovs_buffer_size(ovs_buffer_t *ptr);
  * return: 0 on success, -1 on fail
  */
 int
-ovs_deallocate(ovs_ctx_t *ctx,
+ovs_deallocate(Context *ctx,
                ovs_buffer_t *ptr);
 
 /*
@@ -149,7 +93,7 @@ ovs_deallocate(ovs_ctx_t *ctx,
  * return: Number of bytes actually read, -1 on fail
  */
 ssize_t
-ovs_read(ovs_ctx_t *ctx,
+ovs_read(Context *ctx,
          const std::string& filename,
          void *buf,
          size_t nbytes,
@@ -164,7 +108,7 @@ ovs_read(ovs_ctx_t *ctx,
  * return: 0 on success, -1 on fail
  */
 int
-ovs_aio_suspend(ovs_ctx_t *ctx,
+ovs_aio_suspend(Context *ctx,
                 struct ovs_aiocb *ovs_aiocb,
                 const struct timespec *timeout);
 
@@ -177,7 +121,7 @@ ovs_aio_suspend(ovs_ctx_t *ctx,
  */
 
 int
-ovs_aio_suspendv(ovs_ctx_t *ctx,
+ovs_aio_suspendv(Context *ctx,
                 const std::vector<ovs_aiocb*> &ovs_aiocbp_vec,
                 const struct timespec *timeout);
 /*
@@ -187,7 +131,7 @@ ovs_aio_suspendv(ovs_ctx_t *ctx,
  * return: 0 on success, -1 on fail
  */
 int
-ovs_aio_error(ovs_ctx_t *ctx,
+ovs_aio_error(Context *ctx,
               struct ovs_aiocb *ovs_aiocbp);
 
 /*
@@ -197,7 +141,7 @@ ovs_aio_error(ovs_ctx_t *ctx,
  * return: Number of bytes returned based on the operation, -1 on fail
  */
 ssize_t
-ovs_aio_return(ovs_ctx_t *ctx,
+ovs_aio_return(Context *ctx,
                struct ovs_aiocb *ovs_aiocbp);
 
 /*
@@ -207,7 +151,7 @@ ovs_aio_return(ovs_ctx_t *ctx,
  * return: 0 on success, -1 on fail
  */
 int
-ovs_aio_cancel(ovs_ctx_t *ctx,
+ovs_aio_cancel(Context *ctx,
                struct ovs_aiocb *ovs_aiocbp);
 
 /*
@@ -217,7 +161,7 @@ ovs_aio_cancel(ovs_ctx_t *ctx,
  * return: 0 on success, -1 on fail
  */
 int
-ovs_aio_finish(ovs_ctx_t *ctx,
+ovs_aio_finish(Context *ctx,
                struct ovs_aiocb* ovs_aiocbp);
 
 /*
@@ -227,7 +171,7 @@ ovs_aio_finish(ovs_ctx_t *ctx,
  * return: 0 on success, -1 on fail
  */
 int
-ovs_aio_read(ovs_ctx_t *ctx,
+ovs_aio_read(Context *ctx,
              const std::string  &filename,
              struct ovs_aiocb *ovs_aiocbp);
 
@@ -238,7 +182,7 @@ ovs_aio_read(ovs_ctx_t *ctx,
  * return: 0 on success, -1 on fail
  */
 int
-ovs_aio_readv(ovs_ctx_t *ctx,
+ovs_aio_readv(Context *ctx,
              const std::string  &filename,
              const std::vector<ovs_aiocb*> &ovs_aiocbp_vec);
 
@@ -250,7 +194,7 @@ ovs_aio_readv(ovs_ctx_t *ctx,
  * return: 0 on success, -1 on fail
  */
 int
-ovs_aio_readcb(ovs_ctx_t *ctx,
+ovs_aio_readcb(Context *ctx,
                const std::string &filename,
                struct ovs_aiocb *ovs_aiocbp,
                ovs_completion_t *completion);

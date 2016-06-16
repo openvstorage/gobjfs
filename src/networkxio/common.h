@@ -64,13 +64,6 @@ enum class TransportType
     RDMA,
 };
 
-struct ovs_context_attr_t
-{
-    TransportType transport;
-    char *host{nullptr};
-    int port{-1};
-};
-
 struct ovs_buffer
 {
     void *buf{nullptr};

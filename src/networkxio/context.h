@@ -19,7 +19,7 @@ but WITHOUT ANY WARRANTY of any kind.
 
 #include "NetworkXioClient.h"
 
-struct ovs_context_t
+struct Context
 {
     TransportType transport;
     std::string host;
@@ -28,6 +28,23 @@ struct ovs_context_t
     std::string dev_name;
     int oflag;
     gobjfs::xio::NetworkXioClientPtr net_client_;
+
+    struct Attr
+    {
+      TransportType transport{TransportType::Error};
+      char* host{nullptr};
+      int port{-1};
+
+      ~Attr()
+      {
+        free(host);
+      }
+
+      int setTransport(const char* transport, const char* host, int port);
+    };
+
+    Context(const Attr& attr);
+    ~Context();
 };
 
 
@@ -63,7 +80,7 @@ ovs_aio_request* create_new_request(RequestOp op,
 }
 
 inline int
-ovs_xio_open_device(ovs_ctx_t *ctx, const char *dev_name)
+ovs_xio_open_device(Context *ctx, const char *dev_name)
 {
     XXEnter();
     ssize_t r;

@@ -36,120 +36,65 @@ but WITHOUT ANY WARRANTY of any kind.
 #define unlikely(x)     (x)
 #endif
 
-ovs_ctx_attr_t*
-ovs_ctx_attr_new()
-{
-    try
-    {
-        ovs_ctx_attr_t *attr = new ovs_ctx_attr_t;
-        attr->transport = TransportType::Error;
-        attr->host = NULL;
-        attr->port = 0;
-        return attr;
-    }
-    catch (const std::bad_alloc&)
-    {
-        errno = ENOMEM;
-    }
-    return NULL;
-}
-
 int
-ovs_ctx_attr_destroy(ovs_ctx_attr_t *attr)
-{
-    if (attr)
-    {
-        if (attr->host)
-        {
-            free(attr->host);
-        }
-        delete attr;
-    }
-    return 0;
-}
-
-int
-ovs_ctx_attr_set_transport(ovs_ctx_attr_t *attr,
-                           const char *transport,
+Context::Attr::setTransport(const char *transport,
                            const char *host,
                            int port)
 {
-    if (attr == NULL)
-    {
-        errno = EINVAL;
-        return -1;
-    }
-
-
     if ((not strcmp(transport, "tcp")) and host)
     {
-        attr->transport = TransportType::TCP;
-        attr->host = strdup(host);
-        attr->port = port;
+        this->transport = TransportType::TCP;
+        host = strdup(host);
+        port = port;
         return 0;
     }
 
     if ((not strcmp(transport, "rdma")) and host)
     {
-        attr->transport = TransportType::RDMA;
-        attr->host = strdup(host);
-        attr->port = port;
+        this->transport = TransportType::RDMA;
+        host = strdup(host);
+        port = port;
         return 0;
     }
-    errno = EINVAL;
     return -1;
 }
 
-ovs_ctx_t*
-ovs_ctx_new(const ovs_ctx_attr_t *attr)
+Context::Context(const Context::Attr &attr)
 {
-    ovs_ctx_t *ctx = NULL;
-
-    if(not attr)
+    if (attr.transport != TransportType::TCP &&
+        attr.transport != TransportType::RDMA)
     {
         errno = EINVAL;
-        return NULL;
-    }
-
-    if (attr->transport != TransportType::TCP &&
-        attr->transport != TransportType::RDMA)
-    {
-        errno = EINVAL;
-        return NULL;
     }
 
     try
     {
-        ctx = new ovs_ctx_t;
-        ctx->transport = attr->transport;
-        ctx->host = std::string(attr->host ? attr->host : "");
-        ctx->port = attr->port;
-        ctx->net_client_ = nullptr;
+        transport = attr.transport;
+        host = std::string(attr.host ? attr.host : "");
+        port = attr.port;
+        net_client_ = nullptr;
     }
     catch (const std::bad_alloc&)
     {
         errno = ENOMEM;
-        return NULL;
     }
 
-    switch (ctx->transport)
+    switch (transport)
     {
     case TransportType::TCP:
-        ctx->uri = "tcp://" + ctx->host + ":" + std::to_string(ctx->port);
+        uri = "tcp://" + host + ":" + std::to_string(port);
         break;
     case TransportType::RDMA:
-        ctx->uri = "rdma://" + ctx->host + ":" + std::to_string(ctx->port);
+        uri = "rdma://" + host + ":" + std::to_string(port);
         break;
     case TransportType::SharedMemory: 
     case TransportType::Error: /* already catched */
         errno = EINVAL;
-        return NULL;
     }
-    return ctx;
 }
 
 int
-ovs_ctx_init(ovs_ctx_t *ctx,
+ovs_ctx_init(Context *ctx,
              const char* dev_name,
              int oflag)
 {
@@ -189,26 +134,16 @@ done:
     return err;
 }
 
-int
-ovs_ctx_destroy(ovs_ctx_t *ctx)
+Context::~Context()
 {
-    int r = 0;
-    if (ctx == NULL)
+    if (net_client_)
     {
-        errno = EINVAL;
-        return (r = -1);
+        net_client_.reset();
     }
-
-    if (ctx->net_client_)
-    {
-        ctx->net_client_.reset();
-    }
-    delete ctx;
-    return r;
 }
 
 static int
-_ovs_submit_aio_request(ovs_ctx_t *ctx,
+_ovs_submit_aio_request(Context *ctx,
                         const std::string& filename,
                         struct ovs_aiocb *ovs_aiocbp,
                         notifier_sptr& cvp,
@@ -306,7 +241,7 @@ _ovs_submit_aio_request(ovs_ctx_t *ctx,
 }
 
 int
-ovs_aio_error(ovs_ctx_t *ctx,
+ovs_aio_error(Context *ctx,
               struct ovs_aiocb *ovs_aiocbp)
 {
     int r = 0;
@@ -337,7 +272,7 @@ ovs_aio_error(ovs_ctx_t *ctx,
 }
 
 ssize_t
-ovs_aio_return(ovs_ctx_t *ctx,
+ovs_aio_return(Context *ctx,
                struct ovs_aiocb *ovs_aiocbp)
 {
     int r = 0;
@@ -365,7 +300,7 @@ ovs_aio_return(ovs_ctx_t *ctx,
 }
 
 int
-ovs_aio_finish(ovs_ctx_t *ctx,
+ovs_aio_finish(Context *ctx,
                struct ovs_aiocb *ovs_aiocbp)
 {
     XXEnter();
@@ -382,7 +317,7 @@ ovs_aio_finish(ovs_ctx_t *ctx,
 }
 
 int
-ovs_aio_suspendv(ovs_ctx_t *ctx,
+ovs_aio_suspendv(Context *ctx,
                 const std::vector<ovs_aiocb*> &ovs_aiocbp_vec,
                 const struct timespec *timeout)
 {
@@ -427,7 +362,7 @@ ovs_aio_suspendv(ovs_ctx_t *ctx,
 }
 
 int
-ovs_aio_suspend(ovs_ctx_t *ctx,
+ovs_aio_suspend(Context *ctx,
                 ovs_aiocb *ovs_aiocbp,
                 const struct timespec *timeout)
 {
@@ -466,7 +401,7 @@ ovs_aio_suspend(ovs_ctx_t *ctx,
 }
 
 int
-ovs_aio_cancel(ovs_ctx_t * /*ctx*/,
+ovs_aio_cancel(Context * /*ctx*/,
                struct ovs_aiocb * /*ovs_aiocbp*/)
 {
     errno = ENOSYS;
@@ -474,7 +409,7 @@ ovs_aio_cancel(ovs_ctx_t * /*ctx*/,
 }
 
 ovs_buffer_t*
-ovs_allocate(ovs_ctx_t *ctx,
+ovs_allocate(Context *ctx,
              size_t size)
 {
     ovs_buffer_t *buf = (ovs_buffer_t *)malloc(size);
@@ -516,7 +451,7 @@ ovs_buffer_size(ovs_buffer_t *ptr)
 }
 
 int
-ovs_deallocate(ovs_ctx_t *ctx,
+ovs_deallocate(Context *ctx,
                ovs_buffer_t *ptr)
 {
     free(ptr);
@@ -662,7 +597,7 @@ ovs_aio_release_completion(ovs_completion_t *completion)
 }
 
 int
-ovs_aio_read(ovs_ctx_t *ctx,
+ovs_aio_read(Context *ctx,
                const std::string& filename,
                struct ovs_aiocb *ovs_aiocbp)
 {
@@ -677,7 +612,7 @@ ovs_aio_read(ovs_ctx_t *ctx,
 }
 
 int
-ovs_aio_readv(ovs_ctx_t *ctx,
+ovs_aio_readv(Context *ctx,
                const std::string& filename,
                const std::vector<ovs_aiocb*> &ovs_aiocbp_vec)
 {
@@ -698,7 +633,7 @@ ovs_aio_readv(ovs_ctx_t *ctx,
 }
 
 int
-ovs_aio_readcb(ovs_ctx_t *ctx,
+ovs_aio_readcb(Context *ctx,
                const std::string& filename,
                struct ovs_aiocb *ovs_aiocbp,
                ovs_completion_t *completion)
@@ -714,7 +649,7 @@ ovs_aio_readcb(ovs_ctx_t *ctx,
 }
 
 ssize_t
-ovs_read(ovs_ctx_t *ctx,
+ovs_read(Context *ctx,
          const std::string& filename, 
          void *buf,
          size_t nbytes,
