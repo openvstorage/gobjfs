@@ -106,6 +106,7 @@ ENABLE_TESTING()
 ADD_SUBDIRECTORY(src)
 ADD_SUBDIRECTORY(util)
 ADD_SUBDIRECTORY(benchmark)
+ADD_SUBDIRECTORY(examples)
 
 
 # Set compiler options

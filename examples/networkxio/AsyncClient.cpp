@@ -20,8 +20,8 @@ but WITHOUT ANY WARRANTY of any kind.
 #include <string.h>
 #include <vector>
 
-#include "volumedriver.h"
-#include "common.h"
+#include <gobjfs_client.h>
+#include <networkxio/common.h>
 
 int times = 10;
 
