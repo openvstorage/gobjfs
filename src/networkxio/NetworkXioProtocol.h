@@ -16,6 +16,7 @@
 #pragma once
 
 #include <msgpack.hpp>
+#include <sstream>
 
 #include <networkxio/NetworkXioCommon.h>
 

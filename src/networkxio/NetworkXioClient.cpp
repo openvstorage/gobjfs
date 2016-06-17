@@ -21,6 +21,7 @@ but WITHOUT ANY WARRANTY of any kind.
 #include <functional>
 #include <atomic>
 #include <system_error>
+#include <chrono>
 
 #include <sstream>
 
@@ -538,15 +539,13 @@ NetworkXioClient::on_session_event(xio_session *session __attribute__((unused)),
 void
 NetworkXioClient::req_queue_wait_until(xio_msg_s *xmsg)
 {
-    using namespace std::chrono_literals;
     std::unique_lock<std::mutex> l_(req_queue_lock);
     if (--nr_req_queue <= 0)
     {
         //TODO("export cv timeout")
-        if (not req_queue_cond.wait_until(l_,
-                                          std::chrono::steady_clock::now() +
-                                          60s,
-                                          [&]{return nr_req_queue >= 0;}))
+        if (not req_queue_cond.wait_for(l_,
+                                        std::chrono::seconds(60),
+                                        [&]{return nr_req_queue >= 0;}))
         {
            delete xmsg;
            throw XioClientQueueIsBusyException("request queue is busy");

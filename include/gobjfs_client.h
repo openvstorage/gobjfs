@@ -63,8 +63,8 @@ ovs_ctx_attr_destroy(ovs_ctx_attr_t *attr);
 /*
  * Set transport type
  * param attr: Context attributes object
- * param transport: Transport string ("shm", "tcp", "rdma)
- * param host: Host string (FQDN or ASCII)
+ * param transport: Transport string ("tcp" or "rdma)
+ * param host: Host string FQDN or IP address
  * param port: TCP/RDMA port number
  * return: 0 on success, -1 on fail
  */
