@@ -26,6 +26,11 @@ struct ovs_context_t
     int port;
     std::string uri;
     gobjfs::xio::NetworkXioClientPtr net_client_;
+
+    ~ovs_context_t()
+    {
+      net_client_.reset();
+    }
 };
 
 
@@ -61,7 +66,7 @@ ovs_aio_request* create_new_request(RequestOp op,
 }
 
 inline int
-ovs_xio_open_device(ovs_ctx_t *ctx)
+ovs_xio_open_device(ovs_ctx_ptr ctx)
 {
     XXEnter();
     ssize_t r;

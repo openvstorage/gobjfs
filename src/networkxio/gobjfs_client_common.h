@@ -21,6 +21,7 @@ but WITHOUT ANY WARRANTY of any kind.
 #include <condition_variable>
 #include <iostream>
 #include <assert.h>
+#include <string>
 #include <gobjfs_client.h>
 
 #define ATTRIBUTE_UNUSED __attribute__((unused))
@@ -76,7 +77,7 @@ enum class TransportType
 struct ovs_context_attr_t
 {
     TransportType transport;
-    char *host{nullptr};
+    std::string host;
     int port{-1};
 };
 
