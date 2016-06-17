@@ -28,7 +28,9 @@ but WITHOUT ANY WARRANTY of any kind.
 #include <string>
 #include <queue>
 #include <boost/thread/lock_guard.hpp>
-#include "NetworkXioRequest.h"
+
+#include <networkxio/gobjfs_client_common.h>
+#include <networkxio/NetworkXioRequest.h>
 
 namespace gobjfs { namespace xio
 {

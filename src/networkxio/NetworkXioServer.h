@@ -25,9 +25,9 @@ but WITHOUT ANY WARRANTY of any kind.
 #include <libxio.h>
 #include <iostream>
 #include <atomic>
-#include "NetworkXioIOHandler.h"
-#include "NetworkXioWorkQueue.h"
-#include "NetworkXioRequest.h"
+#include <networkxio/NetworkXioIOHandler.h>
+#include <networkxio/NetworkXioWorkQueue.h>
+#include <networkxio/NetworkXioRequest.h>
 
 namespace gobjfs { namespace xio 
 {

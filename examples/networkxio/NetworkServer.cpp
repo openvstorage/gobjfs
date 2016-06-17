@@ -36,7 +36,6 @@ but WITHOUT ANY WARRANTY of any kind.
 
 #include <gIOExecFile.h>
 
-#include <networkxio/gobjfs_client_common.h>
 #include <gobjfs_client.h>
 #include <networkxio/NetworkXioServer.h>
 
