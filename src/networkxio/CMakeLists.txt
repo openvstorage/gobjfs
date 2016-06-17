@@ -7,7 +7,6 @@ SET(CLIENT_SOURCES
 
 SET(LIBRARY_LIST
     gobjfs_client
-    msgpack
     xio
     boost_thread 
     glog 
@@ -27,7 +26,6 @@ SET(SERVER_SOURCES
 SET(LIBRARY_LIST
     gobjfs_server
     aio
-    msgpack
     xio
     boost_thread 
     glog 

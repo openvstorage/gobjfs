@@ -1,7 +1,6 @@
 
 SET(LIBRARY_LIST
     aio
-    msgpack
     xio
     boost_thread 
     glog 
