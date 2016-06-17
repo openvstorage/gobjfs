@@ -7,8 +7,7 @@ SET(CLIENT_SOURCES
    )
 
 SET(LIBRARY_LIST
-    gobjfs
-    gobjfs_util
+    gobjfs_server
     aio
     msgpack
     xio

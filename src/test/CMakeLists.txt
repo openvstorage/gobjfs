@@ -7,7 +7,7 @@ ADD_EXECUTABLE(ObjfsTester
   )
 
 TARGET_LINK_LIBRARIES(ObjfsTester
-  gobjfs
+  gobjfs_server
   glog gtest
   pthread rt z)
 

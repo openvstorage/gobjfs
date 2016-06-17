@@ -104,7 +104,6 @@ ENABLE_TESTING()
 # but hack for now
 
 ADD_SUBDIRECTORY(src)
-ADD_SUBDIRECTORY(util)
 ADD_SUBDIRECTORY(benchmark)
 ADD_SUBDIRECTORY(examples)
 
