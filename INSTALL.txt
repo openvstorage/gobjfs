@@ -20,7 +20,7 @@ sudo apt-get install -y cmake git xfsprogs sysstat gdb
 
 # Packages to install
 
-# Msgpack used by networkxio
+# XIO used by networkxio
 wget http://apt.openvstorage.org/pool/main/a/accelio/libxio-dev_1.6-1_amd64.deb
 sudo dpkg -i libxio-dev_1.6-1_amd64.deb
 
