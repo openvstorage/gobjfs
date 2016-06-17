@@ -62,8 +62,8 @@ set(CUSTOM_LIBRARY_PATH ${PROJECT_SOURCE_DIR}/lib)
 # SET(CMAKE_CXX_COMPILER "/usr/bin/g++")
 # SET(CMAKE_C_COMPILER "/usr/bin/gcc")
 
-SET (CXX_STANDARD "c++11")
-SET (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=${CXX_STANDARD}")
+set (CXX_STANDARD "c++11")
+set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=${CXX_STANDARD}")
 
 add_compile_options(
   -Wall

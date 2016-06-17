@@ -187,24 +187,24 @@ static constexpr int XIO_COMPLETION_DEFAULT_MAX_EVENTS = 100;
           NetworkXioRequest *pXioReq = (NetworkXioRequest *)iostatus.completionId;
           assert (pXioReq != nullptr);
 
-          if (iostatus.errorCode == 0 ) {
-              pXioReq->retval = 0;
-              pXioReq->errval = 0;
-          } else {
-              pXioReq->retval = -1;
-              pXioReq->errval = iostatus.errorCode;
-          }
-
-
           switch (pXioReq->op) {
 
           case NetworkXioMsgOpcode::ReadRsp: {
-                  if (iostatus.errorCode == 0) {
+
+                  if (iostatus.errorCode == 0 ) {
+                    // read must return the size which was read
+                      pXioReq->retval = pXioReq->size;
+                      pXioReq->errval = 0;
                       GLOG_DEBUG(" Read completed with completion ID" << iostatus.completionId);
                   } else {
-                      GLOG_ERROR("Read completion error " << iostatus.errorCode << " For completion ID " << iostatus.completionId );
+                      pXioReq->retval = -1;
+                      pXioReq->errval = iostatus.errorCode;
+                      GLOG_ERROR("Read completion error " << iostatus.errorCode 
+                        << " For completion ID " << iostatus.completionId );
                   }
+
                   pack_msg(pXioReq);
+
                   pWorkQueue = reinterpret_cast<NetworkXioWorkQueue*> (pXioReq->req_wq);
                   pWorkQueue->worker_bottom_half(pWorkQueue, pXioReq);
               }

@@ -17,6 +17,9 @@ TARGET_LINK_LIBRARIES(MultiAsyncClient gobjfs_client ${LIBRARY_LIST})
 ADD_EXECUTABLE(AsyncClient AsyncClient.cpp)
 TARGET_LINK_LIBRARIES(AsyncClient gobjfs_client ${LIBRARY_LIST})
 
-ADD_EXECUTABLE(NetworkServer NetworkServer.cpp)
 
+ADD_EXECUTABLE(NetworkServer NetworkServer.cpp)
 TARGET_LINK_LIBRARIES(NetworkServer gobjfs_server gobjfs ${LIBRARY_LIST})
+
+# how to add target-specific compile-time macros
+# target_compile_definitions(NetworkServer PRIVATE DEBUG_TRACE=1)

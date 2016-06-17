@@ -22,12 +22,14 @@ but WITHOUT ANY WARRANTY of any kind.
 
 #include <networkxio/gobjfs_client_common.h>
 #include <gobjfs_client.h>
+#include <util/os_utils.h>
 
 #include "NetworkXioServer.h"
 #include "NetworkXioProtocol.h"
 #include "NetworkXioRequest.h"
 
 static constexpr int POLLING_TIME_USEC = 20;
+using gobjfs::os::DirectIOSize;
 
 namespace gobjfs { namespace xio {
 
@@ -268,31 +270,31 @@ NetworkXioServer::run(std::promise<void> &promise)
                                0,
                                queue_depth,
                                32,
-                               0);
+                               DirectIOSize);
     (void) xio_mempool_add_slab(xio_mpool.get(),
                                32768,
                                0,
                                queue_depth,
                                32,
-                               0);
+                               DirectIOSize);
     (void) xio_mempool_add_slab(xio_mpool.get(),
                                65536,
                                0,
                                queue_depth,
                                32,
-                               0);
+                               DirectIOSize);
     (void) xio_mempool_add_slab(xio_mpool.get(),
                                131072,
                                0,
                                256,
                                32,
-                               0);
+                               DirectIOSize);
     (void) xio_mempool_add_slab(xio_mpool.get(),
                                1048576,
                                0,
                                32,
                                4,
-                               0);
+                               DirectIOSize);
     promise.set_value();
     while (not stopping)
     {

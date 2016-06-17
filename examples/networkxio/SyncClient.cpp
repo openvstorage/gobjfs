@@ -23,6 +23,8 @@ but WITHOUT ANY WARRANTY of any kind.
 #include <gobjfs_client.h>
 #include <networkxio/gobjfs_client_common.h> // GLOG_DEBUG
 
+static constexpr size_t BufferSize = 4096;
+
 void NetworkServerWriteReadTest(void)
 {
     ovs_ctx_attr_t *ctx_attr = ovs_ctx_attr_new();
@@ -41,19 +43,19 @@ void NetworkServerWriteReadTest(void)
         return;
     }
 
-    for (int i = 0; i < 100000; i ++) {
+    for (int i = 0; i < 10; i ++) {
 
-      auto rbuf = (char*)malloc(4096);
+      auto rbuf = (char*)malloc(BufferSize);
       assert(rbuf != nullptr);
   
-      auto sz = ovs_read(ctx, "abcd", rbuf, 4096, 0);
+      auto sz = ovs_read(ctx, "abcd", rbuf, BufferSize, 0);
   
       if (sz < 0) {
         GLOG_ERROR("OMG!!read failure with error  : " << sz);
         break;
       }
-      if (sz != (ssize_t) 4096) {
-        GLOG_ERROR("Read Length and write length not matching \n");
+      if (sz != (ssize_t) BufferSize) {
+        GLOG_ERROR("Read Length " << sz << " not matching expected " << BufferSize);
         break;
       }
       free(rbuf);

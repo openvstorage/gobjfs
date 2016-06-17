@@ -19,6 +19,7 @@ but WITHOUT ANY WARRANTY of any kind.
 
 #include <mutex>
 #include <condition_variable>
+#include <iostream>
 #include <assert.h>
 #include <gobjfs_client.h>
 
@@ -45,7 +46,7 @@ but WITHOUT ANY WARRANTY of any kind.
 #define GLOG_ERROR(msg) std::cout  << " " << __FUNCTION__ << " , " << __FILE__ << " ( " << __LINE__ << " ) " << msg << std::endl;
 #define GLOG_FATAL(msg) GLOG_ERROR(msg)
 
-#ifdef FUNC_TRACE
+#ifdef DEBUG_TRACE
 #define GLOG_INFO(msg) GLOG_ERROR(msg)
 #define GLOG_DEBUG(msg) GLOG_ERROR(msg)
 #define GLOG_TRACE(msg) GLOG_ERROR(msg)
