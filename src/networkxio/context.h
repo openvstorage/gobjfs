@@ -25,8 +25,6 @@ struct ovs_context_t
     std::string host;
     int port;
     std::string uri;
-    std::string dev_name;
-    int oflag;
     gobjfs::xio::NetworkXioClientPtr net_client_;
 };
 
@@ -63,7 +61,7 @@ ovs_aio_request* create_new_request(RequestOp op,
 }
 
 inline int
-ovs_xio_open_device(ovs_ctx_t *ctx, const char *dev_name)
+ovs_xio_open_device(ovs_ctx_t *ctx)
 {
     XXEnter();
     ssize_t r;

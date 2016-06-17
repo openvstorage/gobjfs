@@ -83,16 +83,12 @@ ovs_ctx_t*
 ovs_ctx_new(const ovs_ctx_attr_t *attr);
 
 /*
- * Initialize Open vStorage context
+ * Initialize Open vStorage context to talk to server
  * param ctx: Open vStorage context
- * param dev_name: Volume name
- * param oflag: Open flags
  * return: Open vStorage context on success, or NULL on fail
  */
 int
-ovs_ctx_init(ovs_ctx_t *ctx,
-             const char *dev_name,
-             int oflag);
+ovs_ctx_init(ovs_ctx_t *ctx);
 
 /*
  * Destroy Open vStorage context

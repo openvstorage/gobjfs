@@ -149,21 +149,11 @@ ovs_ctx_new(const ovs_ctx_attr_t *attr)
 }
 
 int
-ovs_ctx_init(ovs_ctx_t *ctx,
-             const char* dev_name,
-             int oflag)
+ovs_ctx_init(ovs_ctx_t *ctx)
 {
     int err = 0;    
     XXEnter();
-    if (oflag != O_RDONLY &&
-        oflag != O_WRONLY &&
-        oflag != O_RDWR) {
-        err = -EINVAL;
-        XXDone();
-    }
 
-    ctx->oflag = oflag;
-    ctx->dev_name = std::string(dev_name);
     if (ctx->transport == TransportType::RDMA ||
              ctx->transport == TransportType::TCP)
     {
@@ -178,7 +168,7 @@ ovs_ctx_init(ovs_ctx_t *ctx,
             err = -EIO;
             XXDone();
         }
-        err = ovs_xio_open_device(ctx, dev_name);
+        err = ovs_xio_open_device(ctx);
         if (err < 0) {
             GLOG_ERROR("ovs_xio_open_device failed with error " << err);
             XXDone();
@@ -235,16 +225,9 @@ _ovs_submit_aio_request(ovs_ctx_t *ctx,
         return -1;
     }
 
-    accmode = ctx->oflag & O_ACCMODE;
     switch (op)
     {
     case RequestOp::Read:
-        if (accmode == O_WRONLY)
-        {
-            errno = EBADF;
-            XXExit();
-            return -1;
-        }
         break;
     default:
         errno = EBADF;

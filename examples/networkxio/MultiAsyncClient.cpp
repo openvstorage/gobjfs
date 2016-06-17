@@ -38,9 +38,7 @@ void NetworkServerWriteReadTest()
     ovs_ctx_t *ctx = ovs_ctx_new(ctx_attr);
     assert(ctx != nullptr);
 
-    int err = ovs_ctx_init(ctx,
-               "/dev/sdb",
-               O_RDWR);
+    int err = ovs_ctx_init(ctx);
     if (err < 0) {
         GLOG_ERROR("Volume open failed ");
         return;
