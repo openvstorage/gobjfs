@@ -15,9 +15,17 @@ sudo update-alternatives --config g++
 
 sudo apt-get install -y cmake git xfsprogs sysstat gdb
 
+###############################################
 # The rest is for any machine
 
 # Packages to install
+
+# Msgpack used by networkxio
+wget http://apt.openvstorage.org/pool/main/a/accelio/libxio-dev_1.6-1_amd64.deb
+sudo dpkg -i libxio-dev_1.6-1_amd64.deb
+
+wget http://apt.openvstorage.org/pool/main/a/accelio/libxio0_1.6-1_amd64.deb
+sudo dpkg -i libxio0_1.6-1_amd64.deb
 
 sudo apt-get install libunwind8-dev
 sudo apt-get install -y libaio1 libaio1-dbg libaio-dev
