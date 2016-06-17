@@ -4,7 +4,7 @@ ADD_EXECUTABLE(BenchIOExecFile
   )
 
 TARGET_LINK_LIBRARIES(BenchIOExecFile
-  gobjfs_server
+  gobjfs
   glog gtest
   pthread rt z)
 
