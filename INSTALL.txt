@@ -1,6 +1,8 @@
 # This file can be directly executed ! 
 
 # On a new machine
+
+# NetworkXio required c++14 support, so install g++-5
 sudo add-apt-repository ppa:ubuntu-toolchain-r/test
 sudo apt-get update
 sudo apt-get install -y gcc-5 g++-5
@@ -12,6 +14,8 @@ sudo update-alternatives --config gcc
 sudo update-alternatives --config g++
 
 sudo apt-get install -y cmake git xfsprogs sysstat gdb
+
+# The rest is for any machine
 
 # Packages to install
 
