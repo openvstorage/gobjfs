@@ -45,6 +45,7 @@ void NetworkServerWriteReadTest()
     }
 
     std::vector<ovs_aiocb*> iocb_vec;
+    std::vector<std::string> filename_vec;
 
     for (int i = 0; i < times; i ++) {
 
@@ -57,9 +58,10 @@ void NetworkServerWriteReadTest()
       iocb->aio_nbytes = 4096;
 
       iocb_vec.push_back(iocb);
+      filename_vec.push_back("abcd");
     }
 
-    auto ret = ovs_aio_readv(ctx, "abcd", iocb_vec);
+    auto ret = ovs_aio_readv(ctx, filename_vec, iocb_vec);
 
     if (ret == 0) {
       ret = ovs_aio_suspendv(ctx, iocb_vec, nullptr); 
@@ -78,8 +80,9 @@ void NetworkServerWriteReadTest()
 
 int main(int argc, char *argv[]) {
 
+  if (argc > 1) {
     times = atoi(argv[1]);
+  } 
 
-    NetworkServerWriteReadTest();
-
+  NetworkServerWriteReadTest();
 }

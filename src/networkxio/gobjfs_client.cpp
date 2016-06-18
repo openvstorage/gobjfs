@@ -628,16 +628,25 @@ ovs_aio_read(ovs_ctx_ptr ctx,
 
 int
 ovs_aio_readv(ovs_ctx_ptr ctx,
-               const std::string& filename,
+               const std::vector<std::string>& filename_vec,
                const std::vector<ovs_aiocb*> &ovs_aiocbp_vec)
 {
   int err = 0;
 
+  if (filename_vec.size() != ovs_aiocbp_vec.size()) 
+  {
+    GLOG_ERROR("mismatch between filename vector size=" << filename_vec.size()
+      << " and iocb vector size=" << ovs_aiocbp_vec.size());
+    errno = EINVAL;
+    return -1;
+  }
+
   auto cv = std::make_shared<notifier>(ovs_aiocbp_vec.size());
 
+  size_t idx = 0;
   for (auto elem : ovs_aiocbp_vec) {
     err |= _ovs_submit_aio_request(ctx,
-                                   filename,
+                                   filename_vec[idx++],
                                    elem,
                                    cv,
                                    nullptr,

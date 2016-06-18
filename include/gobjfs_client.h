@@ -205,6 +205,7 @@ ovs_aio_finish(ovs_ctx_ptr ctx,
 /*
  * Asynchronous read from a volume
  * param ctx: Open vStorage context
+ * param filename: filenames on which to read
  * param ovs_aiocb: Pointer to an AIO Control Block structure
  * return: 0 on success, -1 on fail
  */
@@ -216,12 +217,14 @@ ovs_aio_read(ovs_ctx_ptr ctx,
 /*
  * Asynchronous readv from a volume
  * param ctx: Open vStorage context
+ * param filename_vec: Pointer to vector of filenames to read
  * param ovs_aiocb_vec: Pointer to vector of AIO Control Block structure
+ *   this vector and filename_vec must be same size
  * return: 0 on success, -1 on fail
  */
 int
 ovs_aio_readv(ovs_ctx_ptr ctx,
-             const std::string  &filename,
+             const std::vector<std::string> &filename_vec,
              const std::vector<ovs_aiocb*> &ovs_aiocbp_vec);
 
 /*
