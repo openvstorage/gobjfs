@@ -28,9 +28,11 @@ but WITHOUT ANY WARRANTY of any kind.
 
 #include <sstream>       //
 #include <sys/eventfd.h> // EFD_NONBLOCk
+#include <boost/program_options.hpp>
 
 using namespace gobjfs;
 using namespace gobjfs::stats;
+using gobjfs::os::IsDirectIOAligned;
 
 #define EPOLL_MAXEVENT 10 // arbitrary number
 
@@ -122,13 +124,35 @@ IOExecutor::Config::Config(uint32_t queueDepth) : queueDepth_(queueDepth) {
 
 void IOExecutor::Config::setDerivedParam() {
   maxRequestQueueSize_ = queueDepth_ / 5;
+  maxFdQueueSize_ = queueDepth_;
 }
 
 void IOExecutor::Config::print() const {
   LOG(INFO) << " \"queueDepth\":" << queueDepth_
             << ",\"maxRequestQueueSize\":" << maxRequestQueueSize_
+            << ",\"maxFdQueueSize\":" << maxFdQueueSize_
             << ",\"minSubmitSize\":" << minSubmitSize_
             << ",\"noSubmitterThread\":" << noSubmitterThread_;
+}
+
+namespace po = boost::program_options;
+
+int
+IOExecutor::Config::addOptions(boost::program_options::options_description& desc) {
+
+  po::options_description ioexecOptions("ioexec config");
+
+  ioexecOptions.add_options()
+    ("ioexec.ctx_queue_depth", 
+      po::value<uint32_t>(&queueDepth_), 
+      "io depth of each context in IOExecutor")
+    ("ioexec.cpu_core", 
+      po::value<std::vector<CoreId>>(&cpuCores_)->multitoken(),
+      "cpu cores dedicated to IO");
+
+  desc.add(ioexecOptions);
+
+  return 0;
 }
 
 // ================
@@ -144,6 +168,16 @@ void IOExecutor::Statistics::incrementOps(FilerJob *job) {
     write_.serviceTime_ = job->serviceTime();
     write_.waitHist_ = job->waitTime();
     write_.serviceHist_ = job->serviceTime();
+
+  } else if (job->op_ == FileOp::NonAlignedWrite) {
+
+    assert(job->size_);
+    nonAlignedWrite_.numOps_ ++;
+    nonAlignedWrite_.numBytes_ += job->size_;
+    nonAlignedWrite_.waitTime_ = job->waitTime();
+    nonAlignedWrite_.serviceTime_ = job->serviceTime();
+    nonAlignedWrite_.waitHist_ = job->waitTime();
+    nonAlignedWrite_.serviceHist_ = job->serviceTime();
 
   } else if (job->op_ == FileOp::Read) {
 
@@ -185,13 +219,16 @@ std::string IOExecutor::Statistics::getState() const {
   std::ostringstream s;
 
   // json format
-  s << "{\"stats\":{\"write\":"   << write_.getState() 
+  s << "{\"stats\":{"
+    << "\"write\":"   << write_.getState() 
+    << ",\"nonAlignedWrite\":"   << nonAlignedWrite_.getState() 
     << ",\"read\":"    << read_.getState() 
     << ",\"delete\":"  << delete_.getState() 
     << ",\"numQueued\":" << numQueued_
     << ",\"numSubmitted\":" << numSubmitted_ 
     << ",\"numCompleted\":" << numCompleted_
     << ",\"maxRequestQueueSize\":" << maxRequestQueueSize_
+    << ",\"maxFdQueueSize\":" << maxFdQueueSize_
     << ",\"idleLoop\":" << idleLoop_
     << ",\"numProcessedInLoop\":" << numProcessedInLoop_
     << ",\"numCompletionEvents\":" << numCompletionEvents_
@@ -322,6 +359,7 @@ void IOExecutor::execute() {
                 << ":minSubmitSize=" << minSubmitSize_
                 << ":numReads=" << stats_.read_.numOps_
                 << ":numWrites=" << stats_.write_.numOps_ 
+                << ":numNonAlignedWrites=" << stats_.nonAlignedWrite_.numOps_ 
                 << ":state=" << state_;
             submitterWaitingForNewRequests_ = false;
           }
@@ -547,6 +585,18 @@ int32_t IOExecutor::ProcessFdQueue() {
           LOG(ERROR) << "delete file=" << job->fileName_
                      << " failed errno=" << job->retcode_;
         }
+      } else if (job->op_ == FileOp::NonAlignedWrite) {
+        job->setWaitTime();
+        stats_.numSubmitted_ ++;
+        ssize_t writeSz = ::pwrite(job->fd_, job->buffer_, job->userSize_, job->offset_);
+        if (writeSz != job->userSize_) {
+          job->retcode_ = -errno;
+          LOG(ERROR) << "op=" << job->op_ 
+            << " failed for job=" << (void *)job
+            << " errno=" << job->retcode_;
+        } else {
+          job->retcode_ = 0;
+        }
       } else {
         LOG(ERROR) << "unknown op=" << job->op_ << " for job=" << (void *)job;
         job->retcode_ = -EINVAL;
@@ -562,6 +612,9 @@ int32_t IOExecutor::ProcessFdQueue() {
     }
 
     fdQueueSize_--;
+    if (fdQueueSize_ >= (int32_t)config_.maxRequestQueueSize_) {
+      fdQueueHasSpace_.wakeup();
+    }
   }
 
   stats_.fdQueueThread_.getThreadStats();
@@ -580,13 +633,36 @@ int IOExecutor::submitTask(FilerJob *job, bool blocking) {
       break;
     }
 
-    if ((job->op_ == FileOp::Delete) || (job->op_ == FileOp::Sync)) {
+    if (!IsDirectIOAligned(job->userSize_)) {
+      if (job->op_ == FileOp::Write) {
+        job->op_ = FileOp::NonAlignedWrite;
+        blocking = true;
+      } else if (job->op_ == FileOp::Read) {
+        // short reads work with O_DIRECT
+      }
+    }
+
+    if ((job->op_ == FileOp::Delete) || 
+      (job->op_ == FileOp::Sync) ||
+      (job->op_ == FileOp::NonAlignedWrite)) {
+
+      if (fdQueueSize_ > (int32_t)config_.maxRequestQueueSize_) {
+        if (!blocking) {
+          LOG(ERROR) << "FD Queue full.  rejecting nonblocking job=" << (void *)job;
+          ret = job->retcode_ = -EAGAIN;
+          break;
+        } else {
+          stats_.requestQueueFull_++;
+          fdQueueHasSpace_.pause();
+        }
+      }
+
       // increment size before push, to prevent race conditions
       job->setSubmitTime();
       job->executor_ = this;
       stats_.numQueued_++;
 
-      fdQueueSize_++;
+      stats_.maxFdQueueSize_ = ++fdQueueSize_;
 
       bool pushReturn = false;
       do {
@@ -599,49 +675,56 @@ int IOExecutor::submitTask(FilerJob *job, bool blocking) {
       break;
     }
 
-    if (requestQueueSize_ > (int32_t)config_.maxRequestQueueSize_) {
-      if (!blocking) {
-        LOG(ERROR) << "Queue full.  rejecting nonblocking job=" << (void *)job;
-        ret = job->retcode_ = -EAGAIN;
-        break;
-      } else {
-        stats_.requestQueueFull_++;
-        requestQueueHasSpace_.pause();
-      }
-    }
+    else if ((job->op_ == FileOp::Write) || 
+      (job->op_ == FileOp::Read)) {
 
-    // set FilerJob variables and increment queue size,
-    // before pushing into queue
-    // otherwise asserts fail because completion thread
-    // also changes FilerJob
-    stats_.maxRequestQueueSize_ = ++requestQueueSize_;
-    job->setSubmitTime();
-    job->executor_ = this;
-    stats_.numQueued_++;
-
-    bool pushReturn = false;
-    do {
-      pushReturn = requestQueue_.push(job);
-      if (pushReturn == false) {
-        LOG_EVERY_N(WARNING, 10) << "push into requestQueue failing";
-      }
-    } while (pushReturn == false);
-
-    // if context is free & num jobs > min, wakeup
-
-    if (config_.noSubmitterThread_) {
-      if (requestQueueSize_ >= (int32_t)minSubmitSize_) {
-        std::unique_lock<std::mutex> lck(submitterCond_.mutex_);
-        if (requestQueueSize_ >= (int32_t)minSubmitSize_)
-          ProcessRequestQueue();
-      }
-    } else {
-      if (submitterWaitingForNewRequests_) {
-        std::unique_lock<std::mutex> lck(submitterCond_.mutex_);
-        if (submitterWaitingForNewRequests_) {
-          submitterCond_.cond_.notify_one();
+      if (requestQueueSize_ > (int32_t)config_.maxRequestQueueSize_) {
+        if (!blocking) {
+          LOG(ERROR) << "Async Queue full.  rejecting nonblocking job=" << (void *)job;
+          ret = job->retcode_ = -EAGAIN;
+          break;
+        } else {
+          stats_.requestQueueFull_++;
+          requestQueueHasSpace_.pause();
         }
       }
+
+      // set FilerJob variables and increment queue size,
+      // before pushing into queue
+      // otherwise asserts fail because completion thread
+      // also changes FilerJob
+      stats_.maxRequestQueueSize_ = ++requestQueueSize_;
+      job->setSubmitTime();
+      job->executor_ = this;
+      stats_.numQueued_++;
+
+      bool pushReturn = false;
+      do {
+        pushReturn = requestQueue_.push(job);
+        if (pushReturn == false) {
+          LOG_EVERY_N(WARNING, 10) << "push into requestQueue failing";
+        }
+      } while (pushReturn == false);
+
+      // if context is free & num jobs > min, wakeup
+
+      if (config_.noSubmitterThread_) {
+        if (requestQueueSize_ >= (int32_t)minSubmitSize_) {
+          std::unique_lock<std::mutex> lck(submitterCond_.mutex_);
+          if (requestQueueSize_ >= (int32_t)minSubmitSize_)
+            ProcessRequestQueue();
+        }
+      } else {
+        if (submitterWaitingForNewRequests_) {
+          std::unique_lock<std::mutex> lck(submitterCond_.mutex_);
+          if (submitterWaitingForNewRequests_) {
+            submitterCond_.cond_.notify_one();
+          }
+        }
+      }
+    } else {
+      LOG(ERROR) << "bad op=" << job->op_;
+      ret = -EAGAIN;
     }
   } while (0);
 
@@ -815,11 +898,13 @@ int32_t IOExecutor::ProcessCallbacks(io_event *events, int32_t numEvents) {
       LOG(ERROR) << "IOerror for job=" << (void *)job << ":fd=" << job->fd_
                  << ":op=" << job->op_ << ":size=" << job->size_
                  << ":offset=" << job->offset_ << ":error=" << job->retcode_;
-    } else if (events[idx].res != job->size_) {
+    } else if ((events[idx].res != job->userSize_) 
+      && (events[idx].res != job->size_)) {
+
       job->retcode_ = -EIO;
       LOG(ERROR) << "partial read/write for job=" << (void *)job
                  << ":fd=" << job->fd_ << ":op=" << job->op_
-                 << ":expected size=" << job->size_
+                 << ":expected size=" << job->userSize_
                  << ":actual size=" << events[idx].res
                  << ":offset=" << job->offset_;
     } else {
@@ -835,10 +920,13 @@ int32_t IOExecutor::ProcessCallbacks(io_event *events, int32_t numEvents) {
 }
 
 int32_t IOExecutor::doPostProcessingOfJob(FilerJob *job) {
-  job->reset(); // decr FileDesc count
+  job->reset(); 
   // incrementOps() has to be done after reset() because
   // reset() sets serviceTime , which is used by stats
   stats_.incrementOps(job);
+  if (job->closeFileHandle_) {
+    close(job->fd_);
+  }
   if (job->canBeFreed_) {
     delete job;
   }

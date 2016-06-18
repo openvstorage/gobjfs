@@ -3,10 +3,10 @@
 # https://cmake.org/cmake/help/v3.0/manual/cmake-commands.7.html
 # http://www.slideshare.net/DanielPfeifer1/cmake-48475415
 #
-CMAKE_MINIMUM_REQUIRED(VERSION 2.8 FATAL_ERROR)
+cmake_minimum_required(VERSION 2.8 FATAL_ERROR)
 
 # Project(<name> VERSION <version> LANGUAGES CXX)
-PROJECT(GOBJFS C CXX ASM)
+project(GOBJFS C CXX ASM)
 
 set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/CMake" "${CMAKE_MODULE_PATH}")
 
@@ -17,12 +17,12 @@ include(FindASan)
 include(FindMSan)
 
 # so that "make" will echo the command line for easy debugging
-SET(CMAKE_VERBOSE_MAKEFILE on)
+set(CMAKE_VERBOSE_MAKEFILE on)
 
 # Specify command-line options
 # OPTION(<option_variable> "help string describing option" [initial_value])
 
-SET (CMAKE_BUILD_TYPE Release)
+set (CMAKE_BUILD_TYPE Release)
 # CMAKE_BUILD_TYPE can be Release/Debug/RelWithDebInfo/MinSizeRel
 # For Sanitizer builds, set it to ASan/MSan/TSan.  
 # See the CMake directory for sanitizer cmake files
@@ -32,37 +32,40 @@ if (NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
 endif()
 
 # turns on colors in generated Makefile
-SET(CMAKE_COLOR_MAKEFILE)
+set(CMAKE_COLOR_MAKEFILE)
 
 # overwriting the source and binary directories with the current ones
 # this is useful for other projects reusing this project as a subcomponent
-SET(CMAKE_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR})
-SET(CMAKE_BINARY_DIR ${CMAKE_CURRENT_BINARY_DIR})
+set(CMAKE_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR})
+set(CMAKE_BINARY_DIR ${CMAKE_CURRENT_BINARY_DIR})
 
 # this will prohibit in-source-builds
-IF(${CMAKE_BINARY_DIR} STREQUAL ${CMAKE_SOURCE_DIR})
-  MESSAGE(STATUS "In-source-builds are not allowed")
-  MESSAGE(STATUS "Clean your source directory (e.g. delete the CMakeCache.txt file)")
-  MESSAGE(FATAL_ERROR "Please create a separate build directory and call CMake again")
-ENDIF(${CMAKE_BINARY_DIR} STREQUAL ${CMAKE_SOURCE_DIR})
+if(${CMAKE_BINARY_DIR} STREQUAL ${CMAKE_SOURCE_DIR})
+  message(STATUS "In-source-builds are not allowed")
+  message(STATUS "Clean your source directory (e.g. delete the CMakeCache.txt file)")
+  message(FATAL_ERROR "Please create a separate build directory and call CMake again")
+endif(${CMAKE_BINARY_DIR} STREQUAL ${CMAKE_SOURCE_DIR})
 #
 # all headers specified wrt the top-level src dir
-INCLUDE_DIRECTORIES(${PROJECT_SOURCE_DIR}/src)
-INCLUDE_DIRECTORIES(${PROJECT_SOURCE_DIR})
-INCLUDE_DIRECTORIES(${PROJECT_SOURCE_DIR}/include)
+include_directories(${PROJECT_SOURCE_DIR}/src)
+include_directories(${PROJECT_SOURCE_DIR})
+include_directories(${PROJECT_SOURCE_DIR}/include)
 
-LINK_DIRECTORIES(${PROJECT_SOURCE_DIR}/lib)
+link_directories(${PROJECT_SOURCE_DIR}/lib)
+link_directories(${PROJECT_SOURCE_DIR}/thirdparty/xio/lib)
 
 set(CUSTOM_LIBRARY_PATH ${PROJECT_SOURCE_DIR}/lib)
 
-# set compiler to gcc
-SET(CMAKE_CXX_COMPILER "/usr/bin/g++")
-SET(CMAKE_C_COMPILER "/usr/bin/gcc")
+# Do not set the Compiler in this file
+# Instead, set the env variables CC and C++
+# See https://cmake.org/Wiki/CMake_FAQ#How_do_I_use_a_different_compiler.3F
+# SET(CMAKE_CXX_COMPILER "/usr/bin/g++")
+# SET(CMAKE_C_COMPILER "/usr/bin/gcc")
 
-SET (CXX_STANDARD "c++11")
-SET (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=${CXX_STANDARD}")
+set (CXX_STANDARD "c++11")
+set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=${CXX_STANDARD}")
 
-ADD_COMPILE_OPTIONS(
+add_compile_options(
   -Wall
   -Wextra
   -Wstrict-aliasing
@@ -90,7 +93,7 @@ include(cppcheck)
 include(clang-format)
 
 # to enable tests, add this to top-level CMakeLists.txt
-ENABLE_TESTING()
+enable_testing()
 # then add this command in any subdir
 # ADD_TEST(testname <executable> [arg1...])
 # this will enable "make test" to run tests
@@ -101,10 +104,9 @@ ENABLE_TESTING()
 # All third-pary libs should really use ExternalProject_Add
 # but hack for now
 
-ADD_SUBDIRECTORY(src)
-ADD_SUBDIRECTORY(util)
-ADD_SUBDIRECTORY(benchmark)
-
+add_subdirectory(src)
+add_subdirectory(benchmark)
+add_subdirectory(examples)
 
 # Set compiler options
 # if (CMAKE_COMPILER_IS_GNUCXX)

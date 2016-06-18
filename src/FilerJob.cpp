@@ -7,6 +7,7 @@ namespace gobjfs {
 
 using gobjfs::os::FD_INVALID;
 using gobjfs::os::IsDirectIOAligned;
+using gobjfs::os::RoundToNext512;
 
 std::ostream &operator<<(std::ostream &os, FileOp op) {
   switch (op) {
@@ -24,6 +25,9 @@ std::ostream &operator<<(std::ostream &os, FileOp op) {
     break;
   case FileOp::Delete:
     os << "Delete";
+    break;
+  case FileOp::NonAlignedWrite:
+    os << "NonAlignedWrite";
     break;
   default:
     os << "Unknown";
@@ -74,6 +78,11 @@ int32_t FilerJob::prepareCallblock(iocb *cb) {
 bool FilerJob::isValid(std::ostringstream &ostr) {
   bool isValid = true;
 
+  if ((op_ != FileOp::Read) && (op_ != FileOp::Write))
+  {
+    return isValid;
+  }
+
   if (!gobjfs::os::IsFdOpen(fd_)) {
     ostr << ":fd=" << fd_ << " has errno=" << errno;
     isValid = false;
@@ -94,10 +103,12 @@ bool FilerJob::isValid(std::ostringstream &ostr) {
   return isValid;
 }
 
+
 void FilerJob::setBuffer(off_t fileOffset, char *buffer, size_t size) {
   buffer_ = buffer;
   offset_ = fileOffset;
-  size_ = size;
+  userSize_ = size;
+  size_ = RoundToNext512(userSize_);
 }
 
 void FilerJob::reset() {

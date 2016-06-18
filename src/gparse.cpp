@@ -34,21 +34,26 @@ int ParseConfigFile(const char *configFileName, IOExecutor::Config &config) {
     << BOOST_VERSION / 100000     << "."  // major version
     << BOOST_VERSION / 100 % 1000 << "."  // minor version
     << BOOST_VERSION % 100;                // patch level
-    
+
   po::options_description desc("allowed options");
-  desc.add_options()("ioexec.ctx_queue_depth",
-                     po::value<uint32_t>(&config.queueDepth_)->required(),
-                     "io depth of each context in IOExecutor")(
-      "ioexec.cpu_core", po::value<std::vector<CoreId>>(&config.cpuCores_)
-                             ->multitoken()
-                             ->required(),
-      "cpu cores dedicated to IO");
+
+  // add options needed by IOExecutor
+  config.addOptions(desc);
+    
+  // add FileDistributor mountpoint
+  // TODO supply this to IOExecFileServiceInit
+  std::string mountPoint;
+  desc.add_options()
+    ("mount_point", po::value<std::string>(&mountPoint), "mountpoint");
+
   std::ifstream configFile(configFileName);
+
   po::variables_map vm;
 
   int ret = 0;
   if (configFile.is_open()) {
-    po::store(po::parse_config_file(configFile, desc), vm);
+    auto parsed_options = po::parse_config_file(configFile, desc);
+    po::store(parsed_options, vm);
     po::notify(vm);
     VLOG(2) << "read config file=" << configFileName << "[ioexec]"
             << "ioexec.ctx_queue_depth" << config.queueDepth_;

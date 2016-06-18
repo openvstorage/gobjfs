@@ -19,10 +19,12 @@ but WITHOUT ANY WARRANTY of any kind.
 #include <Mempool.h>
 #include <gMempool.h>
 #include <glog/logging.h>
+#include <util/os_utils.h>
 
 using gobjfs::Mempool;
 using gobjfs::MempoolFactory;
 using gobjfs::MempoolSPtr;
+using gobjfs::os::RoundToNext512;
 
 // TODO: add more pools if required
 // Keep a std::map<pool name, MemPool>
@@ -39,7 +41,8 @@ int gMempool_init(size_t alignSize) {
 
 void *gMempool_alloc(size_t size) {
   LOG_IF(FATAL, pool == nullptr) << "call to gMempool_init is missing";
-  return pool->Alloc(size);
+  const size_t allocSize = RoundToNext512(size);
+  return pool->Alloc(allocSize);
 }
 
 void gMempool_free(void *ptr) {

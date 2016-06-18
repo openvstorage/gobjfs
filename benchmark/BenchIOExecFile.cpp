@@ -61,6 +61,7 @@ struct Config {
   uint32_t maxThr = 1;
   uint32_t writePercent = 0;
   uint32_t totalReadWriteScale = 2000;
+  uint32_t shortenFileSize = 0;
   bool newInstance = false;
   std::vector<std::string> dirPrefix;
 
@@ -82,7 +83,10 @@ struct Config {
         "percent of total read write scale")(
         "total_read_write_scale",
         value<uint32_t>(&totalReadWriteScale)->required(),
-        "total scale")("new_instance", value<bool>(&newInstance)->required(),
+        "total scale")(
+        "shorten_file_size", value<uint32_t>(&shortenFileSize), "shorten the"
+" size by this much to test nonaliged reads")(
+        "new_instance", value<bool>(&newInstance)->required(),
                        "create files from scratch")(
         "mountpoint",
         value<std::vector<std::string>>(&dirPrefix)->required()->multitoken(),
@@ -127,7 +131,7 @@ struct Config {
 
 static Config config;
 
-#define FOURMB (4 << 20)
+static constexpr size_t FOURMB = (1 << 24);
 
 struct FixedSizeFileManager {
   IOExecServiceHandle serviceHandle;
@@ -254,7 +258,7 @@ struct FixedSizeFileManager {
 
     try {
       auto str = Directory.at(index);
-      handle = IOExecFileOpen(serviceHandle, str.c_str(), O_RDWR);
+      handle = IOExecFileOpen(serviceHandle, str.c_str(), O_RDONLY);
       if (config.doMemCheck && actualNumber) {
         auto filename = basename(str.c_str());
         auto ret = parseFileName(filename, *actualNumber);
@@ -364,10 +368,11 @@ struct StatusExt {
 
 };
 
+static constexpr size_t MAX_EVENTS = 10;
+
 static int wait_for_iocompletion(int epollfd, int efd, ThreadCtx *ctx) {
   LOG(INFO) << "polling " << efd << " for " << ctx->perThreadIO;
 
-#define MAX_EVENTS 10
   epoll_event events[MAX_EVENTS];
 
   uint64_t ctr = 0;
@@ -405,6 +410,7 @@ static int wait_for_iocompletion(int epollfd, int efd, ThreadCtx *ctx) {
             if (ext->isWrite()) {
               ctx->totalWriteLatency = ext->timer.elapsedMicroseconds();
               ctr++;
+              //IOExecFileTruncate(ext->handle, ext->batch->array[0].size - config.shortenFileSize); NonAligned Option2 truncate after write
               if (iostatus.errorCode != 0) {
                 ctx->failedWrites ++;        
               }
@@ -546,6 +552,8 @@ static void doRandomReadWrite(ThreadCtx *ctx) {
 
   uint64_t totalIO = 0;
 
+  uint32_t sleepTimeMicrosec = 1;
+
   while (totalIO < ctx->perThreadIO) {
     IOExecFileHandle handle{nullptr};
 
@@ -626,14 +634,14 @@ static void doRandomReadWrite(ThreadCtx *ctx) {
 
       if (ext->isWrite()) {
         frag.offset = 0;
-        frag.size = config.blockSize * config.maxBlocks;
+        frag.size = (config.blockSize * config.maxBlocks) - config.shortenFileSize; // TEST unaligned writes
         frag.addr = (caddr_t)gMempool_alloc(frag.size);
         memset(frag.addr, 'a' + (ext->actualFilenum % 26), frag.size);
         assert(frag.addr != nullptr);
       } else if (ext->isRead()) {
         uint64_t blockNum = blockGenerator(seedGen);
         frag.offset = blockNum * config.blockSize;
-        frag.size = config.blockSize;
+        frag.size = config.blockSize - config.shortenFileSize; // TEST unaligned reads
         frag.addr = (caddr_t)gMempool_alloc(frag.size);
         assert(frag.addr != nullptr);
       } else if (ext->isDelete()) {
@@ -659,8 +667,10 @@ static void doRandomReadWrite(ThreadCtx *ctx) {
       }
 
       if (ret == -EAGAIN) {
-        usleep(1);
-        LOG(WARNING) << "too fast";
+	if (sleepTimeMicrosec < 10) 
+          sleepTimeMicrosec *= 2;
+        usleep(sleepTimeMicrosec);
+        LOG(WARNING) << "too fast sleep=" << sleepTimeMicrosec;
       } else {
         if (StartCounting) {
           totalIO++;

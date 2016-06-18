@@ -22,6 +22,7 @@ but WITHOUT ANY WARRANTY of any kind.
 #include <gIOExecFile.h>
 #include <gMempool.h>
 #include <glog/logging.h>
+#include <util/os_utils.h>
 #include <gparse.h>
 #include <FileDistributor.h>
 
@@ -68,7 +69,7 @@ gIOBatch *gIOBatchAlloc(size_t count) {
 void gIOBatchFree(gIOBatch *ptr) {
   for (size_t idx = 0; idx < ptr->count; idx++) {
     gIOExecFragment &frag = ptr->array[idx];
-    assert(IsDirectIOAligned(frag.size));
+    //assert(IsDirectIOAligned(frag.size));
     assert(IsDirectIOAligned(frag.offset));
     assert(frag.completionId != 0);
 
@@ -179,7 +180,7 @@ IOExecServiceHandle IOExecFileServiceInit(const char *pConfigFileName,
       ret = handle->fileDistributor.removeDirectories(mountPoints);
     }
 
-    uint32_t slots = 1024;
+    uint32_t slots = 1024; // TODO make config param
 
     if (ret == 0)  {
       ret = handle->fileDistributor.initDirectories(mountPoints, 
@@ -293,9 +294,11 @@ struct IOExecFileInt {
   }
 
   ~IOExecFileInt() {
-    int ret = close(fd);
-    if (ret != 0) {
-      LOG(ERROR) << "failed to close fd=" << fd << " errno=" << errno;
+    if (fd != -1) {
+      int ret = close(fd);
+      if (ret != 0) {
+        LOG(ERROR) << "failed to close fd=" << fd << " errno=" << errno;
+      }
     }
   }
 };
@@ -313,6 +316,9 @@ IOExecFileHandle IOExecFileOpen(IOExecServiceHandle serviceHandle,
   auto dir = serviceHandle->fileDistributor.getDir(fileName);
   auto absFileName = dir + fileName;
 
+  // NonAligned Option1 
+  // add O_DIRECT fd will be used for io_submit
+  // do not add O_DIRECT for pwrite() 
   int newFlags = flags | O_DIRECT;
 
   int mode = S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH;
@@ -355,6 +361,7 @@ int32_t IOExecFileTruncate(IOExecFileHandle fileHandle, size_t newSize) {
 static int32_t IOExecFileOp(const char* name, 
   FileOp optype,
   IOExecFileHandle fileHandle, 
+  bool closeFileHandle,
   const gIOBatch *batch,
   IOExecEventFdHandle eventFdHandle) {
 
@@ -396,6 +403,7 @@ static int32_t IOExecFileOp(const char* name,
     job->completionId_ = frag.completionId;
     job->completionFd_ = jobFd;
     job->canBeFreed_ = true; // free job after completion
+    job->closeFileHandle_ = closeFileHandle;
     retcode = ioexecPtr->submitTask(job, /*blocking*/ false);
     if (retcode != 0) {
       LOG(WARNING) << "job not submitted due to overflow";
@@ -408,15 +416,39 @@ static int32_t IOExecFileOp(const char* name,
 int32_t IOExecFileWrite(IOExecFileHandle fileHandle, const gIOBatch *batch,
                         IOExecEventFdHandle eventFdHandle) {
 
-  return IOExecFileOp("write", FileOp::Write, fileHandle, batch, eventFdHandle);
+  bool closeFileHandle = false;
+  return IOExecFileOp("write", FileOp::Write, fileHandle, closeFileHandle, batch, eventFdHandle);
 
 }
 
 int32_t IOExecFileRead(IOExecFileHandle fileHandle, const gIOBatch *batch,
                        IOExecEventFdHandle eventFdHandle) {
 
-  return IOExecFileOp("read", FileOp::Read, fileHandle, batch, eventFdHandle);
+  bool closeFileHandle = false;
+  return IOExecFileOp("read", FileOp::Read, fileHandle, closeFileHandle, batch, eventFdHandle);
 }
+
+
+int32_t IOExecFileRead(IOExecServiceHandle serviceHandle, 
+  const char* fileName, 
+  const gIOBatch *batch,
+  IOExecEventFdHandle eventFdHandle) {
+
+  auto fileHandle = IOExecFileOpen(serviceHandle, fileName, O_RDONLY);
+  if (fileHandle == nullptr) {
+    return -EIO;
+  }
+
+  bool closeFileHandle = true;
+  auto ret =  IOExecFileOp("read", FileOp::Read, fileHandle, closeFileHandle, batch, eventFdHandle);
+
+  // close fileHandle but do not close fd which is still in use
+  // because the fd will be closed after FilerJob::reset
+  fileHandle->fd = gobjfs::os::FD_INVALID;
+  IOExecFileClose(fileHandle);
+  return ret;
+}
+
 
 int32_t IOExecFileDeleteSync(IOExecServiceHandle serviceHandle,
                              const char *fileName) {

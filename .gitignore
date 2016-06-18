@@ -1,2 +1,21 @@
-build/
-lib/
+# c++ obj
+*.o
+lib/**
+
+# cscope
+cscope.files
+cscope.out
+
+# ctags
+tags
+
+# CMake related
+build/**
+CMakeCache.txt
+CMakeFiles
+CMakeScripts
+Makefile
+cmake_install.cmake
+install_manifest.txt
+
+ocaml/_build/*

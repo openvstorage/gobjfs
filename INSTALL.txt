@@ -1,13 +1,37 @@
 # This file can be directly executed ! 
 
 # On a new machine
-sudo apt-get install g++-5 cmake git xfsprogs sysstat gdb
+
+# If c++14 required, then install g++-5
+# this is NOT NEEDED ANYMORE
+# sudo add-apt-repository ppa:ubuntu-toolchain-r/test
+# sudo apt-get update
+# sudo apt-get install -y gcc-5 g++-5
+# sudo update-alternatives --remove-all gcc
+# sudo update-alternatives --remove-all g++
+# sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-5 20
+# sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-5 20
+# sudo update-alternatives --config gcc
+# sudo update-alternatives --config g++
+
+sudo apt-get install -y cmake git xfsprogs sysstat gdb
+
+###############################################
+# The rest is for any machine
 
 # Packages to install
 
-sudo apt-get install libaio1 libaio1-dbg libaio-dev
-sudo apt-get install libz-dev libbz2-dev
-sudo apt-get install libboost-all-dev libgoogle-glog-dev
+# XIO used by networkxio
+wget http://apt.openvstorage.org/pool/main/a/accelio/libxio-dev_1.6-1_amd64.deb
+sudo dpkg -i libxio-dev_1.6-1_amd64.deb
+
+wget http://apt.openvstorage.org/pool/main/a/accelio/libxio0_1.6-1_amd64.deb
+sudo dpkg -i libxio0_1.6-1_amd64.deb
+
+sudo apt-get install libunwind8-dev
+sudo apt-get install -y libaio1 libaio1-dbg libaio-dev
+sudo apt-get install -y libz-dev libbz2-dev
+sudo apt-get install -y libboost-all-dev libgoogle-glog-dev
 
 # Install google test
 cd ~
@@ -27,26 +51,26 @@ cd -
 
 sudo apt-add-repository "deb http://llvm.org/apt/trusty/llvm-toolchain-trusty-3.8 main"
 sudo apt-get update
-sudo apt-get install clang-3.8 lldb-3.8
+sudo apt-get install -y clang-3.8 lldb-3.8
 
 
-(cd gobjfs; cd build; \
-  cmake -DCMAKE_C_COMPILER=/usr/lib/llvm-3.8/libexec/ccc-analyzer \
-    -DCMAKE_CXX_COMPILER=/usr/lib/llvm-3.8/libexec/c++-analyzer ..; \
-  scan-build make)
+#(cd gobjfs; cd build; \
+  #cmake -DCMAKE_C_COMPILER=/usr/lib/llvm-3.8/libexec/ccc-analyzer \
+    #-DCMAKE_CXX_COMPILER=/usr/lib/llvm-3.8/libexec/c++-analyzer ..; \
+  #scan-build make)
 
 
 #=========================
 
 To run address sanitizer
 
-(cd gobjfs; cd build; cmake -DCMAKE_BUILD_TYPE=ASan ..; make)
+#(cd gobjfs; cd build; cmake -DCMAKE_BUILD_TYPE=ASan ..; make)
 
 #=========================
 
 To run cppcheck
 
-sudo apt-get install cppcheck
+sudo apt-get install -y cppcheck
 
 (cd gobjfs; cd build; make cppcheck)
 
@@ -56,6 +80,6 @@ To run clang-format
 
 sudo apt-add-repository "deb http://llvm.org/apt/trusty/llvm-toolchain-trusty-3.8 main"
 sudo apt-get update
-sudo apt-get install clang-format-3.8
+sudo apt-get install -y clang-format-3.8
 
 (cd gobjfs; cd build; make clangformat)
