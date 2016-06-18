@@ -61,9 +61,11 @@ void NetworkServerWriteReadTest(void)
         break;
       }
       free(rbuf);
+      if (i && (i % 1000 == 0)) {
+        std::cout << "completed reads=" << i << std::endl;
+      }
     }
 
-    GLOG_DEBUG("\n\n------------------- ovs_ctx_destroy Successful -------------- \n\n");
 
 }
 
