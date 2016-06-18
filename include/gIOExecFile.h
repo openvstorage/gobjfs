@@ -76,7 +76,6 @@ void gIOStatusBatchFree(gIOStatusBatch *ptr);
 // ========================================
 
 IOExecServiceHandle IOExecFileServiceInit(const char *pConfigFileName,
-  const char* mountPoint,
   bool createFlag);
 
 int32_t IOExecFileServiceDestroy(IOExecServiceHandle);

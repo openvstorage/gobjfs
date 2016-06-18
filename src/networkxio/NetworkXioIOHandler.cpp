@@ -52,7 +52,9 @@ static constexpr int XIO_COMPLETION_DEFAULT_MAX_EVENTS = 100;
     {
         try {
 
-          serviceHandle_ = IOExecFileServiceInit(configFileName_.c_str());
+          bool newInstance = true; // TODO make param 
+
+          serviceHandle_ = IOExecFileServiceInit(configFileName_.c_str(), newInstance);
           if (serviceHandle_ == nullptr) {
               throw std::bad_alloc();
           }

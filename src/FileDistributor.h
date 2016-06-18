@@ -3,6 +3,10 @@
 #include <vector>
 #include <string>
 
+namespace boost { namespace program_options {
+  class options_description;
+}}
+
 namespace gobjfs { 
 
 /**
@@ -16,20 +20,34 @@ namespace gobjfs {
 
 class FileDistributor
 {
-  size_t slots_{0};
-  std::vector<std::string> dirs_;
-
   public:
+
+  struct Config
+  {
+    // total slots across mountPoints
+    size_t slots_{0};
+
+    // mountpoints in which subdirectories are created
+    std::vector<std::string> mountPoints_;
+
+    int32_t addOptions(boost::program_options::options_description& desc);
+  };
+
+  Config config_;
+
+  // actual list of sub-directories
+  std::vector<std::string> dirs_; 
 
   static FileDistributor instance_;
 
-  int32_t initDirectories(const std::vector<std::string> &mountPoints, 
-    size_t slots, 
-    bool createFlag);
+  int32_t initDirectories(const Config& config, bool createFlag);
 
   const std::string& getDir(const std::string& fileName) const;
 
-  int32_t removeDirectories(const std::vector<std::string> &mountPoints);
+  static int32_t removeDirectories(const std::vector<std::string> &mountPoints);
+
+  // add options needed by IOExecutor to parser config
+  int32_t addOptions(boost::program_options::options_description& desc);
 };
 
 }

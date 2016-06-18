@@ -92,7 +92,7 @@ public:
 TEST_F(IOExecFileInitTest, CheckStats) {
 
   const char* mnt = "/mnt/nvme";
-  auto serviceHandle = IOExecFileServiceInit(fileTemplate, mnt, true);
+  auto serviceHandle = IOExecFileServiceInit(fileTemplate, true);
 
   uint32_t len = 8192;
   char buffer [len];

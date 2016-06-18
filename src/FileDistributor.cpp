@@ -5,25 +5,34 @@
 #include <sys/stat.h>
 #include <ftw.h> // ftw dir traversal
 #include <unistd.h>
+#include <boost/program_options.hpp>
 
 namespace gobjfs { 
 
 static constexpr size_t MaxOpenFd = 100;
 
 int32_t 
-FileDistributor::initDirectories(const std::vector<std::string>& mountPoints, 
-  size_t slots, 
-  bool createFlag)
+FileDistributor::initDirectories(const Config& config, bool createFlag)
 {
-  slots_ = slots;
+  if (config.mountPoints_.size() == 0) {
+    LOG(ERROR) << "no directories specified";
+    return -EINVAL;
+  }
 
-  size_t slotsToMake = slots/(mountPoints.size());
+  if (config.slots_ == 0) {
+    LOG(ERROR) << "no slots specified";
+    return -EINVAL;
+  }
+
+  config_ = config;
+
+  size_t slotsPerMountPoint = config_.slots_/(config_.mountPoints_.size());
 
   int ret = 0;
 
-  for (auto& mnt : mountPoints)
+  for (auto& mnt : config_.mountPoints_)
   {
-    for (size_t idx = 0; idx < slotsToMake; idx ++)
+    for (size_t idx = 0; idx < slotsPerMountPoint; idx ++)
     {
       auto dir = mnt + "/dir" + std::to_string(idx) + "/";
       if (createFlag) 
@@ -43,8 +52,8 @@ FileDistributor::initDirectories(const std::vector<std::string>& mountPoints,
   }
 
   if (ret == 0) {
-    if (dirs_.size() != slots) {
-      LOG(ERROR) << "dir size=" << dirs_.size() << " not equal to expected=" << slots;
+    if (dirs_.size() != config_.slots_) {
+      LOG(ERROR) << "dir size=" << dirs_.size() << " not equal to expected=" << config_.slots_;
       ret = -ENOTDIR;
     }
   }
@@ -56,7 +65,7 @@ const std::string&
 FileDistributor::getDir(const std::string& fileName) const
 {
   static std::hash<std::string> hasher;
-  auto slot = hasher(fileName) % slots_;
+  auto slot = hasher(fileName) % config_.slots_;
   return dirs_.at(slot);
 }
 
@@ -112,6 +121,26 @@ FileDistributor::removeDirectories(
     }
   }
   return ret;
+}
+
+namespace po = boost::program_options;
+
+int32_t
+FileDistributor::Config::addOptions(boost::program_options::options_description& desc) {
+
+  po::options_description fileDistribOptions("filedistrib config");
+
+  fileDistribOptions.add_options()
+    ("file_distributor.num_dirs", 
+      po::value<size_t>(&slots_)->required(),
+      " total num of directories to create across mountpoints")
+    ("file_distributor.mount_point", 
+      po::value<std::vector<std::string>>(&mountPoints_)->multitoken()->required(),
+      " mountpoints to manage");
+
+  desc.add(fileDistribOptions);
+
+  return 0;
 }
 
 }

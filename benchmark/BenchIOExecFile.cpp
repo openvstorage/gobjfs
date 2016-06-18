@@ -716,7 +716,6 @@ int main(int argc, char *argv[]) {
   config.readConfig("./benchioexec.conf");
 
   auto serviceHandle = IOExecFileServiceInit("./gioexecfile.conf", 
-    config.dirPrefix[0].c_str(),
     config.newInstance);
 
   gMempool_init(config.alignSize);

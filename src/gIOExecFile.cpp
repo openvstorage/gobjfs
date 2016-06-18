@@ -135,16 +135,17 @@ int32_t IOExecGetStats(IOExecServiceHandle serviceHandle, char* buf,
   return curOffset;
 }
 
-IOExecServiceHandle IOExecFileServiceInit(const char *pConfigFileName,
-  const char* mnt,
+IOExecServiceHandle IOExecFileServiceInit(const char *pConfigFileName, 
   bool createFlag) {
 
   int ret = 0;
 
   IOExecServiceHandle handle = new IOExecServiceInt;
 
+  FileDistributor::Config fileDistributorConfig;
+
   do {
-    if (ParseConfigFile(pConfigFileName, handle->ioConfig) < 0) {
+    if (ParseConfigFile(pConfigFileName, handle->ioConfig, fileDistributorConfig) < 0) {
       LOG(ERROR) << "Invalid Config File=" << pConfigFileName;
       ret = -EINVAL;
       break;
@@ -174,17 +175,12 @@ IOExecServiceHandle IOExecFileServiceInit(const char *pConfigFileName,
       ret = -EINVAL;
     }
 
-    std::vector<std::string> mountPoints = { mnt };
-
     if ((ret == 0) && createFlag) {
-      ret = handle->fileDistributor.removeDirectories(mountPoints);
+      ret = FileDistributor::removeDirectories(fileDistributorConfig.mountPoints_);
     }
 
-    uint32_t slots = 1024; // TODO make config param
-
     if (ret == 0)  {
-      ret = handle->fileDistributor.initDirectories(mountPoints, 
-        slots, 
+      ret = handle->fileDistributor.initDirectories(fileDistributorConfig,
         createFlag);
     }
     
@@ -498,8 +494,7 @@ int32_t IOExecFileDelete(IOExecServiceHandle serviceHandle,
 
 EXTERNC {
   service_handle_t gobjfs_ioexecfile_service_init(const char *cfg_name) {
-    const char* mnt =  "/mnt" ;
-    return IOExecFileServiceInit(cfg_name, mnt, true);
+    return IOExecFileServiceInit(cfg_name, true);
   }
 
   int32_t gobjfs_ioexecfile_service_destroy(service_handle_t service_handle) {

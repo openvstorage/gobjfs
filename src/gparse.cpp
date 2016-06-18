@@ -26,7 +26,9 @@ but WITHOUT ANY WARRANTY of any kind.
 
 namespace po = boost::program_options;
 
-int ParseConfigFile(const char *configFileName, IOExecutor::Config &config) {
+int ParseConfigFile(const char *configFileName, 
+  IOExecutor::Config &config, 
+  FileDistributor::Config& fileDistribConfig) {
 
   // print boost compile time version for diagnostic purposes
   // in case it differs from link time version
@@ -39,13 +41,10 @@ int ParseConfigFile(const char *configFileName, IOExecutor::Config &config) {
 
   // add options needed by IOExecutor
   config.addOptions(desc);
-    
-  // add FileDistributor mountpoint
-  // TODO supply this to IOExecFileServiceInit
-  std::string mountPoint;
-  desc.add_options()
-    ("mount_point", po::value<std::string>(&mountPoint), "mountpoint");
 
+  // add options needed by FileDistributor
+  fileDistribConfig.addOptions(desc);
+    
   std::ifstream configFile(configFileName);
 
   po::variables_map vm;
@@ -55,9 +54,9 @@ int ParseConfigFile(const char *configFileName, IOExecutor::Config &config) {
     auto parsed_options = po::parse_config_file(configFile, desc);
     po::store(parsed_options, vm);
     po::notify(vm);
-    VLOG(2) << "read config file=" << configFileName << "[ioexec]"
-            << "ioexec.ctx_queue_depth" << config.queueDepth_;
-    //<< "ioexec.cpu_core" << config.cpuCores_;
+
+    VLOG(2) << "read config file=" << configFileName;
+    
   } else {
     LOG(ERROR) << "Failed to open the file" << configFileName;
     ret = -1;

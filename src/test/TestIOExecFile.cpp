@@ -75,7 +75,7 @@ static void run_verifyIO() {
 
   // figure out how to provide the path to config file in a test
   const char* mnt =  "/mnt/nvme" ;
-  auto serviceHandle = IOExecFileServiceInit("../../../src/gioexecfile.conf", mnt, true);
+  auto serviceHandle = IOExecFileServiceInit("../../../src/gioexecfile.conf", true);
 
   IOExecFileHandle handle;
   handle = IOExecFileOpen(serviceHandle, "/tmp/abc", O_RDWR | O_CREAT);
