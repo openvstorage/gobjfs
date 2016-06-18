@@ -28,6 +28,7 @@ but WITHOUT ANY WARRANTY of any kind.
 
 #include <sstream>       //
 #include <sys/eventfd.h> // EFD_NONBLOCk
+#include <boost/program_options.hpp>
 
 using namespace gobjfs;
 using namespace gobjfs::stats;
@@ -132,6 +133,26 @@ void IOExecutor::Config::print() const {
             << ",\"maxFdQueueSize\":" << maxFdQueueSize_
             << ",\"minSubmitSize\":" << minSubmitSize_
             << ",\"noSubmitterThread\":" << noSubmitterThread_;
+}
+
+namespace po = boost::program_options;
+
+int
+IOExecutor::Config::addOptions(boost::program_options::options_description& desc) {
+
+  po::options_description ioexecOptions("ioexec config");
+
+  ioexecOptions.add_options()
+    ("ioexec.ctx_queue_depth", 
+      po::value<uint32_t>(&queueDepth_), 
+      "io depth of each context in IOExecutor")
+    ("ioexec.cpu_core", 
+      po::value<std::vector<CoreId>>(&cpuCores_)->multitoken(),
+      "cpu cores dedicated to IO");
+
+  desc.add(ioexecOptions);
+
+  return 0;
 }
 
 // ================

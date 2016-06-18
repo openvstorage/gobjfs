@@ -36,6 +36,10 @@ but WITHOUT ANY WARRANTY of any kind.
 #include <util/Timer.h>
 #include <util/os_utils.h>
 
+namespace boost { namespace program_options {
+  class options_description;
+}}
+
 namespace gobjfs {
 
 class FilerJob;
@@ -120,6 +124,9 @@ public:
     explicit Config(uint32_t queueDepth);
 
     void print() const;
+
+    // add options needed by IOExecutor to parser config
+    int addOptions(boost::program_options::options_description& desc);
   };
 
   static Config defaultConfig_;
