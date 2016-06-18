@@ -51,11 +51,15 @@ int main(int argc, char *argv[]) {
     google::InitGoogleLogging(argv[0]);
 
     std::string configFileName = "./gioexecfile.conf";
+    bool newInstance = true;
 
     if (argc > 1) {
       configFileName = argv[1];
     }
+
     std::promise<void> _pr;
-    NetworkXioServer *xs = new NetworkXioServer(Url, configFileName);
+
+    NetworkXioServer *xs = new NetworkXioServer(Url, configFileName, newInstance);
+
     xs->run(_pr);
 }

@@ -25,6 +25,8 @@ but WITHOUT ANY WARRANTY of any kind.
 
 static constexpr size_t BufferSize = 4096;
 
+int times = 10;
+
 void NetworkServerWriteReadTest(void)
 {
     auto ctx_attr = ovs_ctx_attr_new();
@@ -43,7 +45,7 @@ void NetworkServerWriteReadTest(void)
         return;
     }
 
-    for (int i = 0; i < 10; i ++) {
+    for (int i = 0; i < times; i ++) {
 
       auto rbuf = (char*)malloc(BufferSize);
       assert(rbuf != nullptr);
@@ -67,6 +69,10 @@ void NetworkServerWriteReadTest(void)
 
 int main(int argc, char *argv[]) {
 
-    NetworkServerWriteReadTest();
+  if (argc > 1) {
+    times = atoi(argv[1]);
+  }
+
+  NetworkServerWriteReadTest();
 
 }

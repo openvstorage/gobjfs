@@ -40,6 +40,7 @@ public:
 
     NetworkXioServer(const std::string& uri,
                     const std::string& configFileName,
+                    bool newInstance,
                     size_t snd_rcv_queue_depth = 256);
 
     ~NetworkXioServer();
@@ -98,12 +99,20 @@ private:
     std::string uri_;
     std::string configFileName_; 
 
+    // if true, removes all files from mountpoints
+    bool newInstance_;
+
+    // owned by NetworkXioServer
+    IOExecServiceHandle    serviceHandle_{nullptr}; 
+
     bool stopping{false};
+    bool stopped{false};
 
     std::mutex mutex_;
     std::condition_variable cv_;
-    bool stopped{false};
+
     EventFD evfd;
+
     int queue_depth;
 
     NetworkXioWorkQueuePtr wq_;
