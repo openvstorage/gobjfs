@@ -45,17 +45,12 @@ static constexpr int XIO_COMPLETION_DEFAULT_MAX_EVENTS = 100;
         XXExit();
     }
 
-    NetworkXioIOHandler::NetworkXioIOHandler(const std::string& configFileName,
+    NetworkXioIOHandler::NetworkXioIOHandler(IOExecServiceHandle serviceHandle,
       NetworkXioWorkQueuePtr wq)
-    : configFileName_(configFileName)
+    : serviceHandle_(serviceHandle)
     , wq_(wq) 
     {
         try {
-
-          serviceHandle_ = IOExecFileServiceInit(configFileName_.c_str());
-          if (serviceHandle_ == nullptr) {
-              throw std::bad_alloc();
-          }
 
           eventHandle_ = IOExecEventFdOpen(serviceHandle_);
           if (eventHandle_ == nullptr) {
@@ -122,10 +117,6 @@ static constexpr int XIO_COMPLETION_DEFAULT_MAX_EVENTS = 100;
         epollfd = -1;
       }
 
-      if (serviceHandle_ ) {
-        IOExecFileServiceDestroy(serviceHandle_);
-        serviceHandle_ = nullptr;
-      }
     }
 
     void

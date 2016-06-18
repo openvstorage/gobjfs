@@ -98,12 +98,17 @@ private:
     std::string uri_;
     std::string configFileName_; 
 
+    // owned by NetworkXioServer
+    IOExecServiceHandle    serviceHandle_{nullptr}; 
+
     bool stopping{false};
+    bool stopped{false};
 
     std::mutex mutex_;
     std::condition_variable cv_;
-    bool stopped{false};
+
     EventFD evfd;
+
     int queue_depth;
 
     NetworkXioWorkQueuePtr wq_;

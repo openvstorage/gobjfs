@@ -36,7 +36,7 @@ namespace gobjfs { namespace xio
 class NetworkXioIOHandler
 {
 public:
-    NetworkXioIOHandler(const std::string& configFileName,
+    NetworkXioIOHandler(IOExecServiceHandle serviceHandle,
       NetworkXioWorkQueuePtr wq);
 
     ~NetworkXioIOHandler();
@@ -72,14 +72,18 @@ private:
 private:
 
     std::string configFileName_;
+
     NetworkXioWorkQueuePtr wq_;
 
-    IOExecServiceHandle    serviceHandle_{nullptr};
+    // owned by NetworkXioServer; do not delete
+    IOExecServiceHandle    serviceHandle_{nullptr}; 
+
     IOExecEventFdHandle    eventHandle_{nullptr};
 
     int epollfd = -1 ; 
 
     std::thread ioCompletionThread;
+
     gobjfs::os::ShutdownNotifier ioCompletionThreadShutdown;
 };
 

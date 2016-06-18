@@ -147,6 +147,7 @@ NetworkXioServer::NetworkXioServer(
     , evfd()
     , queue_depth(snd_rcv_queue_depth)
 {}
+
 void
 NetworkXioServer::xio_destroy_ctx_shutdown(xio_context *ctx)
 {
@@ -173,6 +174,12 @@ NetworkXioServer::run(std::promise<void> &promise)
     int queue_depth = 2048;
 
     XXEnter();
+
+    serviceHandle_ = IOExecFileServiceInit(configFileName_.c_str());
+    if (serviceHandle_ == nullptr) {
+        throw std::bad_alloc();
+    }
+
     xio_init();
 
     xio_set_opt(NULL,
@@ -312,6 +319,12 @@ NetworkXioServer::run(std::promise<void> &promise)
     std::lock_guard<std::mutex> lock_(mutex_);
     stopped = true;
     cv_.notify_one();
+
+    if (serviceHandle_ ) {
+      IOExecFileServiceDestroy(serviceHandle_);
+      serviceHandle_ = nullptr;
+    }
+
     XXExit();
 }
 
@@ -345,7 +358,7 @@ NetworkXioServer::create_session_connection(xio_session *session,
     {
         try
         {
-            NetworkXioIOHandler *ioh_ptr = new NetworkXioIOHandler(this->configFileName_, wq_);
+            NetworkXioIOHandler *ioh_ptr = new NetworkXioIOHandler(this->serviceHandle_, wq_);
             cd->ncd_ioh = ioh_ptr;
             cd->ncd_session = session;
             cd->ncd_conn = evdata->conn;
