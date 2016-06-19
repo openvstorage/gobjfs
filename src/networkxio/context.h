@@ -19,7 +19,9 @@ but WITHOUT ANY WARRANTY of any kind.
 
 #include "NetworkXioClient.h"
 
-struct ovs_context_t
+namespace gobjfs { namespace xio {
+
+struct client_ctx
 {
     TransportType transport;
     std::string host;
@@ -27,7 +29,7 @@ struct ovs_context_t
     std::string uri;
     gobjfs::xio::NetworkXioClientPtr net_client_;
 
-    ~ovs_context_t()
+    ~client_ctx()
     {
       net_client_.reset();
     }
@@ -35,17 +37,17 @@ struct ovs_context_t
 
 
 inline 
-ovs_aio_request* create_new_request(RequestOp op,
-                                    struct ovs_aiocb *aio,
+aio_request* create_new_request(RequestOp op,
+                                    struct giocb *aio,
                                     notifier_sptr cvp,
-                                    ovs_completion_t *completion)
+                                    completion *cptr)
 {
     try
     {
-        ovs_aio_request *request = new ovs_aio_request;
+        aio_request *request = new aio_request;
         request->_op = op;
-        request->ovs_aiocbp = aio;
-        request->completion = completion;
+        request->giocbp = aio;
+        request->cptr = cptr;
         /*cnanakos TODO: err handling */
         request->_on_suspend = false;
         request->_canceled = false;
@@ -66,15 +68,15 @@ ovs_aio_request* create_new_request(RequestOp op,
 }
 
 inline int
-ovs_xio_open_device(ovs_ctx_ptr ctx)
+ovs_xio_open_device(client_ctx_ptr ctx)
 {
     XXEnter();
     ssize_t r;
-    struct ovs_aiocb aio;
+    struct giocb aio;
 
     auto cvp = std::make_shared<notifier>();
 
-    ovs_aio_request *request = create_new_request(RequestOp::Open,
+    aio_request *request = create_new_request(RequestOp::Open,
                                                   &aio,
                                                   cvp,
                                                   NULL);
@@ -103,20 +105,22 @@ ovs_xio_open_device(ovs_ctx_ptr ctx)
         return -1;
     }
 
-    if ((r = ovs_aio_suspend(ctx, &aio, NULL)) < 0)
+    if ((r = aio_suspend(ctx, &aio, NULL)) < 0)
     {
-        GLOG_ERROR("ovs_aio_suspend() failed with error ");
+        GLOG_ERROR("aio_suspend() failed with error ");
         XXExit();
         return r;
     }
-    r = ovs_aio_return(ctx, &aio);
+    r = aio_return(ctx, &aio);
     if (r < 0) {
-        GLOG_ERROR("ovs_aio_return() failed with error ");
+        GLOG_ERROR("gio_return() failed with error ");
     }
-    if (ovs_aio_finish(ctx, &aio) < 0){
-        GLOG_ERROR("ovs_aio_finish() failed with error ");
+    if (aio_finish(ctx, &aio) < 0){
+        GLOG_ERROR("aio_finish() failed with error ");
         r = -1;
     }
     XXExit();
     return r;
 }
+
+}}

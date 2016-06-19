@@ -86,7 +86,6 @@ private:
     int evfd_;
 };
 
-}} //namespace
 enum class NetworkXioMsgOpcode
 {
     Noop,
@@ -101,3 +100,6 @@ enum class NetworkXioMsgOpcode
 };
 
 #define GetNegative(err) (err > 0) ? -err:err;
+
+
+}} //namespace

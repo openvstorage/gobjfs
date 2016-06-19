@@ -36,12 +36,14 @@ but WITHOUT ANY WARRANTY of any kind.
 #define unlikely(x)     (x)
 #endif
 
-ovs_ctx_attr_ptr
-ovs_ctx_attr_new()
+namespace gobjfs { namespace xio {
+
+client_ctx_attr_ptr
+ctx_attr_new()
 {
     try
     {
-        auto attr = std::make_shared<ovs_context_attr_t>();
+        auto attr = std::make_shared<client_ctx_attr>();
         attr->transport = TransportType::Error;
         attr->port = 0;
         return attr;
@@ -54,7 +56,7 @@ ovs_ctx_attr_new()
 }
 
 int
-ovs_ctx_attr_set_transport(ovs_ctx_attr_ptr attr,
+ctx_attr_set_transport(client_ctx_attr_ptr attr,
                            const char *transport,
                            const char *host,
                            int port)
@@ -85,10 +87,10 @@ ovs_ctx_attr_set_transport(ovs_ctx_attr_ptr attr,
     return -1;
 }
 
-ovs_ctx_ptr
-ovs_ctx_new(const ovs_ctx_attr_ptr attr)
+client_ctx_ptr
+ctx_new(const client_ctx_attr_ptr attr)
 {
-    ovs_ctx_ptr ctx = nullptr;
+    client_ctx_ptr ctx = nullptr;
 
     if(not attr)
     {
@@ -105,7 +107,7 @@ ovs_ctx_new(const ovs_ctx_attr_ptr attr)
 
     try
     {
-        ctx = std::make_shared<ovs_context_t>();
+        ctx = std::make_shared<client_ctx>();
         ctx->transport = attr->transport;
         ctx->host = attr->host;
         ctx->port = attr->port;
@@ -134,7 +136,7 @@ ovs_ctx_new(const ovs_ctx_attr_ptr attr)
 }
 
 int
-ovs_ctx_init(ovs_ctx_ptr ctx)
+ctx_init(client_ctx_ptr ctx)
 {
     int err = 0;    
     XXEnter();
@@ -165,27 +167,27 @@ done:
 }
 
 static int
-_ovs_submit_aio_request(ovs_ctx_ptr ctx,
+_ovs_submit_aio_request(client_ctx_ptr ctx,
                         const std::string& filename,
-                        struct ovs_aiocb *ovs_aiocbp,
+                        giocb *giocbp,
                         notifier_sptr& cvp,
-                        ovs_completion_t *completion,
+                        completion *completion,
                         const RequestOp& op)
 {
     XXEnter();
-    int r = 0, accmode;
+    int r = 0;
     gobjfs::xio::NetworkXioClientPtr net_client = ctx->net_client_;
 
 
-    if (ctx == nullptr || ovs_aiocbp == nullptr)
+    if (ctx == nullptr || giocbp == nullptr)
     {
         errno = EINVAL;
         XXExit();
         return -1;
     }
 
-    if ((ovs_aiocbp->aio_nbytes <= 0 ||
-         ovs_aiocbp->aio_offset < 0))
+    if ((giocbp->aio_nbytes <= 0 ||
+         giocbp->aio_offset < 0))
     {
         errno = EINVAL;
         XXExit();
@@ -202,8 +204,8 @@ _ovs_submit_aio_request(ovs_ctx_ptr ctx,
         return -1;
     }
 
-    ovs_aio_request *request = create_new_request(op, 
-                                                  ovs_aiocbp, 
+    aio_request *request = create_new_request(op, 
+                                                  giocbp, 
                                                   cvp, 
                                                   completion);
     if (request == nullptr)
@@ -221,9 +223,9 @@ _ovs_submit_aio_request(ovs_ctx_ptr ctx,
             try
             {
                 net_client->xio_send_read_request(filename,
-                                                  ovs_aiocbp->aio_buf,
-                                                  ovs_aiocbp->aio_nbytes,
-                                                  ovs_aiocbp->aio_offset,
+                                                  giocbp->aio_buf,
+                                                  giocbp->aio_nbytes,
+                                                  giocbp->aio_offset,
                                                   reinterpret_cast<void*>(request));
             }
             catch (const std::bad_alloc&)
@@ -256,29 +258,29 @@ _ovs_submit_aio_request(ovs_ctx_ptr ctx,
 }
 
 int
-ovs_aio_error(ovs_ctx_ptr ctx,
-              struct ovs_aiocb *ovs_aiocbp)
+aio_error(client_ctx_ptr ctx,
+              giocb *giocbp)
 {
     int r = 0;
-    if (ctx == nullptr || ovs_aiocbp == nullptr)
+    if (ctx == nullptr || giocbp == nullptr)
     {
         errno = EINVAL;
         return (r = -1);
     }
 
-    if (ovs_aiocbp->request_->_canceled)
+    if (giocbp->request_->_canceled)
     {
         return (r = ECANCELED);
     }
 
-    if (not ovs_aiocbp->request_->_completed)
+    if (not giocbp->request_->_completed)
     {
         return (r = EINPROGRESS);
     }
 
-    if (ovs_aiocbp->request_->_failed)
+    if (giocbp->request_->_failed)
     {
-        return (r = ovs_aiocbp->request_->_errno);
+        return (r = giocbp->request_->_errno);
     }
     else
     {
@@ -287,72 +289,72 @@ ovs_aio_error(ovs_ctx_ptr ctx,
 }
 
 ssize_t
-ovs_aio_return(ovs_ctx_ptr ctx,
-               struct ovs_aiocb *ovs_aiocbp)
+aio_return(client_ctx_ptr ctx,
+               giocb *giocbp)
 {
     int r = 0;
     XXEnter();
-    if (ctx == nullptr || ovs_aiocbp == nullptr)
+    if (ctx == nullptr || giocbp == nullptr)
     {
-        GLOG_ERROR("ctx or ovs_aiocbp NULL");
+        GLOG_ERROR("ctx or giocbp NULL");
         r = -EINVAL;
         XXExit();
         return r;
     }
 
-    errno = ovs_aiocbp->request_->_errno;
-    if (not ovs_aiocbp->request_->_failed)
+    errno = giocbp->request_->_errno;
+    if (not giocbp->request_->_failed)
     {
-        r = ovs_aiocbp->request_->_rv;
+        r = giocbp->request_->_rv;
     }
     else
     {
         r = GetNegative(errno);
-        GLOG_ERROR("ovs_aiocbp->request_->_failed is true. Error is " << r);
+        GLOG_ERROR("giocbp->request_->_failed is true. Error is " << r);
     }
     XXExit();
     return r;
 }
 
 int
-ovs_aio_finish(ovs_ctx_ptr ctx,
-               struct ovs_aiocb *ovs_aiocbp)
+aio_finish(client_ctx_ptr ctx,
+               giocb *giocbp)
 {
     XXEnter();
-    if (ctx == nullptr || ovs_aiocbp == nullptr)
+    if (ctx == nullptr || giocbp == nullptr)
     {
         errno = EINVAL;
-        GLOG_ERROR("ctx or ovs_aiocbp NULL ");
+        GLOG_ERROR("ctx or giocbp NULL ");
         return -1;
     }
 
-    delete ovs_aiocbp->request_;
+    delete giocbp->request_;
     XXExit();
     return 0;
 }
 
 int
-ovs_aio_suspendv(ovs_ctx_ptr ctx,
-                const std::vector<ovs_aiocb*> &ovs_aiocbp_vec,
-                const struct timespec *timeout)
+aio_suspendv(client_ctx_ptr ctx,
+                const std::vector<giocb*> &giocbp_vec,
+                const timespec *timeout)
 {
     XXEnter();
     int r = 0;
-    if (ctx == nullptr || ovs_aiocbp_vec.size() == 0)
+    if (ctx == nullptr || giocbp_vec.size() == 0)
     {
         errno = EINVAL;
         XXExit();
         return (r = -1);
     }
 
-    for (auto elem : ovs_aiocbp_vec) {
+    for (auto elem : giocbp_vec) {
       __sync_bool_compare_and_swap(&elem->request_->_on_suspend,
                                      false,
                                      true,
                                      __ATOMIC_RELAXED);
     }
 
-    auto cvp = ovs_aiocbp_vec[0]->request_->_cvp;
+    auto cvp = giocbp_vec[0]->request_->_cvp;
 
     {
       if (timeout)
@@ -377,32 +379,32 @@ ovs_aio_suspendv(ovs_ctx_ptr ctx,
 }
 
 int
-ovs_aio_suspend(ovs_ctx_ptr ctx,
-                ovs_aiocb *ovs_aiocbp,
-                const struct timespec *timeout)
+aio_suspend(client_ctx_ptr ctx,
+                giocb *giocbp,
+                const timespec *timeout)
 {
     XXEnter();
     int r = 0;
-    if (ctx == nullptr || ovs_aiocbp == nullptr)
+    if (ctx == nullptr || giocbp == nullptr)
     {
         errno = EINVAL;
         XXExit();
         return (r = -1);
     }
-    if (__sync_bool_compare_and_swap(&ovs_aiocbp->request_->_on_suspend,
+    if (__sync_bool_compare_and_swap(&giocbp->request_->_on_suspend,
                                      false,
                                      true,
                                      __ATOMIC_RELAXED))
     {
       if (timeout)
       {
-          auto func = [&] () { return ovs_aiocbp->request_->_signaled; };
+          auto func = [&] () { return giocbp->request_->_signaled; };
           // TODO add func
-          ovs_aiocbp->request_->_cvp->wait_for(timeout);
+          giocbp->request_->_cvp->wait_for(timeout);
       }
       else
       {
-          ovs_aiocbp->request_->_cvp->wait();
+          giocbp->request_->_cvp->wait();
       }
     }
     if (r == ETIMEDOUT)
@@ -416,18 +418,18 @@ ovs_aio_suspend(ovs_ctx_ptr ctx,
 }
 
 int
-ovs_aio_cancel(ovs_ctx_ptr  /*ctx*/,
-               struct ovs_aiocb * /*ovs_aiocbp*/)
+aio_cancel(client_ctx_ptr  /*ctx*/,
+               giocb * /*giocbp*/)
 {
     errno = ENOSYS;
     return -1;
 }
 
-ovs_buffer_t*
-ovs_allocate(ovs_ctx_ptr ctx,
+gbuffer*
+gbuffer_allocate(client_ctx_ptr ctx,
              size_t size)
 {
-    ovs_buffer_t *buf = (ovs_buffer_t *)malloc(size);
+    gbuffer *buf = (gbuffer *)malloc(size);
     if (!buf)
     {
         errno = ENOMEM;
@@ -436,7 +438,7 @@ ovs_allocate(ovs_ctx_ptr ctx,
 }
 
 void*
-ovs_buffer_data(ovs_buffer_t *ptr)
+gbuffer_data(gbuffer *ptr)
 {
     if (likely(ptr != nullptr))
     {
@@ -450,7 +452,7 @@ ovs_buffer_data(ovs_buffer_t *ptr)
 }
 
 size_t
-ovs_buffer_size(ovs_buffer_t *ptr)
+gbuffer_size(gbuffer *ptr)
 {
 
 
@@ -466,19 +468,19 @@ ovs_buffer_size(ovs_buffer_t *ptr)
 }
 
 int
-ovs_deallocate(ovs_ctx_ptr ctx,
-               ovs_buffer_t *ptr)
+gbuffer_deallocate(client_ctx_ptr ctx,
+               gbuffer *ptr)
 {
     free(ptr);
     return 0;
     
 }
 
-ovs_completion_t*
-ovs_aio_create_completion(ovs_callback_t complete_cb,
+completion*
+aio_create_completion(gcallback complete_cb,
                           void *arg)
 {
-    ovs_completion_t *completion = nullptr;
+    completion *cptr = nullptr;
 
 
     if (complete_cb == nullptr)
@@ -488,14 +490,14 @@ ovs_aio_create_completion(ovs_callback_t complete_cb,
     }
     try
     {
-        completion = new ovs_completion_t;
-        completion->complete_cb = complete_cb;
-        completion->cb_arg = arg;
-        completion->_calling = false;
-        completion->_on_wait = false;
-        completion->_signaled = false;
-        completion->_failed = false;
-        return completion;
+        cptr = new completion;
+        cptr->complete_cb = complete_cb;
+        cptr->cb_arg = arg;
+        cptr->_calling = false;
+        cptr->_on_wait = false;
+        cptr->_signaled = false;
+        cptr->_failed = false;
+        return cptr;
     }
     catch (const std::bad_alloc&)
     {
@@ -505,7 +507,7 @@ ovs_aio_create_completion(ovs_callback_t complete_cb,
 }
 
 ssize_t
-ovs_aio_return_completion(ovs_completion_t *completion)
+aio_return_completion(completion *completion)
 {
 
     if (completion == nullptr)
@@ -533,8 +535,8 @@ ovs_aio_return_completion(ovs_completion_t *completion)
 }
 
 int
-ovs_aio_wait_completion(ovs_completion_t *completion,
-                        const struct timespec *timeout)
+aio_wait_completion(completion *completion,
+                        const timespec *timeout)
 {
     int r = 0;
 
@@ -578,7 +580,7 @@ ovs_aio_wait_completion(ovs_completion_t *completion,
 }
 
 int
-ovs_aio_signal_completion(ovs_completion_t *completion)
+aio_signal_completion(completion *completion)
 {
 
     if (completion == nullptr)
@@ -599,7 +601,7 @@ ovs_aio_signal_completion(ovs_completion_t *completion)
 }
 
 int
-ovs_aio_release_completion(ovs_completion_t *completion)
+aio_release_completion(completion *completion)
 {
 
     if (completion == nullptr)
@@ -612,39 +614,39 @@ ovs_aio_release_completion(ovs_completion_t *completion)
 }
 
 int
-ovs_aio_read(ovs_ctx_ptr ctx,
+aio_read(client_ctx_ptr ctx,
                const std::string& filename,
-               struct ovs_aiocb *ovs_aiocbp)
+               giocb *giocbp)
 {
   auto cv = std::make_shared<notifier>();
 
   return _ovs_submit_aio_request(ctx,
                                    filename,
-                                   ovs_aiocbp,
+                                   giocbp,
                                    cv,
                                    nullptr,
                                    RequestOp::Read);
 }
 
 int
-ovs_aio_readv(ovs_ctx_ptr ctx,
+aio_readv(client_ctx_ptr ctx,
                const std::vector<std::string>& filename_vec,
-               const std::vector<ovs_aiocb*> &ovs_aiocbp_vec)
+               const std::vector<giocb*> &giocbp_vec)
 {
   int err = 0;
 
-  if (filename_vec.size() != ovs_aiocbp_vec.size()) 
+  if (filename_vec.size() != giocbp_vec.size()) 
   {
     GLOG_ERROR("mismatch between filename vector size=" << filename_vec.size()
-      << " and iocb vector size=" << ovs_aiocbp_vec.size());
+      << " and iocb vector size=" << giocbp_vec.size());
     errno = EINVAL;
     return -1;
   }
 
-  auto cv = std::make_shared<notifier>(ovs_aiocbp_vec.size());
+  auto cv = std::make_shared<notifier>(giocbp_vec.size());
 
   size_t idx = 0;
-  for (auto elem : ovs_aiocbp_vec) {
+  for (auto elem : giocbp_vec) {
     err |= _ovs_submit_aio_request(ctx,
                                    filename_vec[idx++],
                                    elem,
@@ -657,30 +659,30 @@ ovs_aio_readv(ovs_ctx_ptr ctx,
 }
 
 int
-ovs_aio_readcb(ovs_ctx_ptr ctx,
+aio_readcb(client_ctx_ptr ctx,
                const std::string& filename,
-               struct ovs_aiocb *ovs_aiocbp,
-               ovs_completion_t *completion)
+               giocb *giocbp,
+               completion *completion)
 {
   auto cv = std::make_shared<notifier>();
 
   return _ovs_submit_aio_request(ctx,
                                    filename,
-                                   ovs_aiocbp,
+                                   giocbp,
                                    cv,
                                    completion,
                                    RequestOp::Read);
 }
 
 ssize_t
-ovs_read(ovs_ctx_ptr ctx,
+read(client_ctx_ptr ctx,
          const std::string& filename, 
          void *buf,
          size_t nbytes,
          off_t offset)
 {
     ssize_t r;
-    struct ovs_aiocb aio;
+    giocb aio;
     aio.aio_buf = buf;
     aio.aio_nbytes = nbytes;
     aio.aio_offset = offset;
@@ -690,20 +692,22 @@ ovs_read(ovs_ctx_ptr ctx,
         return (r = -1);
     }
 
-    if ((r = ovs_aio_read(ctx, filename, &aio)) < 0)
+    if ((r = aio_read(ctx, filename, &aio)) < 0)
     {
         return r;
     }
 
-    if ((r = ovs_aio_suspend(ctx, &aio, nullptr)) < 0)
+    if ((r = aio_suspend(ctx, &aio, nullptr)) < 0)
     {
         return r;
     }
 
-    r = ovs_aio_return(ctx, &aio);
-    if (ovs_aio_finish(ctx, &aio) < 0)
+    r = aio_return(ctx, &aio);
+    if (aio_finish(ctx, &aio) < 0)
     {
         r = -1;
     }
     return r;
 }
+
+}}

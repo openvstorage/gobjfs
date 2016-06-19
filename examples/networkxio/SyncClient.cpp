@@ -27,19 +27,21 @@ static constexpr size_t BufferSize = 4096;
 
 int times = 10;
 
+using namespace gobjfs::xio;
+
 void NetworkServerWriteReadTest(void)
 {
-    auto ctx_attr = ovs_ctx_attr_new();
+    auto ctx_attr = ctx_attr_new();
 
-    ovs_ctx_attr_set_transport(ctx_attr,
+    ctx_attr_set_transport(ctx_attr,
                                          "tcp",
                                          "127.0.0.1",
                                          21321);
 
-    ovs_ctx_ptr ctx = ovs_ctx_new(ctx_attr);
+    client_ctx_ptr ctx = ctx_new(ctx_attr);
     assert(ctx != nullptr);
 
-    int err = ovs_ctx_init(ctx);
+    int err = ctx_init(ctx);
     if (err < 0) {
         GLOG_ERROR("Volume open failed ");
         return;
@@ -50,7 +52,7 @@ void NetworkServerWriteReadTest(void)
       auto rbuf = (char*)malloc(BufferSize);
       assert(rbuf != nullptr);
   
-      auto sz = ovs_read(ctx, "abcd", rbuf, BufferSize, 0);
+      auto sz = gobjfs::xio::read(ctx, "abcd", rbuf, BufferSize, 0);
   
       if (sz < 0) {
         GLOG_ERROR("OMG!!read failure with error  : " << sz);

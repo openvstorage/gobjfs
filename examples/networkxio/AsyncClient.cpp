@@ -26,8 +26,10 @@ but WITHOUT ANY WARRANTY of any kind.
 
 int times = 10;
 
+using namespace gobjfs::xio;
 
-void callback_func(ovs_completion_t *cb, void* arg)
+
+void callback_func(completion *cb, void* arg)
 {
   GLOG_DEBUG( "callback with " << (void*)cb << ":" << (void*)arg);
 }
@@ -35,24 +37,24 @@ void callback_func(ovs_completion_t *cb, void* arg)
 
 void NetworkServerWriteReadTest(bool use_completion)
 {
-    auto ctx_attr = ovs_ctx_attr_new();
+    auto ctx_attr = ctx_attr_new();
 
-    ovs_ctx_attr_set_transport(ctx_attr,
+    ctx_attr_set_transport(ctx_attr,
                                          "tcp",
                                          "127.0.0.1",
                                          21321);
 
-    ovs_ctx_ptr ctx = ovs_ctx_new(ctx_attr);
+    client_ctx_ptr ctx = ctx_new(ctx_attr);
     assert(ctx != nullptr);
 
-    int err = ovs_ctx_init(ctx);
+    int err = ctx_init(ctx);
     if (err < 0) {
         GLOG_ERROR("Volume open failed ");
         return;
     }
 
-    std::vector<ovs_aiocb*> vec;
-    std::vector<ovs_completion_t*> cvec;
+    std::vector<giocb*> vec;
+    std::vector<completion*> cvec;
 
     for (int i = 0; i < times; i ++) {
 
@@ -60,24 +62,24 @@ void NetworkServerWriteReadTest(bool use_completion)
       assert(rbuf != nullptr);
 
 
-      ovs_aiocb* iocb = (ovs_aiocb*)malloc(sizeof(ovs_aiocb));
+      giocb* iocb = (giocb*)malloc(sizeof(giocb));
       iocb->aio_buf = rbuf;
       iocb->aio_offset = 0;
       iocb->aio_nbytes = 4096;
 
-      ovs_completion_t* comp = nullptr;
+      completion* comp = nullptr;
 
       if (use_completion) {
-        comp = ovs_aio_create_completion(callback_func, iocb);
+        comp = aio_create_completion(callback_func, iocb);
       }
 
-      auto ret = ovs_aio_readcb(ctx, "abcd", iocb, comp);
+      auto ret = aio_readcb(ctx, "abcd", iocb, comp);
 
       if (ret != 0) {
         free(iocb);
         free(rbuf);
         if (comp)
-          ovs_aio_release_completion(comp);
+          aio_release_completion(comp);
       } else {
         if (comp) 
           cvec.push_back(comp);
@@ -87,20 +89,20 @@ void NetworkServerWriteReadTest(bool use_completion)
 
     // if completions are in use, wait for them
     for (auto& elem : cvec) {
-      ovs_aio_wait_completion(elem, nullptr);
-      ovs_aio_release_completion(elem);
+      aio_wait_completion(elem, nullptr);
+      aio_release_completion(elem);
     }
 
     for (auto& elem : vec) {
       // if completions not used, call suspend
       if (!use_completion) 
-        ovs_aio_suspend(ctx, elem, nullptr); 
-      ovs_aio_finish(ctx, elem);
+        aio_suspend(ctx, elem, nullptr); 
+      aio_finish(ctx, elem);
       free(elem->aio_buf);
       free(elem);
     }
 
-    GLOG_DEBUG("\n\n------------------- ovs_ctx_destroy Successful -------------- \n\n");
+    GLOG_DEBUG("\n\n------------------- ctx_destroy Successful -------------- \n\n");
 
 }
 

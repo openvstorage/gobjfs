@@ -56,7 +56,7 @@ xrefcnt_shutdown()
 namespace gobjfs { namespace xio {
 
 inline void
-_xio_aio_wake_up_suspended_aiocb(ovs_aio_request *request)
+_xio_aio_wake_up_suspended_aiocb(aio_request *request)
 {
     XXEnter();
     if (not __sync_bool_compare_and_swap(&request->_on_suspend,
@@ -76,8 +76,8 @@ void
 ovs_xio_aio_complete_request(void* opaque, ssize_t retval, int errval)
 {
     XXEnter();
-    ovs_aio_request *request = reinterpret_cast<ovs_aio_request*>(opaque);
-    ovs_completion_t *completion = request->completion;
+    aio_request *request = reinterpret_cast<aio_request*>(opaque);
+    completion *cptr = request->cptr;
     request->_errno = errval;
     request->_rv = retval;
     request->_failed = (retval == -1 ? true : false);
@@ -85,15 +85,15 @@ ovs_xio_aio_complete_request(void* opaque, ssize_t retval, int errval)
     {
         _xio_aio_wake_up_suspended_aiocb(request);
     }
-    if (completion)
+    if (cptr)
     {
-        completion->_rv = retval;
-        completion->_failed = (retval == -1 ? true : false);
+        cptr->_rv = retval;
+        cptr->_failed = (retval == -1 ? true : false);
         GLOG_DEBUG( "signalling completion" << std::endl);
         // first invoke the callback, then signal completion
         // caller must free the completion in main loop - not in callback!
-        completion->complete_cb(completion, completion->cb_arg);
-        ovs_aio_signal_completion(completion);
+        cptr->complete_cb(cptr, cptr->cb_arg);
+        aio_signal_completion(cptr);
     }
     XXExit();
 }
@@ -102,7 +102,7 @@ void
 ovs_xio_complete_request_control(void *opaque, ssize_t retval, int errval)
 {
     XXEnter();
-    ovs_aio_request *request = reinterpret_cast<ovs_aio_request*>(opaque);
+    aio_request *request = reinterpret_cast<aio_request*>(opaque);
     if (request)
     {
         request->_errno = errval;

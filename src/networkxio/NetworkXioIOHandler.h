@@ -73,12 +73,12 @@ private:
 
     std::string configFileName_;
 
-    NetworkXioWorkQueuePtr wq_;
-
     // owned by NetworkXioServer; do not delete
     IOExecServiceHandle    serviceHandle_{nullptr}; 
 
     IOExecEventFdHandle    eventHandle_{nullptr};
+
+    NetworkXioWorkQueuePtr wq_;
 
     int epollfd = -1 ; 
 

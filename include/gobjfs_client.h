@@ -28,24 +28,26 @@ but WITHOUT ANY WARRANTY of any kind.
 #include <string>
 #include <memory> // shared_ptr
 
-typedef struct ovs_buffer ovs_buffer_t;
+namespace gobjfs { namespace xio {
 
-class ovs_context_t;
-typedef std::shared_ptr<ovs_context_t> ovs_ctx_ptr;
+struct gbuffer;
 
-class ovs_context_attr_t;
-typedef std::shared_ptr<ovs_context_attr_t> ovs_ctx_attr_ptr;
+class client_ctx;
+typedef std::shared_ptr<client_ctx> client_ctx_ptr;
 
-typedef struct ovs_aio_request ovs_aio_request;
-typedef struct ovs_completion ovs_completion_t;
-typedef void (*ovs_callback_t)(ovs_completion_t *cb, void *arg);
+class client_ctx_attr;
+typedef std::shared_ptr<client_ctx_attr> client_ctx_attr_ptr;
 
-struct ovs_aiocb
+struct aio_request;
+struct completion;
+typedef void (*gcallback)(completion *cb, void *arg);
+
+struct giocb
 {
     void *aio_buf;
     off_t aio_offset;
     size_t aio_nbytes;
-    ovs_aio_request *request_;
+    aio_request *request_;
 };
 
 
@@ -55,8 +57,8 @@ struct ovs_aiocb
  * return: This function always succeeds returning 0
  * return: Context attributes object on success, or NULL on fail
  */
-ovs_ctx_attr_ptr
-ovs_ctx_attr_new();
+client_ctx_attr_ptr
+ctx_attr_new();
 
 /*
  * Set transport type
@@ -67,7 +69,7 @@ ovs_ctx_attr_new();
  * return: 0 on success, -1 on fail
  */
 int
-ovs_ctx_attr_set_transport(ovs_ctx_attr_ptr attr,
+ctx_attr_set_transport(client_ctx_attr_ptr attr,
                            const char *transport,
                            const char *host,
                            int port);
@@ -77,8 +79,8 @@ ovs_ctx_attr_set_transport(ovs_ctx_attr_ptr attr,
  * param attr: Context attributes object
  * return: Open vStorage context on success, or NULL on fail
  */
-ovs_ctx_ptr
-ovs_ctx_new(const ovs_ctx_attr_ptr attr);
+client_ctx_ptr
+ctx_new(const client_ctx_attr_ptr attr);
 
 /*
  * Initialize Open vStorage context to talk to server
@@ -86,7 +88,7 @@ ovs_ctx_new(const ovs_ctx_attr_ptr attr);
  * return: Open vStorage context on success, or NULL on fail
  */
 int
-ovs_ctx_init(ovs_ctx_ptr ctx);
+ctx_init(client_ctx_ptr ctx);
 
 /*
  * Allocate buffer from the shared memory segment
@@ -94,8 +96,8 @@ ovs_ctx_init(ovs_ctx_ptr ctx);
  * param size: Buffer size in bytes
  * return: Buffer pointer on success, or NULL on fail
  */
-ovs_buffer_t*
-ovs_allocate(ovs_ctx_ptr ctx,
+gbuffer*
+ggbuffer_allocate(client_ctx_ptr ctx,
              size_t size);
 
 /* Retrieve pointer to buffer content
@@ -103,14 +105,14 @@ ovs_allocate(ovs_ctx_ptr ctx,
  * return: Buffer pointer on success, or NULL on fail
  */
 void*
-ovs_buffer_data(ovs_buffer_t *ptr);
+gbuffer_data(gbuffer *ptr);
 
 /* Retrieve size of buffer
  * param ptr: Pointer to buffer structure
  * return: Size of buffer on success, -1 on fail
  */
 size_t
-ovs_buffer_size(ovs_buffer_t *ptr);
+gbuffer_size(gbuffer *ptr);
 
 /*
  * Deallocate previously allocated buffer
@@ -119,8 +121,8 @@ ovs_buffer_size(ovs_buffer_t *ptr);
  * return: 0 on success, -1 on fail
  */
 int
-ovs_deallocate(ovs_ctx_ptr ctx,
-               ovs_buffer_t *ptr);
+gbuffer_deallocate(client_ctx_ptr ctx,
+               gbuffer *ptr);
 
 /*
  * Read from a volume
@@ -131,7 +133,7 @@ ovs_deallocate(ovs_ctx_ptr ctx,
  * return: Number of bytes actually read, -1 on fail
  */
 ssize_t
-ovs_read(ovs_ctx_ptr ctx,
+read(client_ctx_ptr ctx,
          const std::string& filename,
          void *buf,
          size_t nbytes,
@@ -141,113 +143,113 @@ ovs_read(ovs_ctx_ptr ctx,
 /*
  * Suspend until asynchronous I/O operation or timeout complete
  * param ctx: Open vStorage context
- * param ovs_aiocb: Pointer to an AIO Control Block structure
+ * param giocb: Pointer to an AIO Control Block structure
  * param timeout: Pointer to a timespec structure
  * return: 0 on success, -1 on fail
  */
 int
-ovs_aio_suspend(ovs_ctx_ptr ctx,
-                struct ovs_aiocb *ovs_aiocb,
-                const struct timespec *timeout);
+aio_suspend(client_ctx_ptr ctx,
+                giocb *giocb,
+                const timespec *timeout);
 
 /*
  * Suspend until asynchronous I/O operation or timeout complete
  * param ctx: Open vStorage context
- * param ovs_aiocb_vec: Pointer to vector of AIO Control Block structure
+ * param giocb_vec: Pointer to vector of AIO Control Block structure
  * param timeout: Pointer to a timespec structure
  * return: 0 on success, -1 on fail
  */
 
 int
-ovs_aio_suspendv(ovs_ctx_ptr ctx,
-                const std::vector<ovs_aiocb*> &ovs_aiocbp_vec,
-                const struct timespec *timeout);
+aio_suspendv(client_ctx_ptr ctx,
+                const std::vector<giocb*> &giocbp_vec,
+                const timespec *timeout);
 /*
  * Retrieve error status of asynchronous I/O operation
  * param ctx: Open vStorage context
- * param ovs_aiocb: Pointer to an AIO Control Block structure
+ * param giocb: Pointer to an AIO Control Block structure
  * return: 0 on success, -1 on fail
  */
 int
-ovs_aio_error(ovs_ctx_ptr ctx,
-              struct ovs_aiocb *ovs_aiocbp);
+aio_error(client_ctx_ptr ctx,
+              giocb *giocbp);
 
 /*
  * Retrieve return status of asynchronous I/O operation
  * param ctx: Open vStorage context
- * param ovs_aiocb: Pointer to an AIO Control Block structure
+ * param giocb: Pointer to an AIO Control Block structure
  * return: Number of bytes returned based on the operation, -1 on fail
  */
 ssize_t
-ovs_aio_return(ovs_ctx_ptr ctx,
-               struct ovs_aiocb *ovs_aiocbp);
+aio_return(client_ctx_ptr ctx,
+               giocb *giocbp);
 
 /*
  * Cancel an oustanding asynchronous I/O operation
  * param ctx: Open vStorage context
- * param ovs_aiocb: Pointer to an AIO Control Block structure
+ * param giocb: Pointer to an AIO Control Block structure
  * return: 0 on success, -1 on fail
  */
 int
-ovs_aio_cancel(ovs_ctx_ptr ctx,
-               struct ovs_aiocb *ovs_aiocbp);
+aio_cancel(client_ctx_ptr ctx,
+               giocb *giocbp);
 
 /*
  * Finish an asynchronous I/O operation
  * param ctx: Open vStorage context
- * param ovs_aiocb: Pointer to an AIO Control Block structure
+ * param giocb: Pointer to an AIO Control Block structure
  * return: 0 on success, -1 on fail
  */
 int
-ovs_aio_finish(ovs_ctx_ptr ctx,
-               struct ovs_aiocb* ovs_aiocbp);
+aio_finish(client_ctx_ptr ctx,
+               giocb* giocbp);
 
 /*
  * Asynchronous read from a volume
  * param ctx: Open vStorage context
  * param filename: filenames on which to read
- * param ovs_aiocb: Pointer to an AIO Control Block structure
+ * param giocb: Pointer to an AIO Control Block structure
  * return: 0 on success, -1 on fail
  */
 int
-ovs_aio_read(ovs_ctx_ptr ctx,
+aio_read(client_ctx_ptr ctx,
              const std::string  &filename,
-             struct ovs_aiocb *ovs_aiocbp);
+             giocb *giocbp);
 
 /*
  * Asynchronous readv from a volume
  * param ctx: Open vStorage context
  * param filename_vec: Pointer to vector of filenames to read
- * param ovs_aiocb_vec: Pointer to vector of AIO Control Block structure
+ * param giocb_vec: Pointer to vector of AIO Control Block structure
  *   this vector and filename_vec must be same size
  * return: 0 on success, -1 on fail
  */
 int
-ovs_aio_readv(ovs_ctx_ptr ctx,
+aio_readv(client_ctx_ptr ctx,
              const std::vector<std::string> &filename_vec,
-             const std::vector<ovs_aiocb*> &ovs_aiocbp_vec);
+             const std::vector<giocb*> &giocbp_vec);
 
 /*
  * Asynchronous read from a volume with completion
  * param ctx: Open vStorage context
- * param ovs_aiocb: Pointer to an AIO Control Block structure
+ * param giocb: Pointer to an AIO Control Block structure
  * param completion: Pointer to a completion structure
  * return: 0 on success, -1 on fail
  */
 int
-ovs_aio_readcb(ovs_ctx_ptr ctx,
+aio_readcb(client_ctx_ptr ctx,
                const std::string &filename,
-               struct ovs_aiocb *ovs_aiocbp,
-               ovs_completion_t *completion);
+               giocb *giocbp,
+               completion *completion);
 
 /*
  * Create a new completion
- * param complete_cb: Pointer to an ovs_callback_t structure
+ * param complete_cb: Pointer to an gcallback structure
  * param arg: Pointer to an argument passed to complete_cb
  * return: Completion pointer on success, or NULL on fail
  */
-ovs_completion_t*
-ovs_aio_create_completion(ovs_callback_t complete_cb,
+completion*
+aio_create_completion(gcallback complete_cb,
                           void *arg);
 
 /*
@@ -257,7 +259,7 @@ ovs_aio_create_completion(ovs_callback_t complete_cb,
  * -1 on fail
  */
 ssize_t
-ovs_aio_return_completion(ovs_completion_t *completion);
+aio_return_completion(completion *completion);
 
 /*
  * Suspend until completion or timeout complete
@@ -266,8 +268,8 @@ ovs_aio_return_completion(ovs_completion_t *completion);
  * return: 0 on success, -1 on fail
  */
 int
-ovs_aio_wait_completion(ovs_completion_t *completion,
-                        const struct timespec *timeout);
+aio_wait_completion(completion *completion,
+                        const timespec *timeout);
 
 /*
  * Signal a suspended completion
@@ -275,7 +277,7 @@ ovs_aio_wait_completion(ovs_completion_t *completion,
  * return: 0 on success, -1 on fail
  */
 int
-ovs_aio_signal_completion(ovs_completion_t *completion);
+aio_signal_completion(completion *completion);
 
 /*
  * Release completion
@@ -283,5 +285,7 @@ ovs_aio_signal_completion(ovs_completion_t *completion);
  * return: 0 on success, -1 on fail
  */
 int
-ovs_aio_release_completion(ovs_completion_t *completion);
+aio_release_completion(completion *completion);
 
+
+}}

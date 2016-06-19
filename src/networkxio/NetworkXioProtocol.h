@@ -20,6 +20,8 @@
 
 #include <networkxio/NetworkXioCommon.h>
 
+namespace gobjfs { namespace xio {
+
 class NetworkXioMsg
 {
 public:
@@ -199,5 +201,8 @@ public:
                    timeout_);
 };
 
-MSGPACK_ADD_ENUM(NetworkXioMsgOpcode);
+}}
+
+// compilation errors ensue if you put this macro inside namespace 
+MSGPACK_ADD_ENUM(gobjfs::xio::NetworkXioMsgOpcode);
 

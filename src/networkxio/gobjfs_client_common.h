@@ -57,6 +57,8 @@ but WITHOUT ANY WARRANTY of any kind.
 #define GLOG_TRACE(msg) 
 #endif
 
+namespace gobjfs { namespace xio {
+
 // TODO
 enum class RequestOp
 {
@@ -74,22 +76,22 @@ enum class TransportType
     RDMA,
 };
 
-struct ovs_context_attr_t
+struct client_ctx_attr
 {
     TransportType transport;
     std::string host;
     int port{-1};
 };
 
-struct ovs_buffer
+struct gbuffer
 {
     void *buf{nullptr};
     size_t size;
 };
 
-struct ovs_completion
+struct completion
 {
-    ovs_callback_t complete_cb;
+    gcallback complete_cb;
     void *cb_arg{nullptr};
     bool _on_wait{false};
     bool _calling{false};
@@ -155,10 +157,10 @@ struct notifier
 
 typedef std::shared_ptr<notifier> notifier_sptr;
 
-struct ovs_aio_request
+struct aio_request
 {
-    struct ovs_aiocb *ovs_aiocbp{nullptr};
-    ovs_completion_t *completion{nullptr};
+    struct giocb *giocbp{nullptr};
+    completion *cptr{nullptr};
     RequestOp _op{RequestOp::Noop};
     bool _on_suspend{false};
     bool _canceled{false};
@@ -171,3 +173,4 @@ struct ovs_aio_request
     notifier_sptr _cvp;
 };
 
+}}

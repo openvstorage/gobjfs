@@ -28,6 +28,7 @@ but WITHOUT ANY WARRANTY of any kind.
 #include <atomic>
 #include <exception>
 #include "NetworkXioProtocol.h"
+
 namespace gobjfs { namespace xio 
 {
 #define MAKE_EXCEPTION(A) \
