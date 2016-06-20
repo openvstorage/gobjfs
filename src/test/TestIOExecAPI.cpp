@@ -72,7 +72,13 @@ public:
     fd = mkstemp(fileTemplate);
 
     const char* configContents = 
-      "[ioexec]\nctx_queue_depth=200\ncpu_core=0\n";
+      "[ioexec]\n"
+      "ctx_queue_depth=200\n"
+      "cpu_core=0\n"
+      "[file_distributor]\n"
+      "mount_point=/tmp/ioexectest\n"
+      "num_dirs=3\n"
+      ;
 
     ssize_t writeSz = write(fd, configContents, strlen(configContents));
 
@@ -91,7 +97,6 @@ public:
 
 TEST_F(IOExecFileInitTest, CheckStats) {
 
-  const char* mnt = "/mnt/nvme";
   auto serviceHandle = IOExecFileServiceInit(fileTemplate, true);
 
   uint32_t len = 8192;
