@@ -5,6 +5,7 @@ ADD_EXECUTABLE(XioTester
   )
 
 TARGET_LINK_LIBRARIES(XioTester
+  gobjfs_client
   gobjfs_server
   gobjfs
   xio
