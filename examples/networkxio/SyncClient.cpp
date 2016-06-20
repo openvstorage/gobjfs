@@ -23,7 +23,10 @@ but WITHOUT ANY WARRANTY of any kind.
 #include <gobjfs_client.h>
 #include <networkxio/gobjfs_client_common.h> // GLOG_DEBUG
 
-static constexpr size_t BufferSize = 4096;
+static constexpr size_t BufferSize = 512;
+
+// shorten read size to test unaligned reads
+static constexpr size_t ShortenSize = 10;
 
 int times = 10;
 
@@ -51,14 +54,16 @@ void NetworkServerWriteReadTest(void)
 
       auto rbuf = (char*)malloc(BufferSize);
       assert(rbuf != nullptr);
+
+      size_t readSz = BufferSize - ShortenSize;
   
-      auto sz = gobjfs::xio::read(ctx, "abcd", rbuf, BufferSize, 0);
+      auto sz = gobjfs::xio::read(ctx, "abcd", rbuf, readSz, i * BufferSize);
   
       if (sz < 0) {
         GLOG_ERROR("OMG!!read failure with error  : " << sz);
         break;
       }
-      if (sz != (ssize_t) BufferSize) {
+      if (sz != (ssize_t) readSz) {
         GLOG_ERROR("Read Length " << sz << " not matching expected " << BufferSize);
         break;
       }
