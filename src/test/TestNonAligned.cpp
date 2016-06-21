@@ -32,6 +32,8 @@ but WITHOUT ANY WARRANTY of any kind.
 
 using namespace gobjfs::xio;
 
+static int fileTranslator(const char* old_name, char* new_name);
+
 class IOExecFileTest : public testing::Test {
   
   int configFileFd {-1};
@@ -41,13 +43,14 @@ public:
   char configFile[512];
 
   int testDataFd {gobjfs::os::FD_INVALID};
-  const std::string testDataFilePath = "/tmp/ioexectest/dir0/";
-  const std::string testDataFileName = "abcd";
-  const std::string testDataFileFullName = testDataFilePath + testDataFileName;
+  static const std::string testDataFilePath;
+  static const std::string testDataFileName;
+  static const std::string testDataFileFullName;
 
   IOExecServiceHandle serviceHandle;
   IOExecEventFdHandle evHandle;
   int readFd;
+
 
   IOExecFileTest() {
   }
@@ -62,9 +65,6 @@ public:
       "[ioexec]\n"
       "ctx_queue_depth=200\n"
       "cpu_core=0\n"
-      "[file_distributor]\n"
-      "mount_point=/tmp/ioexectest\n"
-      "num_dirs=1\n"
       ;
 
     ssize_t writeSz = write(configFileFd, configContents, strlen(configContents));
@@ -83,7 +83,7 @@ public:
 
     gMempool_init(512);
 
-    serviceHandle = IOExecFileServiceInit(configFile, true);
+    serviceHandle = IOExecFileServiceInit(configFile, fileTranslator, true);
 
     ssize_t ret;
 
@@ -118,6 +118,21 @@ public:
   virtual ~IOExecFileTest() {
   }
 };
+
+const std::string IOExecFileTest::testDataFilePath = "/tmp/";
+
+const std::string IOExecFileTest::testDataFileName = "abcd";
+
+const std::string IOExecFileTest::testDataFileFullName = 
+  std::string(IOExecFileTest::testDataFilePath) + 
+  std::string(IOExecFileTest::testDataFileName);
+
+int fileTranslator(const char* old_name, char* new_name)
+{
+  strcpy(new_name, IOExecFileTest::testDataFilePath.c_str());
+  strcat(new_name, old_name);
+  return 0;
+}
 
 // Nonaligned write succeeds with files opened with O_DIRECT 
 TEST_F(IOExecFileTest, NonAlignedWriteWithoutDirectIO) {

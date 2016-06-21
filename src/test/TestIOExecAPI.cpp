@@ -75,9 +75,6 @@ public:
       "[ioexec]\n"
       "ctx_queue_depth=200\n"
       "cpu_core=0\n"
-      "[file_distributor]\n"
-      "mount_point=/tmp/ioexectest\n"
-      "num_dirs=3\n"
       ;
 
     ssize_t writeSz = write(configFileFd, configContents, strlen(configContents));
@@ -97,7 +94,7 @@ public:
 
 TEST_F(IOExecFileInitTest, CheckStats) {
 
-  auto serviceHandle = IOExecFileServiceInit(configFile, true);
+  auto serviceHandle = IOExecFileServiceInit(configFile, nullptr, true);
 
   uint32_t len = 8192;
   char buffer [len];

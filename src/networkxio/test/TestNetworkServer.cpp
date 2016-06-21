@@ -33,6 +33,8 @@ but WITHOUT ANY WARRANTY of any kind.
 
 using namespace gobjfs::xio;
 
+static int fileTranslatorFunc(const char* old_name, char* new_name);
+
 class NetworkXioServerTest : public testing::Test {
   
   int fd {-1};
@@ -47,9 +49,9 @@ public:
   int portNumber{21321};
 
   int testDataFd {gobjfs::os::FD_INVALID};
-  const std::string testDataFilePath = "/tmp/ioexectest/dir0/";
-  const std::string testDataFileName = "abcd";
-  const std::string testDataFileFullName = testDataFilePath + testDataFileName;
+  static const std::string testDataFilePath;
+  static const std::string testDataFileName;
+  static const std::string testDataFileFullName;
 
   NetworkXioServerTest() {
   }
@@ -64,9 +66,6 @@ public:
       "[ioexec]\n"
       "ctx_queue_depth=200\n"
       "cpu_core=0\n"
-      "[file_distributor]\n"
-      "mount_point=/tmp/ioexectest\n"
-      "num_dirs=1\n"
       ;
 
     ssize_t writeSz = write(fd, configContents, strlen(configContents));
@@ -74,7 +73,7 @@ public:
     EXPECT_EQ(writeSz, strlen(configContents));
 
     bool newInstance = true;
-    xs = gobjfs_xio_server_start("tcp", "127.0.0.1", portNumber, configFile, newInstance);
+    xs = gobjfs_xio_server_start("tcp", "127.0.0.1", portNumber, configFile, fileTranslatorFunc, newInstance);
     EXPECT_NE(xs, nullptr);
   
   }
@@ -98,7 +97,7 @@ public:
 
     gMempool_init(512);
 
-    auto serviceHandle = IOExecFileServiceInit(configFile, true);
+    auto serviceHandle = IOExecFileServiceInit(configFile, fileTranslatorFunc, true);
 
     ssize_t ret;
 
@@ -150,6 +149,19 @@ public:
   virtual ~NetworkXioServerTest() {
   }
 };
+
+const std::string NetworkXioServerTest::testDataFilePath = "/tmp/";
+const std::string NetworkXioServerTest::testDataFileName = "abcd";
+const std::string NetworkXioServerTest::testDataFileFullName = 
+  std::string(NetworkXioServerTest::testDataFilePath) + 
+  std::string(NetworkXioServerTest::testDataFileName);
+
+int fileTranslatorFunc(const char* old_name, char* new_name)
+{
+  strcpy(new_name, NetworkXioServerTest::testDataFilePath.c_str());
+  strcat(new_name, old_name);
+  return 0;
+}
 
 TEST_F(NetworkXioServerTest, MultipleClients) {
 

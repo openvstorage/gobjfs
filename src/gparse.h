@@ -19,11 +19,8 @@ but WITHOUT ANY WARRANTY of any kind.
 #pragma once
 
 #include <IOExecutor.h>
-#include <FileDistributor.h>
 
 using gobjfs::IOExecutor;
-using gobjfs::FileDistributor;
 
 int ParseConfigFile(const char *configFileName, 
-  IOExecutor::Config &config,
-  FileDistributor::Config &fileDistributorConfig);
+  IOExecutor::Config &config);

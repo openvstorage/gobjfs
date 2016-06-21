@@ -27,8 +27,7 @@ but WITHOUT ANY WARRANTY of any kind.
 namespace po = boost::program_options;
 
 int ParseConfigFile(const char *configFileName, 
-  IOExecutor::Config &config, 
-  FileDistributor::Config& fileDistribConfig) {
+  IOExecutor::Config &config) {
 
   // print boost compile time version for diagnostic purposes
   // in case it differs from link time version
@@ -42,9 +41,6 @@ int ParseConfigFile(const char *configFileName,
   // add options needed by IOExecutor
   config.addOptions(desc);
 
-  // add options needed by FileDistributor
-  fileDistribConfig.addOptions(desc);
-    
   std::ifstream configFile(configFileName);
 
   po::variables_map vm;

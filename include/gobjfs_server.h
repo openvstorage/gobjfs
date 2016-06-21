@@ -23,6 +23,8 @@ but WITHOUT ANY WARRANTY of any kind.
 #include <unistd.h>
 #include <sys/types.h>
 
+#include <gIOExecFile.h>
+
 // C API
 #ifdef __cplusplus
 #define EXTERNC extern "C"
@@ -46,6 +48,7 @@ gobjfs_xio_server_handle gobjfs_xio_server_start(
   const char* host, 
   int port,
   const char* config_file,
+  FileTranslatorFunc file_translator_func,
   bool is_new_instance);
 
 // @param server_handle : handle returned from "server_start"

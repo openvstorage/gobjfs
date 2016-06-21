@@ -5,7 +5,6 @@ SET(SOURCES
   IOExecutor.cpp
   FilerJob.cpp
   gIOExecFile.cpp
-  FileDistributor.cpp
   util/os_utils.cpp
   util/ShutdownNotifier.cpp
   util/CpuStats.cpp

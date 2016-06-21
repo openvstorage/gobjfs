@@ -74,8 +74,12 @@ gIOStatusBatch *gIOStatusBatchAlloc(int count);
 void gIOStatusBatchFree(gIOStatusBatch *ptr);
 
 // ========================================
+//
+
+typedef int (*FileTranslatorFunc)(const char* old_name, char* new_name);
 
 IOExecServiceHandle IOExecFileServiceInit(const char *pConfigFileName,
+  FileTranslatorFunc fileTranslatorFunc,
   bool createFlag);
 
 int32_t IOExecFileServiceDestroy(IOExecServiceHandle);
@@ -165,8 +169,9 @@ typedef void *status_t;
 EXTERNC {
   
   // @param full path of config file 
+  // @param translator function which converts given filename to disk path
   // @return handle to service, else NULL pointer on error
-  service_handle_t gobjfs_ioexecfile_service_init(const char *);
+  service_handle_t gobjfs_ioexecfile_service_init(const char *, FileTranslatorFunc trans_func);
 
   // @param handle returned from "service_init"
   // @return 0 on success, else negative number

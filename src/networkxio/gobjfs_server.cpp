@@ -45,13 +45,16 @@ gobjfs_xio_server_handle gobjfs_xio_server_start(
   const char* host, 
   int port,
   const char* config_file,
+  FileTranslatorFunc file_translator_func,
   bool is_new_instance)
 {
   const std::string uri = transport + std::string("://") + 
     host + std::string(":") + std::to_string(port);
 
   NetworkXioServer* xs = new NetworkXioServer(uri, 
-    config_file, is_new_instance);
+    config_file, 
+    file_translator_func,
+    is_new_instance);
 
   std::promise<void> pr;
   auto init_future = pr.get_future();

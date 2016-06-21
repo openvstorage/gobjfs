@@ -59,7 +59,9 @@ int main(int argc, char *argv[]) {
 
     std::promise<void> _pr;
 
-    NetworkXioServer *xs = new NetworkXioServer(Url, configFileName, newInstance);
+    FileTranslatorFunc fileTranslatorFunc{nullptr};
+
+    NetworkXioServer *xs = new NetworkXioServer(Url, configFileName, fileTranslatorFunc, newInstance);
 
     xs->run(_pr);
 }

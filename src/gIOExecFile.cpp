@@ -24,16 +24,15 @@ but WITHOUT ANY WARRANTY of any kind.
 #include <glog/logging.h>
 #include <util/os_utils.h>
 #include <gparse.h>
-#include <FileDistributor.h>
 
 #include <fcntl.h>
+#include <linux/limits.h> // PATH_MAX
 #include <sys/types.h>
 #include <unistd.h>
 #include <boost/version.hpp>
 
 using gobjfs::IOExecutor;
 using gobjfs::FilerJob;
-using gobjfs::FileDistributor;
 using gobjfs::FileOp;
 using gobjfs::os::IsDirectIOAligned;
 
@@ -95,7 +94,7 @@ void gIOStatusBatchFree(gIOStatusBatch *ptr) { free(ptr); }
 struct IOExecServiceInt {
   IOExecutor::Config ioConfig;
   std::vector<std::shared_ptr<IOExecutor>> ioexecVec;
-  FileDistributor fileDistributor;
+  FileTranslatorFunc fileTranslatorFunc;
 
   int32_t getSlot(const char *fileName) {
     static std::hash<std::string> hasher;
@@ -136,16 +135,16 @@ int32_t IOExecGetStats(IOExecServiceHandle serviceHandle, char* buf,
 }
 
 IOExecServiceHandle IOExecFileServiceInit(const char *pConfigFileName, 
+  FileTranslatorFunc fileTranslatorFunc,
   bool createFlag) {
 
   int ret = 0;
 
   IOExecServiceHandle handle = new IOExecServiceInt;
-
-  FileDistributor::Config fileDistributorConfig;
+  handle->fileTranslatorFunc = fileTranslatorFunc;
 
   do {
-    if (ParseConfigFile(pConfigFileName, handle->ioConfig, fileDistributorConfig) < 0) {
+    if (ParseConfigFile(pConfigFileName, handle->ioConfig) < 0) {
       LOG(ERROR) << "Invalid Config File=" << pConfigFileName;
       ret = -EINVAL;
       break;
@@ -174,16 +173,6 @@ IOExecServiceHandle IOExecFileServiceInit(const char *pConfigFileName,
 
       ret = -EINVAL;
     }
-
-    if ((ret == 0) && createFlag) {
-      ret = FileDistributor::removeDirectories(fileDistributorConfig.mountPoints_);
-    }
-
-    if (ret == 0)  {
-      ret = handle->fileDistributor.initDirectories(fileDistributorConfig,
-        createFlag);
-    }
-    
   } while (0);
 
   if (ret != 0) {
@@ -309,15 +298,19 @@ IOExecFileHandle IOExecFileOpen(IOExecServiceHandle serviceHandle,
     return newHandle;
   }
 
-  auto dir = serviceHandle->fileDistributor.getDir(fileName);
-  auto absFileName = dir + fileName;
+  char absFileName[PATH_MAX];
+  if (serviceHandle->fileTranslatorFunc) {
+    serviceHandle->fileTranslatorFunc(fileName, absFileName);
+  } else {
+    strncpy(absFileName, fileName, PATH_MAX - 1);
+  }
 
   // user must add O_DIRECT for aligned IO
   int newFlags = flags;
 
   int mode = S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH;
 
-  int fd = open(absFileName.c_str(), newFlags, mode);
+  int fd = open(absFileName, newFlags, mode);
 
   if (fd < 0) {
     int capture_errno = errno;
@@ -448,10 +441,14 @@ int32_t IOExecFileDeleteSync(IOExecServiceHandle serviceHandle,
                              const char *fileName) {
   (void)serviceHandle;
 
-  auto dir = serviceHandle->fileDistributor.getDir(fileName);
-  auto absFileName = dir + fileName;
+  char absFileName[PATH_MAX];
+  if (serviceHandle->fileTranslatorFunc) {
+    serviceHandle->fileTranslatorFunc(fileName, absFileName);
+  } else {
+    strncpy(absFileName, fileName, PATH_MAX - 1);
+  }
 
-  int retcode = ::unlink(absFileName.c_str());
+  int retcode = ::unlink(absFileName);
   if (retcode != 0) {
     retcode = -errno;
     LOG(ERROR) << "failed to delete file=" << fileName << " errno=" << errno;
@@ -473,10 +470,14 @@ int32_t IOExecFileDelete(IOExecServiceHandle serviceHandle,
     return -EINVAL;
   }
 
-  auto dir = serviceHandle->fileDistributor.getDir(fileName);
-  auto absFileName = dir + fileName;
+  char absFileName[PATH_MAX];
+  if (serviceHandle->fileTranslatorFunc) {
+    serviceHandle->fileTranslatorFunc(fileName, absFileName);
+  } else {
+    strncpy(absFileName, fileName, PATH_MAX - 1);
+  }
 
-  auto job = new FilerJob(absFileName.c_str(), FileOp::Delete);
+  auto job = new FilerJob(absFileName, FileOp::Delete);
   job->completionId_ = completionId;
   job->completionFd_ = eventFdHandle->fd[1];
   job->canBeFreed_ = true; // free job after completion
@@ -491,8 +492,8 @@ int32_t IOExecFileDelete(IOExecServiceHandle serviceHandle,
 // ============================================
 
 EXTERNC {
-  service_handle_t gobjfs_ioexecfile_service_init(const char *cfg_name) {
-    return IOExecFileServiceInit(cfg_name, true);
+  service_handle_t gobjfs_ioexecfile_service_init(const char *cfg_name, FileTranslatorFunc trans_func) {
+    return IOExecFileServiceInit(cfg_name, trans_func, true);
   }
 
   int32_t gobjfs_ioexecfile_service_destroy(service_handle_t service_handle) {
