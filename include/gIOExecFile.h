@@ -21,7 +21,7 @@ but WITHOUT ANY WARRANTY of any kind.
 #include <gcommon.h>
 #include <stdint.h> // uint64
 #include <stdlib.h>
-#include <vector>
+
 #include <string>
 #include <sys/uio.h>
 
@@ -132,8 +132,8 @@ int32_t IOExecFileRead(IOExecFileHandle fileHandle, const gIOBatch *pIOBatch,
  * @param fd the pipe on which callback notification should be sent
  *           when job is completed
  */
-int32_t IOExecFileRead(IOExecServiceHandle serviceHandle, 
-  const char* fileName, 
+int32_t IOExecFileRead(IOExecServiceHandle serviceHandle,
+  const char* fileName,
   const gIOBatch *pIOBatch,
   IOExecEventFdHandle eventFdHandle);
 
@@ -167,8 +167,8 @@ typedef gCompletionID completion_id_t;
 typedef void *status_t;
 
 EXTERNC {
-  
-  // @param full path of config file 
+
+  // @param full path of config file
   // @param translator function which converts given filename to disk path
   // @return handle to service, else NULL pointer on error
   service_handle_t gobjfs_ioexecfile_service_init(const char *, FileTranslatorFunc trans_func);
@@ -186,12 +186,12 @@ EXTERNC {
 
   // @param handle returned by "file_open"
   // @param batch allocated by "batch_alloc"
-  // @param pipe handle returned from "event_fd_open" 
+  // @param pipe handle returned from "event_fd_open"
   // @return 0 on successful submit, else negative number
   int32_t gobjfs_ioexecfile_file_write(handle_t, const batch_t *, event_t evfd);
   // @param handle returned by "file_open"
   // @param batch allocated by "batch_alloc"
-  // @param pipe handle returned from "event_fd_open" 
+  // @param pipe handle returned from "event_fd_open"
   // @return 0 on successful submit, else negative number
   int32_t gobjfs_ioexecfile_file_read(handle_t, batch_t *, event_t evfd);
 
@@ -225,7 +225,7 @@ EXTERNC {
   //      for invalid handle, returns -1
   int gobjfs_ioexecfile_event_fd_get_read_fd(event_t);
 
-  // @param number of fragments in batch 
+  // @param number of fragments in batch
   // @return allocated batch, else NULL ptr on error
   batch_t *gobjfs_batch_alloc(int);
 
@@ -233,10 +233,10 @@ EXTERNC {
   void gobjfs_debug_fragment(const void *);
   void gobjfs_debug_batch(const batch_t *);
 
-  // @param buffer to fill 
+  // @param buffer to fill
   // @param the length of the buffer
   // @return number of bytes filled in buffer
   //   negative number on error
-  int32_t gobjfs_ioexecfile_service_getstats(service_handle_t, char *buffer, 
+  int32_t gobjfs_ioexecfile_service_getstats(service_handle_t, char *buffer,
     int32_t len);
 }
