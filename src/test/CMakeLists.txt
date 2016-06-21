@@ -3,6 +3,7 @@ ADD_EXECUTABLE(ObjfsTester
   MempoolTest.cpp
   TestIOExecFile.cpp
   TestIOExecAPI.cpp
+  TestNonAligned.cpp
   TestMain.cpp
   )
 

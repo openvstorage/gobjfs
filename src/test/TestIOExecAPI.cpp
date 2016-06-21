@@ -57,19 +57,19 @@ TEST(IOExecFile, NoInitDone) {
 
 class IOExecFileInitTest : public testing::Test {
   
-  int fd {-1};
+  int configFileFd {-1};
 
 
 public:
-  char fileTemplate[512];
+  char configFile[512];
 
   IOExecFileInitTest() {
   }
 
   virtual void SetUp() override {
-    strcpy(fileTemplate,  "ioexecfiletestXXXXXX");
+    strcpy(configFile,  "ioexecfiletestXXXXXX");
 
-    fd = mkstemp(fileTemplate);
+    configFileFd = mkstemp(configFile);
 
     const char* configContents = 
       "[ioexec]\n"
@@ -80,14 +80,14 @@ public:
       "num_dirs=3\n"
       ;
 
-    ssize_t writeSz = write(fd, configContents, strlen(configContents));
+    ssize_t writeSz = write(configFileFd, configContents, strlen(configContents));
 
     EXPECT_EQ(writeSz, strlen(configContents));
   }
 
   virtual void TearDown() override {
-    close(fd);
-    int ret = ::unlink(fileTemplate);
+    close(configFileFd);
+    int ret = ::unlink(configFile);
     assert(ret == 0);
   }
 
@@ -97,7 +97,7 @@ public:
 
 TEST_F(IOExecFileInitTest, CheckStats) {
 
-  auto serviceHandle = IOExecFileServiceInit(fileTemplate, true);
+  auto serviceHandle = IOExecFileServiceInit(configFile, true);
 
   uint32_t len = 8192;
   char buffer [len];

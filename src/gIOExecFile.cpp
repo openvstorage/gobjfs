@@ -312,10 +312,8 @@ IOExecFileHandle IOExecFileOpen(IOExecServiceHandle serviceHandle,
   auto dir = serviceHandle->fileDistributor.getDir(fileName);
   auto absFileName = dir + fileName;
 
-  // NonAligned Option1 
-  // add O_DIRECT fd will be used for io_submit
-  // do not add O_DIRECT for pwrite() 
-  int newFlags = flags | O_DIRECT;
+  // user must add O_DIRECT for aligned IO
+  int newFlags = flags;
 
   int mode = S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH;
 
