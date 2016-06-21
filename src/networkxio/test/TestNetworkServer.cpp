@@ -17,8 +17,11 @@ but WITHOUT ANY WARRANTY of any kind.
 */
 
 #include <util/os_utils.h>
+#include <gIOExecFile.h>
+#include <gMempool.h>
 #include <gobjfs_client.h>
 #include <networkxio/NetworkXioServer.h>
+
 #include <glog/logging.h>
 #include <gtest/gtest.h>
 
@@ -43,7 +46,9 @@ public:
   int portNumber{21321};
 
   int testDataFd {gobjfs::os::FD_INVALID};
-  std::string testDataFile = "/tmp/ioexectest/dir0/abcd";
+  const std::string testDataFilePath = "/tmp/ioexectest/dir0/";
+  const std::string testDataFileName = "abcd";
+  const std::string testDataFileFullName = testDataFilePath + testDataFileName;
 
   NetworkXioServerTest() {
   }
@@ -100,24 +105,52 @@ public:
 
   void createDataFile() {
 
-    testDataFd = open(testDataFile.c_str(), O_TRUNC | O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
+    gMempool_init(512);
 
+    auto serviceHandle = IOExecFileServiceInit(configFile, true);
+
+    ssize_t ret;
+
+    auto evHandle = IOExecEventFdOpen(serviceHandle);
+    EXPECT_NE(evHandle, nullptr);
+
+    auto readFd = IOExecEventFdGetReadFd(evHandle);
+    EXPECT_NE(fd, gobjfs::os::FD_INVALID);
+
+    auto fileHandle = IOExecFileOpen(serviceHandle, testDataFileName.c_str(),
+        O_CREAT | O_WRONLY);
+
+    auto batch = gIOBatchAlloc(1);
+    gIOExecFragment& frag = batch->array[0];
+    frag.offset = 0;
     const size_t bufSize = 65536 * 1024;
-    char* buf = (char*)malloc(bufSize);
-    bzero(buf, bufSize);
+    frag.size = bufSize;
+    frag.addr = (char*)gMempool_alloc(bufSize);
+    memset(frag.addr, 'a', bufSize);
+    frag.completionId = reinterpret_cast<uint64_t>(batch);
 
-    ssize_t ret = write(testDataFd, buf, bufSize);
-    EXPECT_EQ(ret, bufSize);
+    ret = IOExecFileWrite(fileHandle, batch, evHandle);
+    EXPECT_EQ(ret, 0);
 
-    free(buf);
+    gIOStatus ioStatus;
+    ret = ::read(readFd, &ioStatus, sizeof(ioStatus));
+    EXPECT_EQ(ret, sizeof(ioStatus));
+    EXPECT_EQ(ioStatus.errorCode, 0);
+    EXPECT_EQ(ioStatus.completionId, reinterpret_cast<uint64_t>(batch));
 
-    ret = close(testDataFd);
-    ASSERT_EQ(ret, 0);
+    gIOBatchFree(batch);
+
+    IOExecFileClose(fileHandle);
+
+    IOExecEventFdClose(evHandle);
+
+    IOExecFileServiceDestroy(serviceHandle);
+
   }
 
   void removeDataFile() {
 
-    int ret = ::unlink(testDataFile.c_str());
+    int ret = ::unlink(testDataFileFullName.c_str());
     ASSERT_EQ(ret, 0);
 
   }
@@ -182,7 +215,7 @@ TEST_F(NetworkXioServerTest, FileDoesntExist) {
 
     size_t readSz = BufferSize - ShortenSize;
 
-    auto sz = gobjfs::xio::read(ctx, "abcd", rbuf, readSz, i * BufferSize);
+    auto sz = gobjfs::xio::read(ctx, testDataFileName, rbuf, readSz, i * BufferSize);
 
     // reads will fail since file doesnt exist
     EXPECT_LT(sz, 0);
@@ -223,7 +256,7 @@ TEST_F(NetworkXioServerTest, SyncRead) {
 
     size_t readSz = BufferSize - ShortenSize;
 
-    auto sz = gobjfs::xio::read(ctx, "abcd", rbuf, readSz, i * BufferSize);
+    auto sz = gobjfs::xio::read(ctx, testDataFileName, rbuf, readSz, i * BufferSize);
 
     // reads will fail since file doesnt exist
     EXPECT_EQ(sz, readSz);
@@ -274,7 +307,7 @@ TEST_F(NetworkXioServerTest, AsyncRead) {
     iocb->aio_offset = i * BufferSize;
     iocb->aio_nbytes = readSz;
 
-    auto ret = aio_readcb(ctx, "abcd", iocb, nullptr);
+    auto ret = aio_readcb(ctx, testDataFileName, iocb, nullptr);
     EXPECT_EQ(ret, 0);
 
     vec.push_back(iocb);
@@ -338,7 +371,7 @@ TEST_F(NetworkXioServerTest, MultiAsyncRead) {
     iocb->aio_nbytes = readSz;
 
     iocb_vec.push_back(iocb);
-    filename_vec.push_back("abcd");
+    filename_vec.push_back(testDataFileName);
   }
 
   auto ret = aio_readv(ctx, filename_vec, iocb_vec);
