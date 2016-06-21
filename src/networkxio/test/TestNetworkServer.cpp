@@ -20,6 +20,7 @@ but WITHOUT ANY WARRANTY of any kind.
 #include <gIOExecFile.h>
 #include <gMempool.h>
 #include <gobjfs_client.h>
+#include <gobjfs_server.h>
 #include <networkxio/NetworkXioServer.h>
 
 #include <glog/logging.h>
@@ -41,7 +42,7 @@ public:
 
   char configFile[512];
 
-  NetworkXioServer* xs;
+  gobjfs_xio_server_handle xs;
   std::future<void> fut;
   int portNumber{21321};
 
@@ -72,27 +73,17 @@ public:
 
     EXPECT_EQ(writeSz, strlen(configContents));
 
-    std::string url = "tcp://127.0.0.1:" + std::to_string(portNumber);
     bool newInstance = true;
+    xs = gobjfs_xio_server_start("tcp", "127.0.0.1", portNumber, configFile, newInstance);
+    EXPECT_NE(xs, nullptr);
   
-    xs = new NetworkXioServer(url, configFile, newInstance);
-  
-    std::promise<void> pr;
-    auto lock_fut = pr.get_future();
-  
-    fut = std::async(std::launch::async,
-        [&] () { xs->run(pr); });
-  
-    lock_fut.wait();
-
   }
 
   virtual void TearDown() override {
 
     int ret = 0;
-    xs->shutdown();
-
-    fut.wait();
+    ret = gobjfs_xio_server_stop(xs);
+    EXPECT_EQ(ret, 0);
 
     {
       ret = close(fd);

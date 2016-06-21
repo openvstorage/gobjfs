@@ -21,6 +21,7 @@ SET_TARGET_PROPERTIES(gobjfs_client
 SET(SERVER_SOURCES 
   NetworkXioIOHandler.cpp
   NetworkXioServer.cpp
+  gobjfs_server.cpp
   )
 
 SET(LIBRARY_LIST
