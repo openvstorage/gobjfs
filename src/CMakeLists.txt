@@ -2,6 +2,7 @@ SET(SOURCES
   Mempool.cpp
   gMempool.cpp
   gparse.cpp
+  gcommon.cpp
   IOExecutor.cpp
   FilerJob.cpp
   gIOExecFile.cpp

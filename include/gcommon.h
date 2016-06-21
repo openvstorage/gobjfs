@@ -18,8 +18,7 @@ but WITHOUT ANY WARRANTY of any kind.
 
 #pragma once
 
-#include <cstddef> // std::size_t
-#include <cstdint> // uint32_t
+#include <stdint.h> // uint32_t
 
 typedef int gOptions; /* Accepts O_RDWR, O_RDONLY or O_WRONLY */
 typedef uint32_t gVersionID;
@@ -35,11 +34,3 @@ struct gIOStatus {
   int32_t reserved; // for consistent padding
 } __attribute__((packed, aligned(8)));
 
-static_assert(reinterpret_cast<std::size_t>(&(((gIOStatus *)0)->errorCode)) ==
-                  8,
-              "Error code not at 8 byte offset - Programs reading the "
-              "gIOStatus from event pipe may need to be changed");
-
-static_assert(sizeof(gIOStatus) == 16, "gIOstatus is no longer 16 bytes - "
-                                       "Programs reading the gIOStatus from "
-                                       "event pipe may need to be changed");

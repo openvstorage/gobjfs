@@ -21,8 +21,6 @@ but WITHOUT ANY WARRANTY of any kind.
 #include <gcommon.h>
 #include <stdint.h> // uint64
 #include <stdlib.h>
-#include <vector>
-#include <string>
 #include <sys/uio.h>
 
 struct IOExecServiceInt;

@@ -167,7 +167,7 @@ done:
 }
 
 static int
-_ovs_submit_aio_request(client_ctx_ptr ctx,
+_submit_aio_request(client_ctx_ptr ctx,
                         const std::string& filename,
                         giocb *giocbp,
                         notifier_sptr& cvp,
@@ -620,7 +620,7 @@ aio_read(client_ctx_ptr ctx,
 {
   auto cv = std::make_shared<notifier>();
 
-  return _ovs_submit_aio_request(ctx,
+  return _submit_aio_request(ctx,
                                    filename,
                                    giocbp,
                                    cv,
@@ -647,7 +647,7 @@ aio_readv(client_ctx_ptr ctx,
 
   size_t idx = 0;
   for (auto elem : giocbp_vec) {
-    err |= _ovs_submit_aio_request(ctx,
+    err |= _submit_aio_request(ctx,
                                    filename_vec[idx++],
                                    elem,
                                    cv,
@@ -666,7 +666,7 @@ aio_readcb(client_ctx_ptr ctx,
 {
   auto cv = std::make_shared<notifier>();
 
-  return _ovs_submit_aio_request(ctx,
+  return _submit_aio_request(ctx,
                                    filename,
                                    giocbp,
                                    cv,

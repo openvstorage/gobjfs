@@ -223,7 +223,7 @@ TEST_F(NetworkXioServerTest, FileDoesntExist) {
     auto sz = gobjfs::xio::read(ctx, testDataFileName, rbuf, readSz, i * BufferSize);
 
     // reads will fail since file doesnt exist
-    EXPECT_LT(sz, 0);
+    EXPECT_LT(sz, -1);
 
     free(rbuf);
   }
