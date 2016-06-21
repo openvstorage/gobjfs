@@ -32,7 +32,7 @@ but WITHOUT ANY WARRANTY of any kind.
 
 using namespace gobjfs::xio;
 
-static int fileTranslator(const char* old_name, char* new_name);
+static int fileTranslator(const char* old_name, size_t old_length, char* new_name);
 
 class IOExecFileTest : public testing::Test {
   
@@ -127,10 +127,10 @@ const std::string IOExecFileTest::testDataFileFullName =
   std::string(IOExecFileTest::testDataFilePath) + 
   std::string(IOExecFileTest::testDataFileName);
 
-int fileTranslator(const char* old_name, char* new_name)
+int fileTranslator(const char* old_name, size_t old_length, char* new_name)
 {
   strcpy(new_name, IOExecFileTest::testDataFilePath.c_str());
-  strcat(new_name, old_name);
+  strncat(new_name, old_name, old_length);
   return 0;
 }
 

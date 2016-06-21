@@ -76,7 +76,7 @@ void gIOStatusBatchFree(gIOStatusBatch *ptr);
 // ========================================
 //
 
-typedef int (*FileTranslatorFunc)(const char* old_name, char* new_name);
+typedef int (*FileTranslatorFunc)(const char* old_name, size_t old_length, char* new_name);
 
 IOExecServiceHandle IOExecFileServiceInit(const char *pConfigFileName,
   FileTranslatorFunc fileTranslatorFunc,

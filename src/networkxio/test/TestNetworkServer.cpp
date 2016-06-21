@@ -33,7 +33,7 @@ but WITHOUT ANY WARRANTY of any kind.
 
 using namespace gobjfs::xio;
 
-static int fileTranslatorFunc(const char* old_name, char* new_name);
+static int fileTranslatorFunc(const char* old_name, size_t old_length, char* new_name);
 
 class NetworkXioServerTest : public testing::Test {
   
@@ -156,10 +156,10 @@ const std::string NetworkXioServerTest::testDataFileFullName =
   std::string(NetworkXioServerTest::testDataFilePath) + 
   std::string(NetworkXioServerTest::testDataFileName);
 
-int fileTranslatorFunc(const char* old_name, char* new_name)
+int fileTranslatorFunc(const char* old_name, size_t old_length, char* new_name)
 {
   strcpy(new_name, NetworkXioServerTest::testDataFilePath.c_str());
-  strcat(new_name, old_name);
+  strncat(new_name, old_name, old_length);
   return 0;
 }
 
@@ -191,6 +191,8 @@ TEST_F(NetworkXioServerTest, MultipleClients) {
 }
 
 TEST_F(NetworkXioServerTest, FileDoesntExist) {
+
+  removeDataFile();
 
   static constexpr size_t BufferSize = 512;
   // shorten read size to test unaligned reads

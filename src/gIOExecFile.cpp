@@ -300,7 +300,7 @@ IOExecFileHandle IOExecFileOpen(IOExecServiceHandle serviceHandle,
 
   char absFileName[PATH_MAX];
   if (serviceHandle->fileTranslatorFunc) {
-    serviceHandle->fileTranslatorFunc(fileName, absFileName);
+    serviceHandle->fileTranslatorFunc(fileName, strlen(fileName), absFileName);
   } else {
     strncpy(absFileName, fileName, PATH_MAX - 1);
   }
@@ -443,7 +443,7 @@ int32_t IOExecFileDeleteSync(IOExecServiceHandle serviceHandle,
 
   char absFileName[PATH_MAX];
   if (serviceHandle->fileTranslatorFunc) {
-    serviceHandle->fileTranslatorFunc(fileName, absFileName);
+    serviceHandle->fileTranslatorFunc(fileName, strlen(fileName), absFileName);
   } else {
     strncpy(absFileName, fileName, PATH_MAX - 1);
   }
@@ -472,7 +472,7 @@ int32_t IOExecFileDelete(IOExecServiceHandle serviceHandle,
 
   char absFileName[PATH_MAX];
   if (serviceHandle->fileTranslatorFunc) {
-    serviceHandle->fileTranslatorFunc(fileName, absFileName);
+    serviceHandle->fileTranslatorFunc(fileName, strlen(fileName), absFileName);
   } else {
     strncpy(absFileName, fileName, PATH_MAX - 1);
   }
