@@ -175,6 +175,7 @@ EXTERNC {
   // @param handle returned from "service_init"
   // @param absolute path of file to open
   // @param file flags as in unix (O_RDWR, O_CREAT, etc)
+  //    for non-aligned write(not 512 aligned), user must add O_DIRECT
   // @return handle to opened file, else NULL pointer on error
   handle_t gobjfs_ioexecfile_file_open(service_handle_t, const char *, int);
 
