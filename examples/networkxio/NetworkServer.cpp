@@ -61,7 +61,7 @@ int main(int argc, char *argv[]) {
 
     FileTranslatorFunc fileTranslatorFunc{nullptr};
 
-    NetworkXioServer *xs = new NetworkXioServer(Url, configFileName, fileTranslatorFunc, newInstance);
+    NetworkXioServer *xs = new NetworkXioServer(Url, 2, 200, fileTranslatorFunc, newInstance);
 
     xs->run(_pr);
 }

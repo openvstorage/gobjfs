@@ -73,7 +73,7 @@ public:
     EXPECT_EQ(writeSz, strlen(configContents));
 
     bool newInstance = true;
-    xs = gobjfs_xio_server_start("tcp", "127.0.0.1", portNumber, configFile, fileTranslatorFunc, newInstance);
+    xs = gobjfs_xio_server_start("tcp", "127.0.0.1", portNumber, 1, 200, fileTranslatorFunc, newInstance);
     EXPECT_NE(xs, nullptr);
   
   }
@@ -138,10 +138,11 @@ public:
 
   }
 
-  void removeDataFile() {
+  void removeDataFile(bool check = true) {
 
     int ret = ::unlink(testDataFileFullName.c_str());
-    ASSERT_EQ(ret, 0);
+    if (check) 
+      ASSERT_EQ(ret, 0);
 
   }
 
@@ -192,7 +193,7 @@ TEST_F(NetworkXioServerTest, MultipleClients) {
 
 TEST_F(NetworkXioServerTest, FileDoesntExist) {
 
-  removeDataFile();
+  removeDataFile(false); // file may not exist; dont fail
 
   static constexpr size_t BufferSize = 512;
   // shorten read size to test unaligned reads
@@ -223,7 +224,7 @@ TEST_F(NetworkXioServerTest, FileDoesntExist) {
     auto sz = gobjfs::xio::read(ctx, testDataFileName, rbuf, readSz, i * BufferSize);
 
     // reads will fail since file doesnt exist
-    EXPECT_LT(sz, -1);
+    EXPECT_LT(sz, 0);
 
     free(rbuf);
   }

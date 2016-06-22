@@ -44,7 +44,8 @@ gobjfs_xio_server_handle gobjfs_xio_server_start(
   const char* transport, 
   const char* host, 
   int port,
-  const char* config_file,
+  int32_t number_cores,
+  int32_t queue_depth,
   FileTranslatorFunc file_translator_func,
   bool is_new_instance)
 {
@@ -52,7 +53,8 @@ gobjfs_xio_server_handle gobjfs_xio_server_start(
     host + std::string(":") + std::to_string(port);
 
   NetworkXioServer* xs = new NetworkXioServer(uri, 
-    config_file, 
+    number_cores,
+    queue_depth,
     file_translator_func,
     is_new_instance);
 

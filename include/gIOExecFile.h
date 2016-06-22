@@ -80,6 +80,11 @@ IOExecServiceHandle IOExecFileServiceInit(const char *pConfigFileName,
   FileTranslatorFunc fileTranslatorFunc,
   bool createFlag);
 
+IOExecServiceHandle IOExecFileServiceInit(int32_t numCoresForIO,
+  int32_t queueDepthForIO,
+  FileTranslatorFunc fileTranslatorFunc,
+  bool createFlag);
+
 int32_t IOExecFileServiceDestroy(IOExecServiceHandle);
 
 IOExecFileHandle IOExecFileOpen(IOExecServiceHandle serviceHandle,

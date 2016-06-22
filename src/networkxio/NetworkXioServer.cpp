@@ -138,12 +138,14 @@ static_evfd_stop_loop(int fd, int events, void *data)
 
 NetworkXioServer::NetworkXioServer(
       const std::string& uri,
-      const std::string& configFileName,
+      int32_t numCoresForIO,
+      int32_t queueDepthForIO,
       FileTranslatorFunc fileTranslatorFunc,
       bool newInstance,
       size_t snd_rcv_queue_depth)
     : uri_(uri)
-    , configFileName_(configFileName)
+    , numCoresForIO_(numCoresForIO)
+    , queueDepthForIO_(queueDepthForIO)
     , fileTranslatorFunc_(fileTranslatorFunc)
     , newInstance_(newInstance)
     , stopping(false)
@@ -179,7 +181,11 @@ NetworkXioServer::run(std::promise<void> &promise)
 
     XXEnter();
 
-    serviceHandle_ = IOExecFileServiceInit(configFileName_.c_str(), fileTranslatorFunc_, newInstance_);
+    serviceHandle_ = IOExecFileServiceInit(numCoresForIO_, 
+      queueDepthForIO_, 
+      fileTranslatorFunc_, 
+      newInstance_);
+
     if (serviceHandle_ == nullptr) {
         throw std::bad_alloc();
     }

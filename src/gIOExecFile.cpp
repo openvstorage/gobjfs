@@ -134,22 +134,11 @@ int32_t IOExecGetStats(IOExecServiceHandle serviceHandle, char* buf,
   return curOffset;
 }
 
-IOExecServiceHandle IOExecFileServiceInit(const char *pConfigFileName, 
-  FileTranslatorFunc fileTranslatorFunc,
-  bool createFlag) {
-
-  int ret = 0;
-
-  IOExecServiceHandle handle = new IOExecServiceInt;
-  handle->fileTranslatorFunc = fileTranslatorFunc;
+static int32_t doCommonInit(IOExecServiceHandle handle)
+{
+  int32_t ret = 0;
 
   do {
-    if (ParseConfigFile(pConfigFileName, handle->ioConfig) < 0) {
-      LOG(ERROR) << "Invalid Config File=" << pConfigFileName;
-      ret = -EINVAL;
-      break;
-    }
-
     if (handle->ioConfig.cpuCores_.size()) {
       for (auto &elem : handle->ioConfig.cpuCores_) {
         const std::string name = "ioexecfile" + std::to_string(elem);
@@ -165,24 +154,85 @@ IOExecServiceHandle IOExecFileServiceInit(const char *pConfigFileName,
         }
       }
     } else {
-      LOG(ERROR) << "config file=" << pConfigFileName
-                 << " has zero cpuCores allocated."
-                 << "  This can happen if your binary is linked to incorrect boost version."
-                 << "  Is your binary linked to boost_program_options version="
-                 << BOOST_LIB_VERSION;
-
       ret = -EINVAL;
     }
   } while (0);
+
+  google::FlushLogFiles(0);
+  return ret;
+}
+
+IOExecServiceHandle IOExecFileServiceInit(int32_t numCoresForIO,
+  int32_t queueDepthForIO,
+  FileTranslatorFunc fileTranslatorFunc,
+  bool createFlag) {
+
+  int ret = 0;
+
+  if ((numCoresForIO == 0) || (queueDepthForIO == 0)) {
+    LOG(ERROR) << "parameters need to be non-zero "
+      << " numCores=" << numCoresForIO
+      << " queueDepth=" << queueDepthForIO;
+    return nullptr;
+  }
+
+  IOExecServiceHandle handle = new IOExecServiceInt;
+  handle->fileTranslatorFunc = fileTranslatorFunc;
+
+  for (int32_t idx = 0; idx < numCoresForIO; idx ++)
+  {
+    handle->ioConfig.cpuCores_.push_back(idx);
+  }
+  handle->ioConfig.queueDepth_ = queueDepthForIO;
+
+  ret = doCommonInit(handle);
 
   if (ret != 0) {
     delete handle;
     handle = nullptr;
   }
 
-  google::FlushLogFiles(0);
   return handle;
 }
+
+IOExecServiceHandle IOExecFileServiceInit(const char *pConfigFileName, 
+  FileTranslatorFunc fileTranslatorFunc,
+  bool createFlag) {
+
+  int32_t ret = 0;
+
+  IOExecServiceHandle handle = new IOExecServiceInt;
+  handle->fileTranslatorFunc = fileTranslatorFunc;
+
+  do {
+    if (ParseConfigFile(pConfigFileName, handle->ioConfig) < 0) {
+      LOG(ERROR) << "Invalid Config File=" << pConfigFileName;
+      ret = -EINVAL;
+      break;
+    }
+
+    if (handle->ioConfig.cpuCores_.size() == 0) {
+      LOG(ERROR) << "config file=" << pConfigFileName
+        << " has zero cpuCores allocated."
+        << "  This can happen if your binary is linked to incorrect boost version."
+        << "  Is your binary linked to boost_program_options version="
+        << BOOST_LIB_VERSION;
+      ret = -EINVAL;
+      break;
+    }
+
+    ret = doCommonInit(handle);
+
+  } while (0);
+
+  if (ret != 0) {
+    delete handle;
+    handle = nullptr;
+  } 
+  
+  return handle;
+}
+
 
 int32_t IOExecFileServiceDestroy(IOExecServiceHandle serviceHandle) {
   if (!serviceHandle) {

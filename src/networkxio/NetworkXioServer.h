@@ -39,7 +39,8 @@ class NetworkXioServer
 public:
 
     NetworkXioServer(const std::string& uri,
-                    const std::string& configFileName,
+                    int32_t numCoresForIO,
+                    int32_t queueDepthForIO,
                     FileTranslatorFunc fileTranslatorFunc,
                     bool newInstance,
                     size_t snd_rcv_queue_depth = 256);
@@ -100,9 +101,11 @@ private:
     std::string uri_;
     std::string configFileName_; 
 
+    int32_t numCoresForIO_{0};
+    int32_t queueDepthForIO_{0};
+
     FileTranslatorFunc fileTranslatorFunc_{nullptr};
 
-    // if true, removes all files from mountpoints
     bool newInstance_;
 
     // owned by NetworkXioServer
