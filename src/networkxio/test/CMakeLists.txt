@@ -2,6 +2,7 @@
 ADD_EXECUTABLE(XioTester
   TestNetworkServer.cpp
   TestMain.cpp
+  TestCompileByC.c
   )
 
 TARGET_LINK_LIBRARIES(XioTester
