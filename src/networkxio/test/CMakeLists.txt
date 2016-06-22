@@ -1,8 +1,9 @@
 
 ADD_EXECUTABLE(XioTester
   TestNetworkServer.cpp
-  TestMain.cpp
+  TestMultipleServers.cpp
   TestCompileByC.c
+  TestMain.cpp
   )
 
 TARGET_LINK_LIBRARIES(XioTester
