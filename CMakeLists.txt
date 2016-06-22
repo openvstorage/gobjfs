@@ -22,13 +22,13 @@ set(CMAKE_VERBOSE_MAKEFILE on)
 # Specify command-line options
 # OPTION(<option_variable> "help string describing option" [initial_value])
 
-set (CMAKE_BUILD_TYPE Release)
 # CMAKE_BUILD_TYPE can be Release/Debug/RelWithDebInfo/MinSizeRel
 # For Sanitizer builds, set it to ASan/MSan/TSan.  
 # See the CMake directory for sanitizer cmake files
 if (NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
-  message(STATUS "No build type selected, default to Debug")
-  set(CMAKE_BUILD_TYPE "Debug")
+  message(STATUS "No build type selected, default to Release")
+  message(STATUS "To change pass -DCMAKE_BUILD_TYPE on command line")
+  set(CMAKE_BUILD_TYPE "Release")
 endif()
 
 # turns on colors in generated Makefile
