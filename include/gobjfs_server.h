@@ -17,36 +17,32 @@ but WITHOUT ANY WARRANTY of any kind.
 */
 #pragma once
 
+#include <stdbool.h>
 #include <pthread.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
 #include <sys/types.h>
 
-#include <gIOExecFile.h>
+//#include <gIOExecFile.h>
 
+typedef void* gobjfs_xio_server_handle;
+typedef int (* FileTranslatorFunc)(const char*, size_t, char*);
 // C API
 #ifdef __cplusplus
-#define EXTERNC extern "C"
-#else
-#define EXTERNC
+extern "C" {
 #endif
-
-struct gobjfs_xio_server_int;
-typedef gobjfs_xio_server_int* gobjfs_xio_server_handle;
-
-EXTERNC {
 
 // @param transport : "tcp" or "rdma"
 // @param host : Host string FQDN or IP address
 // @param port : TCP/RDMA port
 // @param number_cores : CPU cores on which to start IOExecutor
-// @param queue_depth : kernel queue depth to allocate for async io 
+// @param queue_depth : kernel queue depth to allocate for async io
 // @param is_new_instance : cleans up old directories
 // @return server_handle OR nullptr
 gobjfs_xio_server_handle gobjfs_xio_server_start(
-  const char* transport, 
-  const char* host, 
+  const char* transport,
+  const char* host,
   int port,
   int32_t number_cores,
   int32_t queue_depth,
@@ -58,4 +54,6 @@ gobjfs_xio_server_handle gobjfs_xio_server_start(
 int gobjfs_xio_server_stop(
   gobjfs_xio_server_handle server_handle);
 
+#ifdef __cplusplus
 }
+#endif

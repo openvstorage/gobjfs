@@ -41,18 +41,18 @@ struct gobjfs_xio_server_int
 };
 
 gobjfs_xio_server_handle gobjfs_xio_server_start(
-  const char* transport, 
-  const char* host, 
+  const char* transport,
+  const char* host,
   int port,
   int32_t number_cores,
   int32_t queue_depth,
   FileTranslatorFunc file_translator_func,
   bool is_new_instance)
 {
-  const std::string uri = transport + std::string("://") + 
+  const std::string uri = transport + std::string("://") +
     host + std::string(":") + std::to_string(port);
 
-  NetworkXioServer* xs = new NetworkXioServer(uri, 
+  NetworkXioServer* xs = new NetworkXioServer(uri,
     number_cores,
     queue_depth,
     file_translator_func,
@@ -61,9 +61,9 @@ gobjfs_xio_server_handle gobjfs_xio_server_start(
   std::promise<void> pr;
   auto init_future = pr.get_future();
 
-  auto s = new gobjfs_xio_server_int(xs);
+  gobjfs_xio_server_int* s = new gobjfs_xio_server_int(xs);
 
-  s->future = std::async(std::launch::async, 
+  s->future = std::async(std::launch::async,
     [&] () { xs->run(pr); });
 
   init_future.wait();
@@ -74,11 +74,12 @@ gobjfs_xio_server_handle gobjfs_xio_server_start(
 int gobjfs_xio_server_stop(
   gobjfs_xio_server_handle server_handle)
 {
-  server_handle->server->shutdown();
+  gobjfs_xio_server_int* handle = (gobjfs_xio_server_int*) server_handle;
+  handle -> server->shutdown();
 
-  server_handle->future.wait();
+  handle -> future.wait();
 
-  delete server_handle;
+  delete handle;
 
   return 0;
 }
