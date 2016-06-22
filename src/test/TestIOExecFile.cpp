@@ -77,7 +77,8 @@ static void run_verifyIO() {
   auto serviceHandle = IOExecFileServiceInit("../../../src/gioexecfile.conf", nullptr, true);
 
   IOExecFileHandle handle;
-  handle = IOExecFileOpen(serviceHandle, "/tmp/abc", O_RDWR | O_CREAT);
+  std::string fileName = "/tmp/abc";
+  handle = IOExecFileOpen(serviceHandle, fileName.c_str(), fileName.size(), O_RDWR | O_CREAT);
   if (handle == nullptr) {
     LOG(ERROR) << "IOExecFileOpen Failed";
     return;

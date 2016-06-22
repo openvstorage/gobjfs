@@ -285,7 +285,7 @@ static constexpr int XIO_COMPLETION_DEFAULT_MAX_EVENTS = 100;
             frag.size = size;
             frag.completionId = reinterpret_cast<uint64_t>(req);
 
-            ret = IOExecFileRead(serviceHandle_, filename.c_str(), batch, eventHandle_);
+            ret = IOExecFileRead(serviceHandle_, filename.c_str(), filename.size(), batch, eventHandle_);
 
             if (ret != 0) {
                 GLOG_ERROR("IOExecFileRead failed with error " << ret);

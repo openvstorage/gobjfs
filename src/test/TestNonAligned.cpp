@@ -142,8 +142,10 @@ TEST_F(IOExecFileTest, NonAlignedWriteWithoutDirectIO) {
 
     // write the file
     {
-      auto fileHandle = IOExecFileOpen(serviceHandle, testDataFileName.c_str(),
-         O_CREAT | O_WRONLY);
+      auto fileHandle = IOExecFileOpen(serviceHandle, 
+        testDataFileName.c_str(),
+        testDataFileName.size(),
+        O_CREAT | O_WRONLY);
 
       auto batch = gIOBatchAlloc(1);
       gIOExecFragment& frag = batch->array[0];
@@ -170,8 +172,10 @@ TEST_F(IOExecFileTest, NonAlignedWriteWithoutDirectIO) {
 
     // read and verify buffer
     {
-      auto fileHandle = IOExecFileOpen(serviceHandle, testDataFileName.c_str(),
-         O_DIRECT | O_CREAT | O_RDONLY);
+      auto fileHandle = IOExecFileOpen(serviceHandle, 
+        testDataFileName.c_str(),
+        testDataFileName.size(),
+        O_DIRECT | O_CREAT | O_RDONLY);
 
       auto batch = gIOBatchAlloc(1);
       gIOExecFragment& frag = batch->array[0];
@@ -207,8 +211,10 @@ TEST_F(IOExecFileTest, NonAlignedWriteWithoutDirectIO) {
 // Nonaligned write fails with files opened with O_DIRECT 
 TEST_F(IOExecFileTest, NonAlignedWriteWithDirectIO) {
 
-    auto fileHandle = IOExecFileOpen(serviceHandle, testDataFileName.c_str(),
-        O_DIRECT | O_CREAT | O_WRONLY);
+    auto fileHandle = IOExecFileOpen(serviceHandle, 
+      testDataFileName.c_str(),
+      testDataFileName.size(),
+      O_DIRECT | O_CREAT | O_WRONLY);
 
     auto batch = gIOBatchAlloc(1);
     gIOExecFragment& frag = batch->array[0];

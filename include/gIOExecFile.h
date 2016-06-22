@@ -88,7 +88,9 @@ IOExecServiceHandle IOExecFileServiceInit(int32_t numCoresForIO,
 int32_t IOExecFileServiceDestroy(IOExecServiceHandle);
 
 IOExecFileHandle IOExecFileOpen(IOExecServiceHandle serviceHandle,
-                                const char *filename, int32_t flags);
+  const char *filename, 
+  size_t fileNameLength, 
+  int32_t flags);
 
 int32_t IOExecFileClose(IOExecFileHandle FileHandle);
 
@@ -125,18 +127,22 @@ int32_t IOExecFileWrite(IOExecFileHandle fileHandle, const gIOBatch *pIOBatch,
  * @param fd the pipe on which callback notification should be sent
  *           when job is completed
  */
-int32_t IOExecFileRead(IOExecFileHandle fileHandle, const gIOBatch *pIOBatch,
-                       IOExecEventFdHandle eventFdHandle);
+int32_t IOExecFileRead(IOExecFileHandle fileHandle, 
+  const gIOBatch *pIOBatch,
+  IOExecEventFdHandle eventFdHandle);
 
 /**
  * @param serviceHandle returned from ServiceInit
- * @param fileName absolute path of file to read
+ * @param fileName name of file to read
+ * @param fileNameLength length of the file (since it may contain null
+ *   characters)
  * @param pIOBatch batch containing offset, size and buffer to read
  * @param fd the pipe on which callback notification should be sent
  *           when job is completed
  */
 int32_t IOExecFileRead(IOExecServiceHandle serviceHandle, 
   const char* fileName, 
+  size_t fileNameLength,
   const gIOBatch *pIOBatch,
   IOExecEventFdHandle eventFdHandle);
 
@@ -181,11 +187,12 @@ EXTERNC {
   int32_t gobjfs_ioexecfile_service_destroy(service_handle_t);
 
   // @param handle returned from "service_init"
-  // @param absolute path of file to open
+  // @param name of the file to open
+  // @param length of the file 
   // @param file flags as in unix (O_RDWR, O_CREAT, etc)
   //    for non-aligned write(not 512 aligned), user must add O_DIRECT
   // @return handle to opened file, else NULL pointer on error
-  handle_t gobjfs_ioexecfile_file_open(service_handle_t, const char *, int);
+  handle_t gobjfs_ioexecfile_file_open(service_handle_t, const char *, size_t, int);
 
   // @param handle returned by "file_open"
   // @param batch allocated by "batch_alloc"

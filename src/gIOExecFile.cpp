@@ -339,7 +339,9 @@ struct IOExecFileInt {
 };
 
 IOExecFileHandle IOExecFileOpen(IOExecServiceHandle serviceHandle,
-                                const char *fileName, int32_t flags) {
+                                const char *fileName, 
+                                size_t fileNameLength, 
+                                int32_t flags) {
 
   IOExecFileHandle newHandle{nullptr};
 
@@ -350,9 +352,9 @@ IOExecFileHandle IOExecFileOpen(IOExecServiceHandle serviceHandle,
 
   char absFileName[PATH_MAX];
   if (serviceHandle->fileTranslatorFunc) {
-    serviceHandle->fileTranslatorFunc(fileName, strlen(fileName), absFileName);
+    serviceHandle->fileTranslatorFunc(fileName, fileNameLength, absFileName);
   } else {
-    strncpy(absFileName, fileName, PATH_MAX - 1);
+    strncpy(absFileName, fileName, fileNameLength);
   }
 
   // user must add O_DIRECT for aligned IO
@@ -468,10 +470,11 @@ int32_t IOExecFileRead(IOExecFileHandle fileHandle, const gIOBatch *batch,
 
 int32_t IOExecFileRead(IOExecServiceHandle serviceHandle, 
   const char* fileName, 
+  size_t fileNameLength,
   const gIOBatch *batch,
   IOExecEventFdHandle eventFdHandle) {
 
-  auto fileHandle = IOExecFileOpen(serviceHandle, fileName, O_RDONLY);
+  auto fileHandle = IOExecFileOpen(serviceHandle, fileName, fileNameLength, O_RDONLY);
   if (fileHandle == nullptr) {
     return -EIO;
   }
@@ -552,8 +555,10 @@ EXTERNC {
   }
 
   handle_t gobjfs_ioexecfile_file_open(service_handle_t service_handle,
-                                       const char *name, int options) {
-    IOExecFileHandle h = IOExecFileOpen(service_handle, name, options);
+                                       const char *name, 
+                                       size_t name_length, 
+                                       int options) {
+    IOExecFileHandle h = IOExecFileOpen(service_handle, name, name_length, options);
     return (handle_t)h;
   }
 

@@ -42,7 +42,8 @@ TEST(IOExecFile, NoInitDone) {
   auto fd = IOExecEventFdGetReadFd(evHandle);
   EXPECT_EQ(fd, gobjfs::os::FD_INVALID);
 
-  auto handle = IOExecFileOpen(serviceHandle, "/tmp/abc", O_RDWR | O_CREAT);
+  std::string fileName = "/tmp/abc";
+  auto handle = IOExecFileOpen(serviceHandle, fileName.c_str(), fileName.size(), O_RDWR | O_CREAT);
   EXPECT_EQ(handle, nullptr);
 
   ret = IOExecFileTruncate(handle, 512);

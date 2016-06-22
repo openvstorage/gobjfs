@@ -57,24 +57,24 @@ link_directories(${PROJECT_SOURCE_DIR}/thirdparty/xio/lib)
 set(CUSTOM_LIBRARY_PATH ${PROJECT_SOURCE_DIR}/lib)
 
 # Do not set the Compiler in this file
-# Instead, set the env variables CC and C++
+# Instead, set the env variables CC and CXX
 # See https://cmake.org/Wiki/CMake_FAQ#How_do_I_use_a_different_compiler.3F
 # SET(CMAKE_CXX_COMPILER "/usr/bin/g++")
 # SET(CMAKE_C_COMPILER "/usr/bin/gcc")
 
 set (CXX_STANDARD "c++11")
-set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=${CXX_STANDARD}")
+set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=${CXX_STANDARD} -Wnon-virtual-dtor -Woverloaded-virtual")
 
+# these below apply to C and C++ files
+# separate out the C++ options into CMAKE_CXX_FLAGS
 add_compile_options(
   -Wall
   -Wextra
   -Wstrict-aliasing
   -Wno-unused-parameter
   -Wno-missing-field-initializers
-  -Wnon-virtual-dtor
   -Wchar-subscripts
   -Wpointer-arith
-  -Woverloaded-virtual
   -Wformat
   -Wformat-security
   -Werror=format-security

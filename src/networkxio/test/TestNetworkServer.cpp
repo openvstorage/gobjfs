@@ -107,7 +107,9 @@ public:
     auto readFd = IOExecEventFdGetReadFd(evHandle);
     EXPECT_NE(fd, gobjfs::os::FD_INVALID);
 
-    auto fileHandle = IOExecFileOpen(serviceHandle, testDataFileName.c_str(),
+    auto fileHandle = IOExecFileOpen(serviceHandle, 
+        testDataFileName.c_str(),
+        testDataFileName.size(),
         O_CREAT | O_WRONLY);
 
     auto batch = gIOBatchAlloc(1);
