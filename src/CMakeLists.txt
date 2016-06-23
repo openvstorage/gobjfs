@@ -1,4 +1,4 @@
-SET(SOURCES
+set(SOURCES
   Mempool.cpp
   gMempool.cpp
   gparse.cpp
@@ -13,18 +13,27 @@ SET(SOURCES
   util/TimerNotifier.cpp
   )
 
-SET(LIBRARY_LIST
+set(LIBRARY_LIST
   aio
 	boost_thread boost_system boost_program_options
 	glog gflags unwind
 	bz2 pthread rt z)
 
-ADD_LIBRARY(gobjfs SHARED ${SOURCES})
-TARGET_LINK_LIBRARIES(gobjfs ${LIBRARY_LIST})
+add_library(gobjfs OBJECT ${SOURCES})
+set_property(TARGET ${gobjfs} PROPERTY POSITION_INDEPENDENT_CODE 1)
+
+add_library(gobjfs_shared SHARED $<TARGET_OBJECTS:gobjfs>)
+set_target_properties(gobjfs_shared PROPERTIES OUTPUT_NAME gobjfs)
+target_link_libraries(gobjfs_shared ${LIBRARY_LIST})
+
+add_library(gobjfs_static STATIC $<TARGET_OBJECTS:gobjfs>)
+set_target_properties(gobjfs_static PROPERTIES OUTPUT_NAME gobjfs)
+target_link_libraries(gobjfs_static ${LIBRARY_LIST})
 
 # install the library under install_dir/lib
-install(TARGETS gobjfs LIBRARY DESTINATION lib)
+install(TARGETS gobjfs_shared LIBRARY DESTINATION lib)
+install(TARGETS gobjfs_static ARCHIVE DESTINATION lib)
 
-ADD_SUBDIRECTORY(util)
-ADD_SUBDIRECTORY(test)
-ADD_SUBDIRECTORY(networkxio)
+add_subdirectory(util)
+add_subdirectory(test)
+add_subdirectory(networkxio)

@@ -7,7 +7,7 @@ ADD_EXECUTABLE(UtilTester
   TestMain.cpp)
 
 TARGET_LINK_LIBRARIES(UtilTester 
-  gobjfs
+  gobjfs_shared
 	boost_thread boost_system boost_program_options
 	glog gtest 
 	pthread rt z)

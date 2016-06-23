@@ -1,12 +1,15 @@
-INCLUDE_DIRECTORIES(${PROJECT_SOURCE_DIR}/thirdparty/msgpack/include)
+include_directories(${PROJECT_SOURCE_DIR}/thirdparty/msgpack/include)
 
-SET(CLIENT_SOURCES 
+###################
+# gobjfs_client 
+###################
+
+set(CLIENT_SOURCES 
   gobjfs_client.cpp
   NetworkXioClient.cpp
   )
 
-SET(LIBRARY_LIST
-    gobjfs_client
+set(LIBRARY_LIST
     xio
     boost_thread 
     glog 
@@ -14,16 +17,35 @@ SET(LIBRARY_LIST
     unwind
 	bz2 pthread rt z)
 
-ADD_LIBRARY(gobjfs_client SHARED ${CLIENT_SOURCES})
+# create shared and static library from same set of sources
+add_library(gobjfs_client OBJECT ${CLIENT_SOURCES})
+set_property(TARGET ${gobjfs_client} PROPERTY POSITION_INDEPENDENT_CODE 1)
 
-SET(SERVER_SOURCES 
+add_library(gobjfs_client_shared SHARED $<TARGET_OBJECTS:gobjfs_client>)
+set_target_properties(gobjfs_client_shared PROPERTIES OUTPUT_NAME gobjfs_client)
+target_link_libraries(gobjfs_client_shared ${LIBRARY_LIST})
+
+add_library(gobjfs_client_static STATIC $<TARGET_OBJECTS:gobjfs_client>)
+set_target_properties(gobjfs_client_static PROPERTIES OUTPUT_NAME gobjfs_client)
+target_link_libraries(gobjfs_client_static ${LIBRARY_LIST})
+
+# install library under install_dir/lib
+install(TARGETS gobjfs_client_shared
+  LIBRARY DESTINATION lib)
+install(TARGETS gobjfs_client_static 
+  ARCHIVE DESTINATION lib)
+
+###################
+# gobjfs_server 
+###################
+
+set(SERVER_SOURCES 
   NetworkXioIOHandler.cpp
   NetworkXioServer.cpp
   gobjfs_server.cpp
   )
 
-SET(LIBRARY_LIST
-    gobjfs_server
+set(LIBRARY_LIST
     aio
     xio
     boost_thread 
@@ -32,10 +54,23 @@ SET(LIBRARY_LIST
     unwind
 	bz2 pthread rt z)
 
-ADD_LIBRARY(gobjfs_server SHARED ${SERVER_SOURCES})
 
-# install both libraries under install_dir/lib
-install(TARGETS gobjfs_client gobjfs_server 
+# create shared and static library from same set of sources
+add_library(gobjfs_server OBJECT ${SERVER_SOURCES})
+set_property(TARGET ${gobjfs_server} PROPERTY POSITION_INDEPENDENT_CODE 1)
+
+add_library(gobjfs_server_shared SHARED $<TARGET_OBJECTS:gobjfs_server>)
+set_target_properties(gobjfs_server_shared PROPERTIES OUTPUT_NAME gobjfs_server)
+target_link_libraries(gobjfs_server_shared ${LIBRARY_LIST})
+
+add_library(gobjfs_server_static STATIC $<TARGET_OBJECTS:gobjfs_server>)
+set_target_properties(gobjfs_server_static PROPERTIES OUTPUT_NAME gobjfs_server)
+target_link_libraries(gobjfs_server_static ${LIBRARY_LIST})
+
+# install library under install_dir/lib
+install(TARGETS gobjfs_server_shared
   LIBRARY DESTINATION lib)
+install(TARGETS gobjfs_server_static 
+  ARCHIVE DESTINATION lib)
 
-ADD_SUBDIRECTORY(test)
+add_subdirectory(test)

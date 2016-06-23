@@ -7,9 +7,9 @@ ADD_EXECUTABLE(XioTester
   )
 
 TARGET_LINK_LIBRARIES(XioTester
-  gobjfs_client
-  gobjfs_server
-  gobjfs
+  gobjfs_client_shared
+  gobjfs_server_shared
+  gobjfs_shared
   xio
   glog gtest
   pthread rt z)

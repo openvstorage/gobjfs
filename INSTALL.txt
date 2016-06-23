@@ -49,6 +49,7 @@ cd -
 
 # To install the libraries and headers in /usr/local
 make install
+# Under the install path, you should see "include" and "lib" directories
 
 # To change the default installation path
 # https://cmake.org/cmake/help/v3.0/variable/CMAKE_INSTALL_PREFIX.html
