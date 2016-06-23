@@ -47,6 +47,15 @@ cd -
 
 #========================
 
+# To install the libraries and headers in /usr/local
+make install
+
+# To change the default installation path
+# https://cmake.org/cmake/help/v3.0/variable/CMAKE_INSTALL_PREFIX.html
+make DESTDIR=/home/less install
+
+#========================
+
 # To run clang static analyzer
 
 sudo apt-add-repository "deb http://llvm.org/apt/trusty/llvm-toolchain-trusty-3.8 main"

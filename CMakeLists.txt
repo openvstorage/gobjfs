@@ -108,6 +108,11 @@ add_subdirectory(src)
 add_subdirectory(benchmark)
 add_subdirectory(examples)
 
+# Install the header files
+install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/include" 
+  DESTINATION "${CMAKE_INSTALL_PREFIX}"
+  FILES_MATCHING_PATTERN "*.h")
+
 # Set compiler options
 # if (CMAKE_COMPILER_IS_GNUCXX)
 #   target_compile_options(<executable>,

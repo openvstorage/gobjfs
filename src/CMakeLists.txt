@@ -19,10 +19,11 @@ SET(LIBRARY_LIST
 	glog gflags unwind
 	bz2 pthread rt z)
 
-
 ADD_LIBRARY(gobjfs SHARED ${SOURCES})
 TARGET_LINK_LIBRARIES(gobjfs ${LIBRARY_LIST})
-SET_TARGET_PROPERTIES(gobjfs PROPERTIES LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/lib)
+
+# install the library under install_dir/lib
+install(TARGETS gobjfs LIBRARY DESTINATION lib)
 
 ADD_SUBDIRECTORY(util)
 ADD_SUBDIRECTORY(test)

@@ -15,8 +15,6 @@ SET(LIBRARY_LIST
 	bz2 pthread rt z)
 
 ADD_LIBRARY(gobjfs_client SHARED ${CLIENT_SOURCES})
-SET_TARGET_PROPERTIES(gobjfs_client 
-  PROPERTIES LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/lib)
 
 SET(SERVER_SOURCES 
   NetworkXioIOHandler.cpp
@@ -35,7 +33,9 @@ SET(LIBRARY_LIST
 	bz2 pthread rt z)
 
 ADD_LIBRARY(gobjfs_server SHARED ${SERVER_SOURCES})
-SET_TARGET_PROPERTIES(gobjfs_server 
-  PROPERTIES LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/lib)
+
+# install both libraries under install_dir/lib
+install(TARGETS gobjfs_client gobjfs_server 
+  LIBRARY DESTINATION lib)
 
 ADD_SUBDIRECTORY(test)
