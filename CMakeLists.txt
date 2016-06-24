@@ -63,10 +63,12 @@ set(CUSTOM_LIBRARY_PATH ${PROJECT_SOURCE_DIR}/lib)
 # SET(CMAKE_C_COMPILER "/usr/bin/gcc")
 
 set (CXX_STANDARD "c++11")
-set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=${CXX_STANDARD} -Wnon-virtual-dtor -Woverloaded-virtual")
+
+# separate out the C++ options which are not used in C 
+# add boost logger macro
+set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=${CXX_STANDARD} -Wnon-virtual-dtor -Woverloaded-virtual -DBOOST_LOG_DYN_LINK")
 
 # these below apply to C and C++ files
-# separate out the C++ options into CMAKE_CXX_FLAGS
 add_compile_options(
   -Wall
   -Wextra

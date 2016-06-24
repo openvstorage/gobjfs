@@ -19,7 +19,7 @@ but WITHOUT ANY WARRANTY of any kind.
 #include "CpuStats.h"
 
 #include <cassert>
-#include <glog/logging.h>
+#include <gobjfs_log.h>
 #include <sstream>
 #include <string.h>       // memcpy
 #include <sys/resource.h> // rusage

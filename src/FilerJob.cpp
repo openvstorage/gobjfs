@@ -1,5 +1,5 @@
 #include <FilerJob.h>
-#include <glog/logging.h>
+#include <gobjfs_log.h>
 #include <unistd.h>
 #include <util/os_utils.h>
 

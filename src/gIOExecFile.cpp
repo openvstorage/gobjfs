@@ -21,7 +21,7 @@ but WITHOUT ANY WARRANTY of any kind.
 #include <Mempool.h>
 #include <gIOExecFile.h>
 #include <gMempool.h>
-#include <glog/logging.h>
+#include <gobjfs_log.h>
 #include <util/os_utils.h>
 #include <gparse.h>
 
@@ -158,7 +158,7 @@ static int32_t doCommonInit(IOExecServiceHandle handle)
     }
   } while (0);
 
-  google::FlushLogFiles(0);
+  //google::FlushLogFiles(0); TODO logging
   return ret;
 }
 

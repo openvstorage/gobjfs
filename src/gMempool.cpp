@@ -18,7 +18,8 @@ but WITHOUT ANY WARRANTY of any kind.
 
 #include <Mempool.h>
 #include <gMempool.h>
-#include <glog/logging.h>
+#include <string.h>
+#include <gobjfs_log.h>
 #include <util/os_utils.h>
 
 using gobjfs::Mempool;

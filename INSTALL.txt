@@ -28,10 +28,13 @@ sudo dpkg -i libxio-dev_1.6-1_amd64.deb
 wget http://apt.openvstorage.org/pool/main/a/accelio/libxio0_1.6-1_amd64.deb
 sudo dpkg -i libxio0_1.6-1_amd64.deb
 
-sudo apt-get install libunwind8-dev
+# not using glog anymore, and its dependent unwind lib
+# sudo apt-get install libunwind8-dev
+# sudo apt-get install -y libgoogle-glog-dev
+
 sudo apt-get install -y libaio1 libaio1-dbg libaio-dev
 sudo apt-get install -y libz-dev libbz2-dev
-sudo apt-get install -y libboost-all-dev libgoogle-glog-dev
+sudo apt-get install -y libboost-all-dev 
 
 # Install google test
 cd ~

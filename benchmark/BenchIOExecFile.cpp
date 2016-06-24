@@ -25,7 +25,7 @@ but WITHOUT ANY WARRANTY of any kind.
 #include <util/Timer.h>
 #include <util/os_utils.h>
 
-#include <glog/logging.h>
+#include <gobjfs_log.h>
 #include <gtest/gtest.h>
 
 #include <boost/program_options.hpp>
@@ -488,7 +488,7 @@ static int wait_for_iocompletion(int epollfd, int efd, ThreadCtx *ctx) {
   if (ctr != ctx->perThreadIO)
     LOG(ERROR) << "received " << ctr << " events";
 
-  google::FlushLogFiles(0);
+  // google::FlushLogFiles(0); TODO logging
   return 0;
 }
 
@@ -718,7 +718,7 @@ static void doRandomReadWrite(ThreadCtx *ctx) {
 }
 
 int main(int argc, char *argv[]) {
-  google::InitGoogleLogging(argv[0]);
+  // google::InitGoogleLogging(argv[0]); TODO logging
 
   config.readConfig("./benchioexec.conf");
 

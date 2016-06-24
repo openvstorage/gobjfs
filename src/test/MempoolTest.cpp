@@ -18,7 +18,7 @@ but WITHOUT ANY WARRANTY of any kind.
 
 #include "../Mempool.h"
 #include <gMempool.h>
-#include <glog/logging.h>
+#include <gobjfs_log.h>
 #include <gtest/gtest.h>
 #include <util/os_utils.h>
 #include <string.h> // strstr

@@ -21,7 +21,7 @@ but WITHOUT ANY WARRANTY of any kind.
 #include <gcommon.h>
 
 #include <errno.h>
-#include <glog/logging.h>
+#include <gobjfs_log.h>
 #include <sstream>     // open
 #include <sys/epoll.h> // epoll_event
 #include <util/os_utils.h>
@@ -879,7 +879,7 @@ void IOExecutor::ProcessCompletions() {
             << ":numCompleted=" << stats_.numCompleted_
             << ":numEventsProcessed=" << stats_.numCompletionEvents_;
 
-  google::FlushLogFiles(0);
+  //google::FlushLogFiles(0); TODO logging
 }
 
 int32_t IOExecutor::ProcessCallbacks(io_event *events, int32_t numEvents) {

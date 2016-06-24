@@ -12,9 +12,7 @@ set(CLIENT_SOURCES
 set(LIBRARY_LIST
     xio
     boost_thread 
-    glog 
-    gflags 
-    unwind
+    boost_log 
 	bz2 pthread rt z)
 
 # create shared and static library from same set of sources

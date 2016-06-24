@@ -10,8 +10,6 @@ TARGET_LINK_LIBRARIES(XioTester
   gobjfs_client_shared
   gobjfs_server_shared
   gobjfs_shared
-  xio
-  glog gtest
-  pthread rt z)
+  gtest)
 
 ADD_TEST(NAME xiotester COMMAND XioTester)

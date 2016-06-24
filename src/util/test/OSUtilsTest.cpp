@@ -1,4 +1,4 @@
-#include <glog/logging.h>
+#include <gobjfs_log.h>
 #include <gtest/gtest.h>
 
 #include <util/os_utils.h>

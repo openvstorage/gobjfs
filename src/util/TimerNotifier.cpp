@@ -19,7 +19,7 @@ but WITHOUT ANY WARRANTY of any kind.
 #include "TimerNotifier.h"
 
 #include <cassert>        // assert
-#include <glog/logging.h> // LOG
+#include <gobjfs_log.h> // LOG
 #include <strings.h>      // bzero
 #include <sys/epoll.h>    // epoll
 #include <sys/timerfd.h>  // timerfd

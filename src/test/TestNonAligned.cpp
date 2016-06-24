@@ -22,7 +22,7 @@ but WITHOUT ANY WARRANTY of any kind.
 #include <gobjfs_client.h>
 #include <networkxio/NetworkXioServer.h>
 
-#include <glog/logging.h>
+#include <gobjfs_log.h>
 #include <gtest/gtest.h>
 
 #include <fcntl.h>

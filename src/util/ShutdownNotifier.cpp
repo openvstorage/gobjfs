@@ -21,8 +21,9 @@ but WITHOUT ANY WARRANTY of any kind.
 #include <sys/epoll.h>   // epoll
 #include <sys/eventfd.h> // epoll
 #include <unistd.h>      // read
+#include <strings.h>      // bzero
 
-#include <glog/logging.h> // LOG
+#include <gobjfs_log.h> // LOG
 
 #include <cassert>
 

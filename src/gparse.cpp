@@ -19,7 +19,7 @@ but WITHOUT ANY WARRANTY of any kind.
 #include <gparse.h>
 
 #include <fstream>
-#include <glog/logging.h>
+#include <gobjfs_log.h>
 #include <boost/program_options.hpp>
 
 #include <boost/version.hpp>

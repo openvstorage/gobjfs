@@ -16,7 +16,7 @@ Open vStorage is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY of any kind.
 */
 
-#include <glog/logging.h>
+#include <gobjfs_log.h>
 #include <util/os_utils.h>
 
 #include <errno.h>        // errno

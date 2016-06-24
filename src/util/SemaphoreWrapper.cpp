@@ -19,7 +19,7 @@ but WITHOUT ANY WARRANTY of any kind.
 #include "SemaphoreWrapper.h"
 #include <cassert>
 #include <errno.h>
-#include <glog/logging.h>
+#include <gobjfs_log.h>
 
 #define USE_SYS_SEMAPHORE
 

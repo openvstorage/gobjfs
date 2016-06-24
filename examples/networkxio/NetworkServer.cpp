@@ -24,7 +24,7 @@ but WITHOUT ANY WARRANTY of any kind.
 #include <fcntl.h>
 #include <unistd.h>
 
-#include <glog/logging.h>
+#include <gobjfs_log.h>
 
 #include <iostream>
 #include <fstream>
@@ -48,7 +48,7 @@ int main(int argc, char *argv[]) {
     string Url = "tcp://127.0.0.1:21321";
 
     // log files are in /tmp
-    google::InitGoogleLogging(argv[0]);
+    // google::InitGoogleLogging(argv[0]); TODO logging
 
     std::string configFileName = "./gioexecfile.conf";
     bool newInstance = true;

@@ -9,7 +9,6 @@ ADD_EXECUTABLE(ObjfsTester
 
 TARGET_LINK_LIBRARIES(ObjfsTester
   gobjfs_shared
-  glog gtest
-  pthread rt z)
+  gtest)
 
 ADD_TEST(NAME objfstest COMMAND ObjfsTester)

@@ -17,7 +17,7 @@ but WITHOUT ANY WARRANTY of any kind.
 */
 
 #include <gIOExecFile.h>
-#include <glog/logging.h>
+#include <gobjfs_log.h>
 #include <gtest/gtest.h>
 #include <gtest/gtest.h>
 

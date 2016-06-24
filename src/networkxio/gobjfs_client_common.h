@@ -23,6 +23,7 @@ but WITHOUT ANY WARRANTY of any kind.
 #include <assert.h>
 #include <string>
 #include <gobjfs_client.h>
+#include <gobjfs_log.h>
 
 #define ATTRIBUTE_UNUSED __attribute__((unused))
 
@@ -44,18 +45,11 @@ but WITHOUT ANY WARRANTY of any kind.
 #endif
 
 
-#define GLOG_ERROR(msg) std::cout  << " " << __FUNCTION__ << " , " << __FILE__ << " ( " << __LINE__ << " ) " << msg << std::endl;
-#define GLOG_FATAL(msg) GLOG_ERROR(msg)
-
-#ifdef DEBUG_TRACE
-#define GLOG_INFO(msg) GLOG_ERROR(msg)
-#define GLOG_DEBUG(msg) GLOG_ERROR(msg)
-#define GLOG_TRACE(msg) GLOG_ERROR(msg)
-#else
-#define GLOG_INFO(msg) 
-#define GLOG_DEBUG(msg) 
-#define GLOG_TRACE(msg) 
-#endif
+#define GLOG_ERROR(msg) LOG_ERROR << msg
+#define GLOG_FATAL(msg) LOG_FATAL << msg
+#define GLOG_INFO(msg) LOG_INFO << msg
+#define GLOG_DEBUG(msg) LOG_DEBUG << msg
+#define GLOG_TRACE(msg) LOG_TRACE << msg
 
 namespace gobjfs { namespace xio {
 

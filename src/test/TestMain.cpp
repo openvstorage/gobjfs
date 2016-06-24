@@ -16,11 +16,11 @@ Open vStorage is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY of any kind.
 */
 
-#include <glog/logging.h>
+#include <gobjfs_log.h>
 #include <gtest/gtest.h>
 
 int main(int argc, char **argv) {
-  google::InitGoogleLogging(argv[0]);
+  //google::InitGoogleLogging(argv[0]); TODO logging 
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 }

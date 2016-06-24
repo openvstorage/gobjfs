@@ -8,8 +8,6 @@ ADD_EXECUTABLE(UtilTester
 
 TARGET_LINK_LIBRARIES(UtilTester 
   gobjfs_shared
-	boost_thread boost_system boost_program_options
-	glog gtest 
-	pthread rt z)
+	gtest)
 
 ADD_TEST(NAME util COMMAND UtilTester)
