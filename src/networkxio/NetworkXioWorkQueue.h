@@ -302,14 +302,14 @@ retry:
             {
               finishNow = req->work.func(&req->work);
             }
-            //wq->finished_lock.lock();
-            // for sync requests, push in finished queue right here
+            // for sync requests or requests which have error
+            // push in finished queue right here
+            // response is sent and request gets freed
             if (finishNow) {
                 wq->lock_ts(); 
                 wq->finished.push(req);
                 wq->unlock_ts(); 
                 GLOG_DEBUG("Pushed request to finishedqueue. ReqType is " << (int) req->op);
-            //wq->finished_lock.unlock();
                 xstop_loop(wq);
             }
         }

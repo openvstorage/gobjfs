@@ -299,11 +299,6 @@ static constexpr int XIO_COMPLETION_DEFAULT_MAX_EVENTS = 100;
             // leading to a "use-after-free" memory error 
             XXDone();
         }
-        /*CATCH_STD_ALL_EWHAT({
-           GLOG_ERROR("read I/O error: " << EWHAT);
-           req->retval = -1;
-           req->errval = EIO;
-        });*/
         catch (...) {
             GLOG_ERROR("failed to read volume " );
             req->retval = -1;
@@ -368,10 +363,8 @@ static constexpr int XIO_COMPLETION_DEFAULT_MAX_EVENTS = 100;
                             i_msg.filename_,
                             i_msg.size(),
                             i_msg.offset());
-                if (ret != 0) {
-                  pWorkQueue = reinterpret_cast<NetworkXioWorkQueue*> (req->req_wq);
-                  pWorkQueue->worker_bottom_half(pWorkQueue, req);
-                } else {
+
+                if (ret == 0) {
                   finishNow = false;
                 }
                 break;
