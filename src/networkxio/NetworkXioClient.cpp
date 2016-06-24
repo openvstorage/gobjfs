@@ -59,10 +59,12 @@ inline void
 _xio_aio_wake_up_suspended_aiocb(aio_request *request)
 {
     XXEnter();
+    /* always signal for now
     if (not __sync_bool_compare_and_swap(&request->_on_suspend,
                                          false,
                                          true,
                                          __ATOMIC_RELAXED))
+    */
     {
         request->_signaled = true;
         GLOG_DEBUG("waking up the suspended thread");
@@ -80,7 +82,7 @@ ovs_xio_aio_complete_request(void* opaque, ssize_t retval, int errval)
     completion *cptr = request->cptr;
     request->_errno = errval;
     request->_rv = retval;
-    request->_failed = (retval == -1 ? true : false);
+    request->_failed = (retval < 0 ? true : false);
     request->_completed = true;
     {
         _xio_aio_wake_up_suspended_aiocb(request);

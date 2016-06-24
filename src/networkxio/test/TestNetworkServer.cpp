@@ -234,6 +234,65 @@ TEST_F(NetworkXioServerTest, FileDoesntExist) {
   ctx.reset();
 }
 
+TEST_F(NetworkXioServerTest, AsyncFileDoesntExist) {
+
+  removeDataFile(false); // file may not exist; dont fail
+
+  static constexpr size_t BufferSize = 512;
+  // shorten read size to test unaligned reads
+  static constexpr size_t ShortenSize = 10;
+
+  size_t times = 10; 
+
+  auto ctx_attr = ctx_attr_new();
+
+  ctx_attr_set_transport(ctx_attr,
+                                       "tcp",
+                                       "127.0.0.1",
+                                       portNumber);
+
+  client_ctx_ptr ctx = ctx_new(ctx_attr);
+  EXPECT_NE(ctx, nullptr);
+
+  int err = ctx_init(ctx);
+  EXPECT_EQ(err, 0);
+
+  std::vector<giocb*> iocb_vec;
+  std::vector<std::string> filename_vec;
+
+  size_t readSz = BufferSize - ShortenSize;
+
+  for (decltype(times) i = 0; i < times; i ++) {
+
+    auto rbuf = (char*)malloc(BufferSize);
+    EXPECT_NE(rbuf, nullptr);
+
+    giocb* iocb = (giocb*)malloc(sizeof(giocb));
+    iocb->aio_buf = rbuf;
+    iocb->aio_offset = i * BufferSize;
+    iocb->aio_nbytes = readSz;
+
+    iocb_vec.push_back(iocb);
+    filename_vec.push_back(testDataFileName);
+  }
+
+  auto ret = aio_readv(ctx, filename_vec, iocb_vec);
+  EXPECT_EQ(ret, 0);
+
+  ret = aio_suspendv(ctx, iocb_vec, nullptr); 
+  EXPECT_EQ(ret, 0);
+
+  for (auto& elem : iocb_vec) {
+    auto retcode = aio_return(ctx, elem);
+    EXPECT_EQ(retcode, -EIO);
+    aio_finish(ctx, elem);
+    free(elem->aio_buf);
+    free(elem);
+  }
+
+  ctx.reset();
+}
+
 TEST_F(NetworkXioServerTest, SyncRead) {
 
   createDataFile();
