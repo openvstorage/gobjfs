@@ -856,7 +856,7 @@ void IOExecutor::ProcessCompletions() {
         }
 
       } else {
-        LOG(ERROR) << "got unknown event with ptr=" << thisEvent.data.ptr;
+        LOG(ERROR) << "got unknown event with ptr=" << reinterpret_cast<void*>(thisEvent.data.ptr);
       }
     }
 
