@@ -23,6 +23,7 @@ but WITHOUT ANY WARRANTY of any kind.
 #include <assert.h>
 #include <string>
 #include <gobjfs_client.h>
+#include <util/os_utils.h>
 
 #define ATTRIBUTE_UNUSED __attribute__((unused))
 
@@ -115,7 +116,9 @@ struct notifier
     void wait()
     {
       std::unique_lock<std::mutex> l(_mutex);
-      _cond.wait(l);
+      while (_count != 0) {
+        _cond.wait(l);
+      } 
     }
 
     void wait_for(const timespec* timeout)
@@ -143,13 +146,12 @@ struct notifier
 
     void signal()
     {
-      // count doesnt need to be std::atomic since its single-threaded here ?
+      std::unique_lock<std::mutex> l(_mutex);
       assert(_count);
       _count --;
-      GLOG_DEBUG("signal at count=" << _count);
       if (0 == _count) 
       {
-        std::unique_lock<std::mutex> l(_mutex);
+        GLOG_DEBUG("thr=" << gettid() << " signal not=" << (void*)this << " count=" << _count);
         _cond.notify_all();
       }
     }
