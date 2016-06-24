@@ -352,7 +352,11 @@ IOExecFileHandle IOExecFileOpen(IOExecServiceHandle serviceHandle,
 
   char absFileName[PATH_MAX];
   if (serviceHandle->fileTranslatorFunc) {
-    serviceHandle->fileTranslatorFunc(fileName, fileNameLength, absFileName);
+    const int translateRet = serviceHandle->fileTranslatorFunc(fileName, fileNameLength, absFileName);
+    if (translateRet < 0) {
+      LOG(ERROR) << "file translation failed for fileName=" << std::string(fileName, fileNameLength);
+      return nullptr;
+    }
   } else {
     strncpy(absFileName, fileName, fileNameLength);
   }
@@ -494,9 +498,15 @@ int32_t IOExecFileDeleteSync(IOExecServiceHandle serviceHandle,
                              const char *fileName) {
   (void)serviceHandle;
 
+  const size_t fileNameLength = strlen(fileName);
+
   char absFileName[PATH_MAX];
   if (serviceHandle->fileTranslatorFunc) {
-    serviceHandle->fileTranslatorFunc(fileName, strlen(fileName), absFileName);
+    const int translateRet = serviceHandle->fileTranslatorFunc(fileName, fileNameLength, absFileName);
+    if (translateRet < 0) {
+      LOG(ERROR) << "file translation failed for fileName=" << std::string(fileName, fileNameLength);
+      return -EINVAL;
+    }
   } else {
     strncpy(absFileName, fileName, PATH_MAX - 1);
   }
@@ -510,8 +520,11 @@ int32_t IOExecFileDeleteSync(IOExecServiceHandle serviceHandle,
 }
 
 int32_t IOExecFileDelete(IOExecServiceHandle serviceHandle,
-                         const char *fileName, gCompletionID completionId,
+                         const char *fileName, 
+                         gCompletionID completionId,
                          IOExecEventFdHandle eventFdHandle) {
+
+  const size_t fileNameLength = strlen(fileName);
 
   if (!serviceHandle || !serviceHandle->isValid()) {
     LOG(ERROR) << "service handle is invalid";
@@ -525,7 +538,11 @@ int32_t IOExecFileDelete(IOExecServiceHandle serviceHandle,
 
   char absFileName[PATH_MAX];
   if (serviceHandle->fileTranslatorFunc) {
-    serviceHandle->fileTranslatorFunc(fileName, strlen(fileName), absFileName);
+    const int translateRet = serviceHandle->fileTranslatorFunc(fileName, fileNameLength, absFileName);
+    if (translateRet < 0) {
+      LOG(ERROR) << "file translation failed for fileName=" << std::string(fileName, fileNameLength);
+      return -EINVAL;
+    }
   } else {
     strncpy(absFileName, fileName, PATH_MAX - 1);
   }
@@ -575,7 +592,8 @@ EXTERNC {
   }
 
   int32_t gobjfs_ioexecfile_file_delete(service_handle_t service_handle,
-                                        const char *name, completion_id_t cid,
+                                        const char *name, 
+                                        completion_id_t cid,
                                         event_t eventFd) {
     return IOExecFileDelete(service_handle, name, cid,
                             (IOExecEventFdHandle)eventFd);

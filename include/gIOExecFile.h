@@ -150,11 +150,12 @@ int32_t IOExecFileRead(IOExecServiceHandle serviceHandle,
  *
  */
 int32_t IOExecFileDelete(IOExecServiceHandle serviceHandle,
-                         const char *filename, gCompletionID completionId,
+                         const char *fileName, 
+                         gCompletionID completionId,
                          IOExecEventFdHandle eventFdHandle);
 
 int32_t IOExecFileDeleteSync(IOExecServiceHandle serviceHandle,
-                             const char *filename);
+                             const char *fileName);
 
 // C API
 #ifdef __cplusplus
