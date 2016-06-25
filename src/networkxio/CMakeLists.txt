@@ -43,16 +43,6 @@ set(SERVER_SOURCES
   gobjfs_server.cpp
   )
 
-set(LIBRARY_LIST
-    aio
-    xio
-    boost_thread 
-    glog 
-    gflags 
-    unwind
-	bz2 pthread rt z)
-
-
 # create shared and static library from same set of sources
 add_library(gobjfs_server OBJECT ${SERVER_SOURCES})
 set_property(TARGET ${gobjfs_server} PROPERTY POSITION_INDEPENDENT_CODE 1)
