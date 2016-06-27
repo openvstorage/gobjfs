@@ -298,7 +298,7 @@ NetworkXioClient::run(std::promise<bool>& promise)
                                   static_evfd_stop_loop<NetworkXioClient>,
                                   this))
     {
-//        throw FailedRegisterEventHandler("failed to register event handler");
+        throw FailedRegisterEventHandler("failed to register event handler");
     }
 
     session = std::shared_ptr<xio_session>(xio_session_create(&params),

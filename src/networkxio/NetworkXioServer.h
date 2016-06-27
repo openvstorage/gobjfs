@@ -32,6 +32,11 @@ but WITHOUT ANY WARRANTY of any kind.
 namespace gobjfs { namespace xio 
 {
 
+MAKE_EXCEPTION(FailedBindXioServer);
+MAKE_EXCEPTION(FailedCreateXioContext);
+MAKE_EXCEPTION(FailedRegisterEventHandler);
+MAKE_EXCEPTION(FailedCreateXioMempool);
+
 class NetworkXioClientData;
 
 class NetworkXioServer

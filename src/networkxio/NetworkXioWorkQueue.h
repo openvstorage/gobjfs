@@ -36,6 +36,8 @@ but WITHOUT ANY WARRANTY of any kind.
 namespace gobjfs { namespace xio
 {
 
+MAKE_EXCEPTION(WorkQueueThreadsException);
+
 class NetworkXioWorkQueue
 {
 public:
@@ -53,8 +55,7 @@ public:
         int ret = create_workqueue_threads(thread::hardware_concurrency());
         if (ret < 0)
         {
-            std::cout << "Alert !! Create_workquue_threads() failed with error " << std::endl;
-            //throw WorkQueueThreadsException("cannot create worker threads");
+            throw WorkQueueThreadsException("cannot create worker threads");
         }
         XXExit();
     }
@@ -233,8 +234,7 @@ private:
             }
             catch (const std::system_error&)
             {
-                //GLOG_ERROR("cannot create worker thread");
-                std::cout << " ( " << __FILE__ << " , " << __LINE__ << " ) " << " cannot create worker thread " << std::endl;
+                GLOG_ERROR("cannot create worker thread; created= " << nr_threads_ << " of " << nr_threads);
                 return -1;
             }
         }

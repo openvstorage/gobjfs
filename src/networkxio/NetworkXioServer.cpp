@@ -224,8 +224,7 @@ NetworkXioServer::run(std::promise<void> &promise)
 
     if (ctx == nullptr)
     {
-        GLOG_FATAL("failed to create XIO context");
-//        throw FailedCreateXioContext("failed to create XIO context");
+      throw FailedCreateXioContext("failed to create XIO context");
     }
 
     xio_session_ops xio_s_ops;
@@ -246,8 +245,7 @@ NetworkXioServer::run(std::promise<void> &promise)
                                          xio_unbind);
     if (server == nullptr)
     {
-        GLOG_FATAL("failed to bind XIO server to '" << uri_ << "'");
-        //throw FailedBindXioServer("failed to bind XIO server");
+        throw FailedBindXioServer("failed to bind XIO server");
     }
 
     if(xio_context_add_ev_handler(ctx.get(),
@@ -256,21 +254,24 @@ NetworkXioServer::run(std::promise<void> &promise)
                                   static_evfd_stop_loop<NetworkXioServer>,
                                   this))
     {
-        GLOG_FATAL("failed to register event handler");
-//        throw FailedRegisterEventHandler("failed to register event handler");
+      throw FailedRegisterEventHandler("failed to register event handler");
     }
 
     try
     {
         wq_ = std::make_shared<NetworkXioWorkQueue>("ovs_xio_wq", evfd);
     }
-    //catch (const WorkQueueThreadsException&)
-    
+    catch (const WorkQueueThreadsException&)
+    {
+        GLOG_FATAL("failed to create workqueue thread pool");
+        xio_context_del_ev_handler(ctx.get(), evfd);
+        throw;
+    }
     catch (const std::bad_alloc&)
     {
         GLOG_FATAL("failed to allocate requested storage space for workqueue");
         xio_context_del_ev_handler(ctx.get(), evfd);
-//        throw;
+        throw;
     }
 
     xio_mpool = std::shared_ptr<xio_mempool>(
@@ -280,7 +281,7 @@ NetworkXioServer::run(std::promise<void> &promise)
     {
         GLOG_FATAL("failed to create XIO memory pool");
         xio_context_del_ev_handler(ctx.get(), evfd);
-//        throw FailedCreateXioMempool("failed to create XIO memory pool");
+        throw FailedCreateXioMempool("failed to create XIO memory pool");
     }
     (void) xio_mempool_add_slab(xio_mpool.get(),
                                4096,

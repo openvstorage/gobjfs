@@ -36,6 +36,7 @@ namespace gobjfs { namespace xio
 MAKE_EXCEPTION(XioClientCreateException);
 MAKE_EXCEPTION(XioClientRegHandlerException);
 MAKE_EXCEPTION(XioClientQueueIsBusyException);
+MAKE_EXCEPTION(FailedRegisterEventHandler);
 
 extern void ovs_xio_aio_complete_request(void *request,
                                          ssize_t retval,
