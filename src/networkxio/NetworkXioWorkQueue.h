@@ -31,6 +31,7 @@ but WITHOUT ANY WARRANTY of any kind.
 
 #include <networkxio/gobjfs_client_common.h>
 #include <networkxio/NetworkXioRequest.h>
+#include <util/Spinlock.h>
 
 namespace gobjfs { namespace xio
 {
@@ -71,8 +72,9 @@ public:
             stopping = true;
             while (nr_threads_)
             {
-                inflight_cond.notify_all();
-                ::usleep(500);
+              std::unique_lock<std::mutex> lock_(inflight_lock);
+              inflight_cond.notify_all();
+              ::usleep(500);
             }
             stopped = true;
         }
@@ -83,14 +85,13 @@ public:
     {
         XXEnter();
         queued_work_inc();
-        inflight_lock.lock();
+        std::unique_lock<std::mutex> lock_(inflight_lock);
         if (need_to_grow())
         {
             GLOG_DEBUG("nr_threads_ are " << nr_threads_);
             create_workqueue_threads(nr_threads_ * 2);
         }
         inflight_queue.push(req);
-        inflight_lock.unlock();
         inflight_cond.notify_one();
         XXExit();
     }
@@ -109,24 +110,20 @@ public:
 
     void worker_bottom_half(NetworkXioWorkQueue *wq, NetworkXioRequest *req) {
         XXEnter();
-        wq->lock_ts(); 
+        boost::lock_guard<decltype(finished_lock)> lock_(finished_lock);
         wq->finished.push(req);
         wq->xstop_loop(wq);
-        wq->unlock_ts(); 
         GLOG_DEBUG("Pushed request to finishedqueue" );
         XXExit();
-        //wq->finished_lock.unlock();
         
     }
     NetworkXioRequest*
     get_finished()
     {
         XXEnter();
-        //boost::lock_guard<decltype(finished_lock)> lock_(finished_lock);
-        lock_ts();
+        boost::lock_guard<decltype(finished_lock)> lock_(finished_lock);
         NetworkXioRequest *req = finished.front();
         finished.pop();
-        unlock_ts();
         XXExit();
         return req;
     }
@@ -134,15 +131,10 @@ public:
     bool
     is_finished_empty()
     {
-        //boost::lock_guard<decltype(finished_lock)> lock_(finished_lock);
-        // return finished.empty();
-        lock_ts();
-        bool isEmpty = finished.empty();
-        unlock_ts();
-        return isEmpty;
+        boost::lock_guard<decltype(finished_lock)> lock_(finished_lock);
+        return finished.empty();
     }
 private:
-    //DECLARE_LOGGER("NetworkXioWorkQueue");
 
     std::string name_;
     std::atomic<size_t> nr_threads_;
@@ -151,9 +143,7 @@ private:
     std::mutex inflight_lock;
     std::queue<NetworkXioRequest*> inflight_queue;
 
-    //mutable fungi::SpinLock finished_lock;
-    std::atomic_flag  finished_lock = ATOMIC_FLAG_INIT;
-
+    gobjfs::os::Spinlock finished_lock;
       
     std::queue<NetworkXioRequest*> finished;
 
@@ -162,8 +152,8 @@ private:
     std::chrono::steady_clock::time_point thread_life_period_;
     uint64_t protection_period_;
 
-    bool stopping;
-    bool stopped;
+    bool stopping{false};
+    bool stopped{false};
     EventFD& evfd;
 
     void xstop_loop(NetworkXioWorkQueue *wq)
@@ -173,17 +163,6 @@ private:
         XXExit();
     }
 
-    inline void lock_ts() {
-        XXEnter();
-        while (finished_lock.test_and_set(std::memory_order_acquire));
-        XXExit();
-    }
-    
-    inline void unlock_ts() {
-        XXEnter();
-        finished_lock.clear(std::memory_order_release);
-        XXExit();
-    }
     std::chrono::steady_clock::time_point
     get_time_point()
     {
@@ -306,9 +285,8 @@ retry:
             // push in finished queue right here
             // response is sent and request gets freed
             if (finishNow) {
-                wq->lock_ts(); 
+                boost::lock_guard<decltype(inflight_lock)> lock_(inflight_lock);
                 wq->finished.push(req);
-                wq->unlock_ts(); 
                 GLOG_DEBUG("Pushed request to finishedqueue. ReqType is " << (int) req->op);
                 xstop_loop(wq);
             }

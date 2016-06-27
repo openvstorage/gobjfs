@@ -31,12 +31,6 @@ but WITHOUT ANY WARRANTY of any kind.
 
 namespace gobjfs { namespace xio 
 {
-#define MAKE_EXCEPTION(A) \
-    class A: public std::exception{ \
-        public:\
-            A(std::string AA) {\
-            }\
-    } 
 
 MAKE_EXCEPTION(XioClientCreateException);
 MAKE_EXCEPTION(XioClientRegHandlerException);

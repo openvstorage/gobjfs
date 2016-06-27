@@ -52,6 +52,13 @@ but WITHOUT ANY WARRANTY of any kind.
 #define GLOG_DEBUG(msg) LOG_DEBUG << msg
 #define GLOG_TRACE(msg) LOG_TRACE << msg
 
+#define MAKE_EXCEPTION(A) \
+    class A: public std::exception{ \
+        public:\
+            A(std::string AA) {\
+            }\
+    } 
+
 namespace gobjfs { namespace xio {
 
 // TODO
