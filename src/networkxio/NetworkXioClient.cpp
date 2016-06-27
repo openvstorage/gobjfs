@@ -59,12 +59,6 @@ inline void
 _xio_aio_wake_up_suspended_aiocb(aio_request *request)
 {
     XXEnter();
-    /* always signal for now
-    if (not __sync_bool_compare_and_swap(&request->_on_suspend,
-                                         false,
-                                         true,
-                                         __ATOMIC_RELAXED))
-    */
     {
         request->_signaled = true;
         GLOG_DEBUG("waking up the suspended thread");
@@ -382,25 +376,17 @@ NetworkXioClient::xio_destroy_ctx_shutdown(xio_context *ctx)
 bool
 NetworkXioClient::is_queue_empty()
 {
-    //boost::lock_guard<decltype(inflight_lock)> lock_(inflight_lock);
-    //return inflight_reqs.empty();
-    XXEnter();
-    lock_ts();
-    bool isEmpty = inflight_reqs.empty();
-    unlock_ts();
-    XXExit();
-    return isEmpty;
+    boost::lock_guard<decltype(inflight_lock)> lock_(inflight_lock);
+    return inflight_reqs.empty();
 }
 
 NetworkXioClient::xio_msg_s*
 NetworkXioClient::pop_request()
 {
     XXEnter();
-    //boost::lock_guard<decltype(inflight_lock)> lock_(inflight_lock);
-    lock_ts();
+    boost::lock_guard<decltype(inflight_lock)> lock_(inflight_lock);
     xio_msg_s *req = inflight_reqs.front();
     inflight_reqs.pop();
-    unlock_ts();
     XXExit();
     return req;
 }
@@ -408,10 +394,8 @@ NetworkXioClient::pop_request()
 void
 NetworkXioClient::push_request(xio_msg_s *req)
 {
-    //boost::lock_guard<decltype(inflight_lock)> lock_(inflight_lock);
-    lock_ts();
+    boost::lock_guard<decltype(inflight_lock)> lock_(inflight_lock);
     inflight_reqs.push(req);
-    unlock_ts();
 }
 
 void
@@ -559,11 +543,9 @@ void
 NetworkXioClient::req_queue_release()
 {
     XXEnter();
-   // std::lock_guard<std::mutex> l_(req_queue_lock);
-    lock_ts();
+    std::unique_lock<std::mutex> l_(req_queue_lock);
     nr_req_queue++;
     req_queue_cond.notify_one();
-    unlock_ts();
     XXExit();
 }
 

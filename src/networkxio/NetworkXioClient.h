@@ -27,6 +27,7 @@ but WITHOUT ANY WARRANTY of any kind.
 #include <thread>
 #include <atomic>
 #include <exception>
+#include <util/Spinlock.h>
 #include "NetworkXioProtocol.h"
 
 namespace gobjfs { namespace xio 
@@ -53,15 +54,15 @@ public:
 
     struct session_data
     {
-        xio_context *ctx;
-        bool disconnected;
-        bool disconnecting;
+        xio_context *ctx{nullptr};
+        bool disconnected{false};
+        bool disconnecting{false};
     };
 
     struct xio_msg_s
     {
         xio_msg xreq;
-        const void *opaque;
+        const void *opaque{nullptr};
         NetworkXioMsg msg;
         std::string s_msg;
     };
@@ -71,7 +72,7 @@ public:
         xio_msg_s xmsg;
         session_data sdata;
         std::vector<std::string> *vec;
-        uint64_t size;
+        uint64_t size{0};
     };
 
     void
@@ -142,15 +143,7 @@ private:
     bool stopped{false};
     std::thread xio_thread_;
 
-    std::atomic_flag  inflight_lock = ATOMIC_FLAG_INIT;
-
-    inline void lock_ts() {
-        while (inflight_lock.test_and_set(std::memory_order_acquire));
-    }
-    
-    inline void unlock_ts() {
-        inflight_lock.clear(std::memory_order_release);
-    }
+    gobjfs::os::Spinlock inflight_lock;
 
     std::queue<xio_msg_s*> inflight_reqs;
 
@@ -158,7 +151,7 @@ private:
     bool disconnected{false};
     bool disconnecting;
 
-    int64_t nr_req_queue;
+    int64_t nr_req_queue{0};
     std::mutex req_queue_lock;
     std::condition_variable req_queue_cond;
 

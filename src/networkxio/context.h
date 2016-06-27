@@ -63,6 +63,7 @@ aio_request* create_new_request(RequestOp op,
     }
     catch (const std::bad_alloc&)
     {
+        GLOG_ERROR("malloc for aio_request failed");
         return NULL;
     }
 }

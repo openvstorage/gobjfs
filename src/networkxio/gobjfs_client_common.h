@@ -59,9 +59,10 @@ but WITHOUT ANY WARRANTY of any kind.
             }\
     } 
 
+static constexpr uint64_t SEC_TO_NANOSEC = 1000000000;
+
 namespace gobjfs { namespace xio {
 
-// TODO
 enum class RequestOp
 {
     Noop,
@@ -73,7 +74,7 @@ enum class RequestOp
 enum class TransportType
 {
     Error,
-    SharedMemory,
+    SharedMemory, // not supported
     TCP,
     RDMA,
 };
@@ -128,7 +129,7 @@ struct notifier
       _cond.wait_for(
           l, 
           std::chrono::nanoseconds(
-            ((uint64_t)timeout->tv_sec * 1000000000) + 
+            ((uint64_t)timeout->tv_sec * SEC_TO_NANOSEC) + 
             timeout->tv_nsec));
     }
 
@@ -139,7 +140,7 @@ struct notifier
       _cond.wait_for(
           l_, 
           std::chrono::nanoseconds(
-            ((uint64_t)timeout->tv_sec * 1000000000) + 
+            ((uint64_t)timeout->tv_sec * SEC_TO_NANOSEC) + 
             timeout->tv_nsec), 
           func);
     }

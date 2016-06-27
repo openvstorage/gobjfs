@@ -29,6 +29,7 @@ but WITHOUT ANY WARRANTY of any kind.
 #include "NetworkXioRequest.h"
 
 static constexpr int POLLING_TIME_USEC = 20;
+
 using gobjfs::os::DirectIOSize;
 
 namespace gobjfs { namespace xio {
@@ -177,7 +178,6 @@ void
 NetworkXioServer::run(std::promise<void> &promise)
 {
     int xopt = 2;
-    int queue_depth = 2048;
 
     XXEnter();
 

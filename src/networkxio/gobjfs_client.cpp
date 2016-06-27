@@ -347,13 +347,6 @@ aio_suspendv(client_ctx_ptr ctx,
         return (r = -1);
     }
 
-    for (auto elem : giocbp_vec) {
-      __sync_bool_compare_and_swap(&elem->request_->_on_suspend,
-                                     false,
-                                     true,
-                                     __ATOMIC_RELAXED);
-    }
-
     auto cvp = giocbp_vec[0]->request_->_cvp;
 
     {
@@ -391,10 +384,6 @@ aio_suspend(client_ctx_ptr ctx,
         XXExit();
         return (r = -1);
     }
-    if (__sync_bool_compare_and_swap(&giocbp->request_->_on_suspend,
-                                     false,
-                                     true,
-                                     __ATOMIC_RELAXED))
     {
       if (timeout)
       {
