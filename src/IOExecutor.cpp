@@ -778,7 +778,7 @@ void IOExecutor::ProcessCompletions() {
           !(thisEvent.events & EPOLLIN)) {
 
         LOG(WARNING) << " received abnormal event on epoll= "
-                     << thisEvent.events;
+                     << static_cast<uint32_t>(thisEvent.events);
 
       } else if (thisEvent.data.ptr == &completionThreadShutdown_) {
 

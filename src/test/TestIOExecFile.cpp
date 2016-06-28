@@ -49,7 +49,7 @@ static int wait_for_iocompletion(int epollfd, int efd, int max) {
         gIOStatus iostatus;
         int ret = read(efd, &iostatus, sizeof(iostatus));
         if (ret == sizeof(iostatus)) {
-          VLOG(1) << "Recieved event (completionId: " << iostatus.completionId
+          VLOG(1) << "Recieved event (completionId: " << static_cast<uint64_t>(iostatus.completionId)
                   << " , status: " << iostatus.errorCode;
           ctr++;
         }

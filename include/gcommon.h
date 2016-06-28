@@ -32,5 +32,5 @@ struct gIOStatus {
   gCompletionID completionId;
   int32_t errorCode;
   int32_t reserved; // for consistent padding
-} __attribute__((packed, aligned(8)));
+};
 
