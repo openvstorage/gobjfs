@@ -71,7 +71,7 @@ ctx_attr_set_transport(client_ctx_attr_ptr attr,
     if ((not strcmp(transport, "tcp")) and host)
     {
         attr->transport = TransportType::TCP;
-        attr->host = strdup(host);
+        attr->host = host;
         attr->port = port;
         return 0;
     }
@@ -79,7 +79,7 @@ ctx_attr_set_transport(client_ctx_attr_ptr attr,
     if ((not strcmp(transport, "rdma")) and host)
     {
         attr->transport = TransportType::RDMA;
-        attr->host = strdup(host);
+        attr->host = host;
         attr->port = port;
         return 0;
     }
