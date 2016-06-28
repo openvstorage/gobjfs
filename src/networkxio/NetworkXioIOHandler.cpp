@@ -161,7 +161,7 @@ static constexpr int XIO_COMPLETION_DEFAULT_MAX_EVENTS = 100;
           }
 
           if (efd != events[i].data.fd) {
-            GLOG_ERROR("Received event for unknown fd=" << events[i].data.fd);
+	    GLOG_ERROR("Received event for unknown fd=" << static_cast<uint32_t>(events[i].data.fd));
             continue;
           }
 
