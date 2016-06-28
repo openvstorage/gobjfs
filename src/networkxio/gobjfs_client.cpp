@@ -61,6 +61,15 @@ ctx_attr_set_transport(client_ctx_attr_ptr attr,
                            const char *host,
                            int port)
 {
+  return ctx_attr_set_transport(attr, std::string(transport), std::string(host), port);
+}
+
+int
+ctx_attr_set_transport(client_ctx_attr_ptr attr,
+                           std::string const &transport,
+                           std::string const &host,
+                           int port)
+{
     if (attr == nullptr)
     {
         errno = EINVAL;
@@ -68,7 +77,7 @@ ctx_attr_set_transport(client_ctx_attr_ptr attr,
     }
 
 
-    if ((not strcmp(transport, "tcp")) and host)
+    if ((transport == "tcp") and (false == host.empty()))
     {
         attr->transport = TransportType::TCP;
         attr->host = host;
@@ -76,7 +85,7 @@ ctx_attr_set_transport(client_ctx_attr_ptr attr,
         return 0;
     }
 
-    if ((not strcmp(transport, "rdma")) and host)
+    if ((transport == "rdma") and (false == host.empty()))
     {
         attr->transport = TransportType::RDMA;
         attr->host = host;
