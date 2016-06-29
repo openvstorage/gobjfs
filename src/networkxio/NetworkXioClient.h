@@ -149,7 +149,7 @@ public:
 
     } stats;
 
-    void update_stats(void* req);
+    void update_stats(void* req, bool req_failed);
 
 private:
     std::shared_ptr<xio_context> ctx;

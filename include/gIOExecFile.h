@@ -43,6 +43,7 @@ struct gIOExecFragment {
 };
 
 struct gIOBatch {
+  void* opaque{nullptr};
   size_t count;
 
   // variable sized array of "count" items

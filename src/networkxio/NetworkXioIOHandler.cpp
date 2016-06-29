@@ -174,8 +174,17 @@ static constexpr int XIO_COMPLETION_DEFAULT_MAX_EVENTS = 100;
 
           GLOG_DEBUG("Recieved event" << " (completionId: " << (void *)iostatus.completionId << " status: " << iostatus.errorCode);
 
-          NetworkXioRequest *pXioReq = (NetworkXioRequest *)iostatus.completionId;
+          gIOBatch* batch = reinterpret_cast<gIOBatch*>(iostatus.completionId);
+          assert (batch != nullptr);
+
+          NetworkXioRequest *pXioReq = static_cast<NetworkXioRequest *>(batch->opaque);
           assert (pXioReq != nullptr);
+
+          gIOExecFragment& frag = batch->array[0];
+          // reset addr otherwise BatchFree will free it
+          // need to introduce ownership indicator
+          frag.addr = nullptr; 
+          gIOBatchFree(batch);
 
           switch (pXioReq->op) {
 
@@ -263,7 +272,6 @@ static constexpr int XIO_COMPLETION_DEFAULT_MAX_EVENTS = 100;
         req->size = size;
         req->offset = offset;
         try {
-            bool eof = false;
 
             memset(static_cast<char*>(req->data), 0, req->size);
 
@@ -276,13 +284,13 @@ static constexpr int XIO_COMPLETION_DEFAULT_MAX_EVENTS = 100;
             GLOG_DEBUG("----- The WQ pointer is " << req->req_wq);
 
             gIOBatch* batch = gIOBatchAlloc(1);
-
+            batch->opaque = req;
             gIOExecFragment& frag = batch->array[0];
 
             frag.offset = offset;
             frag.addr = reinterpret_cast<caddr_t>(req->reg_mem.addr);
             frag.size = size;
-            frag.completionId = reinterpret_cast<uint64_t>(req);
+            frag.completionId = reinterpret_cast<uint64_t>(batch);
 
             ret = IOExecFileRead(serviceHandle_, filename.c_str(), filename.size(), batch, eventHandle_);
 

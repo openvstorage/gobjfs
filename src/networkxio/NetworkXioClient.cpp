@@ -420,8 +420,13 @@ NetworkXioClient::xstop_loop()
     evfd.writefd();
 }
 
+/**
+ * the request can get freed after signaling completion in ovs_xio_aio_complete_request
+ * therefore, update_stats must be called before this function
+ * otherwise its a use-after-free error
+ */
 void
-NetworkXioClient::update_stats(void* void_req)
+NetworkXioClient::update_stats(void* void_req, bool req_failed)
 {
   aio_request* req = static_cast<aio_request*>(void_req);
   if (!req) { 
@@ -430,7 +435,7 @@ NetworkXioClient::update_stats(void* void_req)
   }
 
   req->_rtt_nanosec = req->_timer.elapsedNanoseconds();
-  if (req->_failed)
+  if (req_failed)
   {
     stats.num_failed ++;
   }
@@ -455,10 +460,10 @@ NetworkXioClient::xio_run_loop_worker(void *arg)
             if (r < 0)
             {
                 req_queue_release();
+                update_stats(const_cast<void*>(req->opaque), true);
                 ovs_xio_aio_complete_request(const_cast<void*>(req->opaque),
                                                  -1,
                                                  EIO);
-                update_stats(const_cast<void*>(req->opaque));
                 delete req;
             }
         }
@@ -526,11 +531,12 @@ NetworkXioClient::on_msg_error(xio_session *session __attribute__((unused)),
         xio_release_response(msg);
     }
     xio_msg = reinterpret_cast<xio_msg_s*>(imsg.opaque());
+
+    update_stats(const_cast<void*>(xio_msg->opaque), true);
     ovs_xio_aio_complete_request(const_cast<void*>(xio_msg->opaque),
                                      -1,
                                      EIO);
 
-    update_stats(const_cast<void*>(xio_msg->opaque));
 
     req_queue_release();
     delete xio_msg;
@@ -672,10 +678,10 @@ NetworkXioClient::on_response(xio_session *session __attribute__((unused)),
         GLOG_ERROR("\n Alert !!imsg has error in retval\n");
     }
 
+    update_stats(const_cast<void*>(xio_msg->opaque), (imsg.retval() < 0));
     ovs_xio_aio_complete_request(const_cast<void*>(xio_msg->opaque),
                                  imsg.retval(),
                                  imsg.errval());
-    update_stats(const_cast<void*>(xio_msg->opaque));
 
     reply->in.header.iov_base = NULL;
     reply->in.header.iov_len = 0;

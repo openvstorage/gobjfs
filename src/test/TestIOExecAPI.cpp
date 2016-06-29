@@ -110,6 +110,7 @@ TEST_F(IOExecFileInitTest, CheckStats) {
     
   // TODO more sophisticated testing possible
   // can check if buffer is json formatted here
+  IOExecFileServiceDestroy(serviceHandle);
 }
 
 static int fileTranslatorFunc(const char*, size_t, char*)
@@ -131,4 +132,6 @@ TEST_F(IOExecFileInitTest, StatsWithSmallBuffer) {
   EXPECT_NE(strstr(buffer, "fileTranslatorStats"), nullptr);
   // TODO more sophisticated testing possible
   // can check if buffer is json formatted here
+  //
+  IOExecFileServiceDestroy(serviceHandle);
 }

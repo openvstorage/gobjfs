@@ -35,6 +35,8 @@ TEST(MempoolTest, CheckAlignment) {
   void *p = m->Alloc(4097);
 
   EXPECT_TRUE(IsDirectIOAligned((uint64_t)p));
+
+  m->Free(p);
 }
 
 TEST(MempoolTest, CheckStats) {
@@ -66,6 +68,8 @@ TEST(gMempoolTest, CheckAlignment) {
   void *p = gMempool_alloc(4097);
 
   EXPECT_TRUE(IsDirectIOAligned((uint64_t)p));
+
+  gMempool_free(p);
 }
 
 TEST(gMempoolTest, CheckStats) {
