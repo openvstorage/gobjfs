@@ -20,6 +20,10 @@ but WITHOUT ANY WARRANTY of any kind.
 #include <limits.h>
 #include <map>
 
+#include <boost/log/core.hpp>
+#include <boost/log/trivial.hpp>
+#include <boost/log/expressions.hpp>
+
 #include <gobjfs_server.h>
 #include <networkxio/NetworkXioCommon.h>
 #include <networkxio/NetworkXioServer.h>
@@ -82,4 +86,26 @@ int gobjfs_xio_server_stop(
   delete handle;
 
   return 0;
+}
+
+
+namespace logging = boost::log;
+
+void gobjfs_init_logging(gobjfs_log_level level){
+
+  std::vector<logging::trivial::severity_level> severities {
+      logging::trivial::trace,
+      logging::trivial::debug,
+      logging::trivial::info,
+      logging::trivial::warning,
+      logging::trivial::error,
+      logging::trivial::fatal
+  };
+  auto severity = severities[level];
+  logging::core::get()->set_filter(
+      logging::trivial::severity >= severity
+      );
+
+  BOOST_LOG_TRIVIAL(info) << "logging initialized";
+
 }

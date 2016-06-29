@@ -54,6 +54,9 @@ gobjfs_xio_server_handle gobjfs_xio_server_start(
 int gobjfs_xio_server_stop(
   gobjfs_xio_server_handle server_handle);
 
+typedef enum { TRACE,DEBUG, INFO, WARNING, ERROR, FATAL} gobjfs_log_level;
+void gobjfs_init_logging(gobjfs_log_level level);
+
 #ifdef __cplusplus
 }
 #endif
