@@ -166,6 +166,25 @@ done:
     return err;
 }
 
+std::string
+ctx_get_stats(client_ctx_ptr ctx)
+{
+  std::string ret_string;
+
+  if (ctx && ctx->net_client_) {
+     ret_string = ctx->net_client_->stats.ToString();
+  } else {
+    std::ostringstream s;
+    s << "ctx=" << ctx.get();
+    if (ctx) {
+      s << " netclient=" << ctx->net_client_.get();
+    }
+    ret_string = "invalid ctx or client connection " + s.str();
+  }
+
+  return ret_string;
+}
+
 static int
 _submit_aio_request(client_ctx_ptr ctx,
                         const std::string& filename,
@@ -227,6 +246,8 @@ _submit_aio_request(client_ctx_ptr ctx,
                                                   giocbp->aio_nbytes,
                                                   giocbp->aio_offset,
                                                   reinterpret_cast<void*>(request));
+
+                request->_timer.reset();
             }
             catch (const std::bad_alloc&)
             {

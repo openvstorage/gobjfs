@@ -25,6 +25,7 @@ but WITHOUT ANY WARRANTY of any kind.
 #include <gobjfs_client.h>
 #include <gobjfs_log.h>
 #include <util/os_utils.h>
+#include <util/Timer.h>
 
 #define ATTRIBUTE_UNUSED __attribute__((unused))
 
@@ -175,6 +176,9 @@ struct aio_request
     ssize_t _rv{0};
 
     notifier_sptr _cvp;
+
+    int64_t _rtt_nanosec{0};
+    gobjfs::stats::Timer _timer;
 };
 
 }}

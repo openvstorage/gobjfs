@@ -55,6 +55,7 @@ aio_request* create_new_request(RequestOp op,
         request->_signaled = false;
         request->_rv = 0;
         request->_cvp = cvp;
+        request->_rtt_nanosec = 0;
         if (aio and op != RequestOp::Noop)
         {
             aio->request_ = request;

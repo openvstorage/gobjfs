@@ -3,6 +3,7 @@ ADD_EXECUTABLE(XioTester
   TestNetworkServer.cpp
   TestMultipleServers.cpp
   TestCompileByC.c
+  TestStats.cpp
   TestMain.cpp
   )
 
