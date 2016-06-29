@@ -411,6 +411,7 @@ NetworkXioClient::push_request(xio_msg_s *req)
 {
     boost::lock_guard<decltype(inflight_lock)> lock_(inflight_lock);
     inflight_reqs.push(req);
+    stats.num_queued ++;
 }
 
 void
@@ -602,7 +603,6 @@ NetworkXioClient::xio_send_open_request(const void *opaque)
     req_queue_wait_until(xmsg);
     push_request(xmsg);
     xstop_loop();
-    stats.num_queued ++;
     XXExit();
 }
 
@@ -629,7 +629,6 @@ NetworkXioClient::xio_send_read_request(const std::string& filename,
     xmsg->xreq.in.data_iov.sglist[0].iov_len = size_in_bytes;
     req_queue_wait_until(xmsg);
     push_request(xmsg);
-    stats.num_queued ++;
     xstop_loop();
 }
 
@@ -647,7 +646,6 @@ NetworkXioClient::xio_send_close_request(const void *opaque)
     req_queue_wait_until(xmsg);
     push_request(xmsg);
     xstop_loop();
-    stats.num_queued ++;
     XXExit();
 }
 
