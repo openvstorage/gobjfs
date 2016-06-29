@@ -57,15 +57,6 @@ ctx_attr_new()
 
 int
 ctx_attr_set_transport(client_ctx_attr_ptr attr,
-                           const char *transport,
-                           const char *host,
-                           int port)
-{
-  return ctx_attr_set_transport(attr, std::string(transport), std::string(host), port);
-}
-
-int
-ctx_attr_set_transport(client_ctx_attr_ptr attr,
                            std::string const &transport,
                            std::string const &host,
                            int port)
