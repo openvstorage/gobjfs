@@ -91,11 +91,9 @@ int gobjfs_xio_server_stop(
 
 namespace logging = boost::log;
 
-int gobjfs_init_logging(int level){
-  if(level < 0 || level > 5){
-      return 1;
-  };
-  std::vector<boost::log::v2_mt_posix::trivial::severity_level> severities {
+void gobjfs_init_logging(gobjfs_log_level level){
+
+  std::vector<logging::trivial::severity_level> severities {
       logging::trivial::trace,
       logging::trivial::debug,
       logging::trivial::info,
@@ -109,5 +107,5 @@ int gobjfs_init_logging(int level){
       );
 
   BOOST_LOG_TRIVIAL(info) << "logging initialized";
-  return 0;
+
 }
