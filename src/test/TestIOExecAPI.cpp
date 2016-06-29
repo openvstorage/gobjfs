@@ -102,9 +102,33 @@ TEST_F(IOExecFileInitTest, CheckStats) {
   auto ret = IOExecGetStats(serviceHandle, buffer, len);
 
   EXPECT_LE(ret, len);
-  char* found = strstr(buffer, "stats");
-  EXPECT_NE(found, nullptr);
+  EXPECT_NE(strstr(buffer, "fileTranslatorStats"), nullptr);
+  EXPECT_NE(strstr(buffer, "fileTranslatorHist"), nullptr);
+  EXPECT_NE(strstr(buffer, "fdqueueSize"), nullptr);
+  EXPECT_NE(strstr(buffer, "serviceHist"), nullptr);
+  EXPECT_NE(strstr(buffer, "waitHist"), nullptr);
+    
   // TODO more sophisticated testing possible
   // can check if buffer is json formatted here
-  LOG(INFO) << "len=" << ret << " buf=" << buffer;
+}
+
+static int fileTranslatorFunc(const char*, size_t, char*)
+{
+  return 0;
+}
+
+// Pass a small buffer and check if GetStats works
+TEST_F(IOExecFileInitTest, StatsWithSmallBuffer) {
+
+  auto serviceHandle = IOExecFileServiceInit(configFile, 
+    fileTranslatorFunc, true);
+
+  uint32_t len = 40;
+  char buffer [len];
+  auto ret = IOExecGetStats(serviceHandle, buffer, len);
+
+  EXPECT_EQ(ret, len);
+  EXPECT_NE(strstr(buffer, "fileTranslatorStats"), nullptr);
+  // TODO more sophisticated testing possible
+  // can check if buffer is json formatted here
 }

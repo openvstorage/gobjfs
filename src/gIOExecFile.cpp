@@ -25,6 +25,7 @@ but WITHOUT ANY WARRANTY of any kind.
 #include <util/os_utils.h>
 #include <gparse.h>
 
+#include <mutex>
 #include <fcntl.h>
 #include <linux/limits.h> // PATH_MAX
 #include <sys/types.h>
@@ -94,7 +95,44 @@ void gIOStatusBatchFree(gIOStatusBatch *ptr) { free(ptr); }
 struct IOExecServiceInt {
   IOExecutor::Config ioConfig;
   std::vector<std::shared_ptr<IOExecutor>> ioexecVec;
+
   FileTranslatorFunc fileTranslatorFunc;
+  std::mutex mutex;
+  gobjfs::stats::StatsCounter<int64_t> fileTranslatorStats_;
+  gobjfs::stats::Histogram<int64_t> fileTranslatorHist_;
+
+  // could use std::forward
+  int callTranslator(const char* old_name, size_t len, char* new_name)
+  {
+    gobjfs::stats::Timer timer(true);
+
+    int ret = 0;
+    if (fileTranslatorFunc) {
+      ret = fileTranslatorFunc(old_name, len, new_name);
+    } else {
+      strncpy(new_name, old_name, PATH_MAX - 1);
+    }
+
+    auto time = timer.elapsedNanoseconds();
+    
+    // lock the stats update
+    std::unique_lock<std::mutex> l(mutex);
+    fileTranslatorStats_ = time;
+    fileTranslatorHist_ = time;
+    return ret;
+  }
+
+  std::string getFileTranslatorStats() const {
+
+    std::ostringstream s;
+
+    s 
+      << " fileTranslatorStats=" << fileTranslatorStats_
+      << ",fileTranslatorHist=" << fileTranslatorHist_
+      << std::endl;
+
+    return s.str();
+  }
 
   int32_t getSlot(const char *fileName) {
     static std::hash<std::string> hasher;
@@ -114,23 +152,37 @@ int32_t IOExecGetStats(IOExecServiceHandle serviceHandle, char* buf,
 {
   decltype(len) curOffset = 0;
 
-  for (auto& elem : serviceHandle->ioexecVec) 
+  auto str = serviceHandle->getFileTranslatorStats();
+  uint32_t copyLen = str.size();
+  if ((ssize_t)str.size() >= len - curOffset)
   {
-    auto str = elem->getState();
-    uint32_t copyLen = str.size();
-    if (str.size() >= len - curOffset)
+    // truncate the string to be copied
+    copyLen = len;
+  }
+  strncpy(buf + curOffset, str.c_str(), copyLen);
+  curOffset += copyLen;
+
+  if (curOffset < len) {
+
+    for (auto& elem : serviceHandle->ioexecVec) 
     {
-      // truncate the string to be copied
-      copyLen = len;
-    }
-    strncpy(buf + curOffset, str.c_str(), copyLen);
-    curOffset += copyLen;
-    if (curOffset >= len) 
-    {
-      LOG(WARNING) << "input buffer len=" << len << " insufficient for stats";
-      break;
+      auto str = elem->getState();
+      uint32_t copyLen = str.size();
+      if ((ssize_t)str.size() >= len - curOffset)
+      {
+        // truncate the string to be copied
+        copyLen = len;
+      }
+      strncpy(buf + curOffset, str.c_str(), copyLen);
+      curOffset += copyLen;
+      if (curOffset >= len) 
+      {
+        LOG(WARNING) << "input buffer len=" << len << " insufficient for stats";
+        break;
+      }
     }
   }
+
   return curOffset;
 }
 
@@ -351,14 +403,12 @@ IOExecFileHandle IOExecFileOpen(IOExecServiceHandle serviceHandle,
   }
 
   char absFileName[PATH_MAX];
-  if (serviceHandle->fileTranslatorFunc) {
-    const int translateRet = serviceHandle->fileTranslatorFunc(fileName, fileNameLength, absFileName);
-    if (translateRet < 0) {
-      LOG(ERROR) << "file translation failed for fileName=" << std::string(fileName, fileNameLength);
-      return nullptr;
-    }
-  } else {
-    strncpy(absFileName, fileName, fileNameLength);
+
+  const int translateRet = serviceHandle->callTranslator(fileName, fileNameLength, absFileName);
+
+  if (translateRet < 0) {
+    LOG(ERROR) << "file translation failed for fileName=" << std::string(fileName, fileNameLength);
+    return nullptr;
   }
 
   // user must add O_DIRECT for aligned IO
@@ -501,14 +551,10 @@ int32_t IOExecFileDeleteSync(IOExecServiceHandle serviceHandle,
   const size_t fileNameLength = strlen(fileName);
 
   char absFileName[PATH_MAX];
-  if (serviceHandle->fileTranslatorFunc) {
-    const int translateRet = serviceHandle->fileTranslatorFunc(fileName, fileNameLength, absFileName);
-    if (translateRet < 0) {
-      LOG(ERROR) << "file translation failed for fileName=" << std::string(fileName, fileNameLength);
-      return -EINVAL;
-    }
-  } else {
-    strncpy(absFileName, fileName, PATH_MAX - 1);
+  const int translateRet = serviceHandle->callTranslator(fileName, fileNameLength, absFileName);
+  if (translateRet < 0) {
+    LOG(ERROR) << "file translation failed for fileName=" << std::string(fileName, fileNameLength);
+    return -EINVAL;
   }
 
   int retcode = ::unlink(absFileName);
@@ -537,14 +583,11 @@ int32_t IOExecFileDelete(IOExecServiceHandle serviceHandle,
   }
 
   char absFileName[PATH_MAX];
-  if (serviceHandle->fileTranslatorFunc) {
-    const int translateRet = serviceHandle->fileTranslatorFunc(fileName, fileNameLength, absFileName);
-    if (translateRet < 0) {
-      LOG(ERROR) << "file translation failed for fileName=" << std::string(fileName, fileNameLength);
-      return -EINVAL;
-    }
-  } else {
-    strncpy(absFileName, fileName, PATH_MAX - 1);
+
+  const int translateRet = serviceHandle->callTranslator(fileName, fileNameLength, absFileName);
+  if (translateRet < 0) {
+    LOG(ERROR) << "file translation failed for fileName=" << std::string(fileName, fileNameLength);
+    return -EINVAL;
   }
 
   auto job = new FilerJob(absFileName, FileOp::Delete);
