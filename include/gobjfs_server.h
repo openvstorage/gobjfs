@@ -54,6 +54,8 @@ gobjfs_xio_server_handle gobjfs_xio_server_start(
 int gobjfs_xio_server_stop(
   gobjfs_xio_server_handle server_handle);
 
+int gobjfs_init_logging(int level);
+
 #ifdef __cplusplus
 }
 #endif
