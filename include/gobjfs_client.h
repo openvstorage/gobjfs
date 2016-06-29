@@ -90,6 +90,14 @@ ctx_new(const client_ctx_attr_ptr attr);
 int
 ctx_init(client_ctx_ptr ctx);
 
+/**
+ * Get stats for this connection
+ * param ctx : Open vStorage context
+ * return : statistics on read requests
+ */
+std::string
+ctx_get_stats(client_ctx_ptr ctx);
+
 /*
  * Allocate buffer from the shared memory segment
  * param ctx: Open vStorage context

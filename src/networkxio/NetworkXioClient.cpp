@@ -78,9 +78,9 @@ ovs_xio_aio_complete_request(void* opaque, ssize_t retval, int errval)
     request->_rv = retval;
     request->_failed = (retval < 0 ? true : false);
     request->_completed = true;
-    {
-        _xio_aio_wake_up_suspended_aiocb(request);
-    }
+
+    _xio_aio_wake_up_suspended_aiocb(request);
+
     if (cptr)
     {
         cptr->_rv = retval;
@@ -162,6 +162,21 @@ static_evfd_stop_loop(int fd, int events, void *data)
         return;
     }
     obj->evfd_stop_loop(fd, events, data);
+}
+
+std::string NetworkXioClient::statistics::ToString() const
+{
+  std::ostringstream s;
+  
+  s 
+    << " num_queued=" << num_queued
+    << ",num_failed=" << num_failed
+    << ",num_completed(incl. failed)=" << num_completed
+    << ",rtt_hist=" << rtt_hist 
+    << ",rtt_stats=" << rtt_stats 
+    << std::endl;
+
+  return s.str();
 }
 
 NetworkXioClient::NetworkXioClient(const std::string& uri, const uint64_t qd)
@@ -396,12 +411,32 @@ NetworkXioClient::push_request(xio_msg_s *req)
 {
     boost::lock_guard<decltype(inflight_lock)> lock_(inflight_lock);
     inflight_reqs.push(req);
+    stats.num_queued ++;
 }
 
 void
 NetworkXioClient::xstop_loop()
 {
     evfd.writefd();
+}
+
+void
+NetworkXioClient::update_stats(void* void_req)
+{
+  aio_request* req = static_cast<aio_request*>(void_req);
+  if (!req) { 
+    stats.num_failed ++;
+    return;
+  }
+
+  req->_rtt_nanosec = req->_timer.elapsedNanoseconds();
+  if (req->_failed)
+  {
+    stats.num_failed ++;
+  }
+  stats.num_completed ++;
+  stats.rtt_hist = req->_rtt_nanosec;
+  stats.rtt_stats = req->_rtt_nanosec;
 }
 
 void
@@ -423,6 +458,7 @@ NetworkXioClient::xio_run_loop_worker(void *arg)
                 ovs_xio_aio_complete_request(const_cast<void*>(req->opaque),
                                                  -1,
                                                  EIO);
+                update_stats(const_cast<void*>(req->opaque));
                 delete req;
             }
         }
@@ -490,11 +526,14 @@ NetworkXioClient::on_msg_error(xio_session *session __attribute__((unused)),
         xio_release_response(msg);
     }
     xio_msg = reinterpret_cast<xio_msg_s*>(imsg.opaque());
-        ovs_xio_aio_complete_request(const_cast<void*>(xio_msg->opaque),
+    ovs_xio_aio_complete_request(const_cast<void*>(xio_msg->opaque),
                                      -1,
                                      EIO);
+
+    update_stats(const_cast<void*>(xio_msg->opaque));
+
     req_queue_release();
-        delete xio_msg;
+    delete xio_msg;
     return 0;
 }
 
@@ -632,9 +671,11 @@ NetworkXioClient::on_response(xio_session *session __attribute__((unused)),
     if (imsg.retval() == -1) {
         GLOG_ERROR("\n Alert !!imsg has error in retval\n");
     }
+
     ovs_xio_aio_complete_request(const_cast<void*>(xio_msg->opaque),
                                  imsg.retval(),
                                  imsg.errval());
+    update_stats(const_cast<void*>(xio_msg->opaque));
 
     reply->in.header.iov_base = NULL;
     reply->in.header.iov_len = 0;
@@ -690,7 +731,8 @@ NetworkXioClient::on_msg_error_control(xio_session *session ATTRIBUTE_UNUSED,
         }
     }
     xio_msg = reinterpret_cast<xio_msg_s*>(imsg.opaque());
-        ovs_xio_complete_request_control(const_cast<void*>(xio_msg->opaque),
+
+    ovs_xio_complete_request_control(const_cast<void*>(xio_msg->opaque),
                                          -1,
                                          EIO);
     xio_context_stop_loop(ctx);

@@ -189,6 +189,8 @@ TEST_F(NetworkXioServerTest, MultipleClients) {
 
   for (auto& ctx_ptr : ptr_vec) {
     // disconnect the client from server
+    auto stats_string = ctx_get_stats(ctx_ptr);
+    EXPECT_NE(stats_string.find("num_failed=0"), std::string::npos);
     ctx_ptr.reset();
   }
 }
@@ -231,6 +233,9 @@ TEST_F(NetworkXioServerTest, FileDoesntExist) {
     free(rbuf);
   }
 
+  auto stats_string = ctx_get_stats(ctx);
+  auto expected_str = "num_failed=" + std::to_string(times);
+  EXPECT_NE(stats_string.find(expected_str), std::string::npos);
   ctx.reset();
 }
 
@@ -290,6 +295,10 @@ TEST_F(NetworkXioServerTest, AsyncFileDoesntExist) {
     free(elem);
   }
 
+  auto stats_string = ctx_get_stats(ctx);
+  auto expected_str = "num_failed=" + std::to_string(times);
+  EXPECT_NE(stats_string.find(expected_str), std::string::npos);
+
   ctx.reset();
 }
 
@@ -332,6 +341,11 @@ TEST_F(NetworkXioServerTest, SyncRead) {
   }
 
   removeDataFile();
+
+  auto stats_string = ctx_get_stats(ctx);
+  auto expected_str = "num_queued=" + std::to_string(times + 1);
+  EXPECT_NE(stats_string.find(expected_str), std::string::npos);
+  EXPECT_NE(stats_string.find("num_failed=0"), std::string::npos);
 
   ctx.reset();
 }
@@ -395,6 +409,11 @@ TEST_F(NetworkXioServerTest, AsyncRead) {
 
   removeDataFile();
 
+  auto stats_string = ctx_get_stats(ctx);
+  auto expected_str = "num_queued=" + std::to_string(times + 1);
+  EXPECT_NE(stats_string.find(expected_str), std::string::npos);
+  EXPECT_NE(stats_string.find("num_failed=0"), std::string::npos);
+
   ctx.reset();
 }
 
@@ -456,6 +475,11 @@ TEST_F(NetworkXioServerTest, MultiAsyncRead) {
   }
 
   removeDataFile();
+
+  auto stats_string = ctx_get_stats(ctx);
+  auto expected_str = "num_queued=" + std::to_string(times + 1);
+  EXPECT_NE(stats_string.find(expected_str), std::string::npos);
+  EXPECT_NE(stats_string.find("num_failed=0"), std::string::npos);
 
   ctx.reset();
 }

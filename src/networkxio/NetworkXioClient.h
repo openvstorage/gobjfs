@@ -28,10 +28,13 @@ but WITHOUT ANY WARRANTY of any kind.
 #include <atomic>
 #include <exception>
 #include <util/Spinlock.h>
+#include <util/Stats.h>
 #include "NetworkXioProtocol.h"
 
 namespace gobjfs { namespace xio 
 {
+
+struct aio_request;
 
 MAKE_EXCEPTION(XioClientCreateException);
 MAKE_EXCEPTION(XioClientRegHandlerException);
@@ -131,6 +134,22 @@ public:
 
     static void
     xio_destroy_ctx_shutdown(xio_context *ctx);
+
+    struct statistics {
+
+      std::atomic<uint64_t> num_queued{0};
+      // num_completed includes num_failed
+      std::atomic<uint64_t> num_completed{0};
+      std::atomic<uint64_t> num_failed{0};
+
+      gobjfs::stats::Histogram<int64_t> rtt_hist;
+      gobjfs::stats::StatsCounter<int64_t> rtt_stats;
+
+      std::string ToString() const;
+
+    } stats;
+
+    void update_stats(void* req);
 
 private:
     std::shared_ptr<xio_context> ctx;
