@@ -140,7 +140,6 @@ static constexpr int XIO_COMPLETION_DEFAULT_MAX_EVENTS = 100;
 
       XXEnter();
 
-      NetworkXioWorkQueue* pWorkQueue = NULL;
       const unsigned int max = XIO_COMPLETION_DEFAULT_MAX_EVENTS;
       epoll_event events[max];
 
@@ -196,7 +195,7 @@ static constexpr int XIO_COMPLETION_DEFAULT_MAX_EVENTS = 100;
 
                   pack_msg(pXioReq);
 
-                  pWorkQueue = reinterpret_cast<NetworkXioWorkQueue*> (pXioReq->req_wq);
+                  NetworkXioWorkQueue* pWorkQueue = reinterpret_cast<NetworkXioWorkQueue*> (pXioReq->req_wq);
                   pWorkQueue->worker_bottom_half(pWorkQueue, pXioReq);
               }
               break;

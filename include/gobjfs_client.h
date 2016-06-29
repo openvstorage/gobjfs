@@ -97,7 +97,7 @@ ctx_init(client_ctx_ptr ctx);
  * return: Buffer pointer on success, or NULL on fail
  */
 gbuffer*
-ggbuffer_allocate(client_ctx_ptr ctx,
+gbuffer_allocate(client_ctx_ptr ctx,
              size_t size);
 
 /* Retrieve pointer to buffer content
