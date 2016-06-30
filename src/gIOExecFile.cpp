@@ -67,6 +67,9 @@ gIOBatch *gIOBatchAlloc(size_t count) {
 }
 
 void gIOBatchFree(gIOBatch *ptr) {
+
+  if (!ptr) return;
+
   for (size_t idx = 0; idx < ptr->count; idx++) {
     gIOExecFragment &frag = ptr->array[idx];
     //assert(IsDirectIOAligned(frag.size));

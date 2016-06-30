@@ -25,6 +25,7 @@ but WITHOUT ANY WARRANTY of any kind.
 #include <boost/log/expressions.hpp>
 
 #include <gobjfs_server.h>
+#include <util/lang_utils.h>
 #include <networkxio/NetworkXioCommon.h>
 #include <networkxio/NetworkXioServer.h>
 
@@ -32,17 +33,18 @@ using gobjfs::xio::NetworkXioServer;
 
 struct gobjfs_xio_server_int
 {
-  NetworkXioServer* server{nullptr};
+  std::unique_ptr<NetworkXioServer> server;
   std::future<void> future;
 
-  gobjfs_xio_server_int(NetworkXioServer* xs)
+  gobjfs_xio_server_int(std::unique_ptr<NetworkXioServer>& xs)
   {
-    server = xs;
+    server = std::move(xs);
   }
   ~gobjfs_xio_server_int()
   {
   }
 };
+
 
 gobjfs_xio_server_handle gobjfs_xio_server_start(
   const char* transport,
@@ -56,7 +58,7 @@ gobjfs_xio_server_handle gobjfs_xio_server_start(
   const std::string uri = transport + std::string("://") +
     host + std::string(":") + std::to_string(port);
 
-  NetworkXioServer* xs = new NetworkXioServer(uri,
+  auto xs = gobjfs::make_unique<NetworkXioServer>(uri,
     number_cores,
     queue_depth,
     file_translator_func,
@@ -68,7 +70,7 @@ gobjfs_xio_server_handle gobjfs_xio_server_start(
   gobjfs_xio_server_int* s = new gobjfs_xio_server_int(xs);
 
   s->future = std::async(std::launch::async,
-    [&] () { xs->run(pr); });
+    [&] () { s->server->run(pr); });
 
   init_future.wait();
 

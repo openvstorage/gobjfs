@@ -95,7 +95,7 @@ public:
 
   void createDataFile() {
 
-    gMempool_init(512);
+    gMempool_init(gobjfs::os::DirectIOSize);
 
     auto serviceHandle = IOExecFileServiceInit(configFile, fileTranslatorFunc, true);
 
@@ -199,7 +199,7 @@ TEST_F(NetworkXioServerTest, FileDoesntExist) {
 
   removeDataFile(false); // file may not exist; dont fail
 
-  static constexpr size_t BufferSize = 512;
+  static constexpr size_t BufferSize = gobjfs::os::DirectIOSize;
   // shorten read size to test unaligned reads
   static constexpr size_t ShortenSize = 10;
 
@@ -243,7 +243,7 @@ TEST_F(NetworkXioServerTest, AsyncFileDoesntExist) {
 
   removeDataFile(false); // file may not exist; dont fail
 
-  static constexpr size_t BufferSize = 512;
+  static constexpr size_t BufferSize = gobjfs::os::DirectIOSize;
   // shorten read size to test unaligned reads
   static constexpr size_t ShortenSize = 10;
 
@@ -306,7 +306,7 @@ TEST_F(NetworkXioServerTest, SyncRead) {
 
   createDataFile();
 
-  static constexpr size_t BufferSize = 512;
+  static constexpr size_t BufferSize = gobjfs::os::DirectIOSize;
   // shorten read size to test unaligned reads
   static constexpr size_t ShortenSize = 10;
 
@@ -354,7 +354,7 @@ TEST_F(NetworkXioServerTest, AsyncRead) {
 
   createDataFile();
 
-  static constexpr size_t BufferSize = 512;
+  static constexpr size_t BufferSize = gobjfs::os::DirectIOSize;
   // shorten read size to test unaligned reads
   static constexpr size_t ShortenSize = 10;
 
@@ -421,7 +421,7 @@ TEST_F(NetworkXioServerTest, MultiAsyncRead) {
 
   createDataFile();
 
-  static constexpr size_t BufferSize = 512;
+  static constexpr size_t BufferSize = gobjfs::os::DirectIOSize;
   // shorten read size to test unaligned reads
   static constexpr size_t ShortenSize = 10;
 

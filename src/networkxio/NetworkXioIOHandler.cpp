@@ -298,6 +298,8 @@ static constexpr int XIO_COMPLETION_DEFAULT_MAX_EVENTS = 100;
                 GLOG_ERROR("IOExecFileRead failed with error " << ret);
                 req->retval = -1;
                 req->errval = EIO;
+                frag.addr = nullptr;
+                gIOBatchFree(batch);
                 XXDone();
             }
 
