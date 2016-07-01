@@ -36,7 +36,6 @@ but WITHOUT ANY WARRANTY of any kind.
 typedef int16_t CoreId; // TODO make a full class later ?
 #define CoreIdInvalid (-1)
 
-
 namespace gobjfs {
 namespace os {
 

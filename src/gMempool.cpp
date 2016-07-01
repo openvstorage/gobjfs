@@ -41,20 +41,23 @@ int gMempool_init(size_t alignSize) {
 }
 
 void *gMempool_alloc(size_t size) {
-  if (size == 0) return nullptr;
+  if (size == 0)
+    return nullptr;
   LOG_IF(FATAL, pool == nullptr) << "call to gMempool_init is missing";
   const size_t allocSize = RoundToNext512(size);
   return pool->Alloc(allocSize);
 }
 
 void gMempool_free(void *ptr) {
-  if (nullptr == ptr) return;
+  if (nullptr == ptr)
+    return;
   LOG_IF(FATAL, pool == nullptr) << "call to gMempool_init is missing";
   pool->Free(ptr);
 }
 
 void gMempool_getStats(char *buffer, size_t len) {
-  if ((nullptr == buffer) || (len == 0)) return;
+  if ((nullptr == buffer) || (len == 0))
+    return;
   LOG_IF(FATAL, pool == nullptr) << "call to gMempool_init is missing";
   const auto str = pool->GetStats();
   strncpy(buffer, str.data(), len);

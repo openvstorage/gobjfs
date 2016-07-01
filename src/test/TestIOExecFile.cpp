@@ -49,7 +49,8 @@ static int wait_for_iocompletion(int epollfd, int efd, int max) {
         gIOStatus iostatus;
         int ret = read(efd, &iostatus, sizeof(iostatus));
         if (ret == sizeof(iostatus)) {
-          VLOG(1) << "Recieved event (completionId: " << static_cast<uint64_t>(iostatus.completionId)
+          VLOG(1) << "Recieved event (completionId: "
+                  << static_cast<uint64_t>(iostatus.completionId)
                   << " , status: " << iostatus.errorCode;
           ctr++;
         }
@@ -74,11 +75,13 @@ static void run_verifyIO() {
   gMempool_init(ALIGNSIZE);
 
   // figure out how to provide the path to config file in a test
-  auto serviceHandle = IOExecFileServiceInit("../../../src/gioexecfile.conf", nullptr, true);
+  auto serviceHandle =
+      IOExecFileServiceInit("../../../src/gioexecfile.conf", nullptr, true);
 
   IOExecFileHandle handle;
   std::string fileName = "/tmp/abc";
-  handle = IOExecFileOpen(serviceHandle, fileName.c_str(), fileName.size(), O_RDWR | O_CREAT);
+  handle = IOExecFileOpen(serviceHandle, fileName.c_str(), fileName.size(),
+                          O_RDWR | O_CREAT);
   if (handle == nullptr) {
     LOG(ERROR) << "IOExecFileOpen Failed";
     return;

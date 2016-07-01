@@ -164,9 +164,9 @@ std::ostream &operator<<(std::ostream &os, const StatsCounter<T> &t) {
 // ================
 
 /**
- * Log scale histogram 
- * bucket 0 contains 0-10 
- * bucket 1 contains 10-100 
+ * Log scale histogram
+ * bucket 0 contains 0-10
+ * bucket 1 contains 10-100
  * and so on..
  *
  * Usage

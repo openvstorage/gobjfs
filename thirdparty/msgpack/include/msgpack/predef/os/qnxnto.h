@@ -31,30 +31,28 @@ version 4 is specifically detected.
 
 #define MSGPACK_OS_QNX MSGPACK_VERSION_NUMBER_NOT_AVAILABLE
 
-#if !defined(MSGPACK_PREDEF_DETAIL_OS_DETECTED) && ( \
-    defined(__QNX__) || defined(__QNXNTO__) \
-    )
-#   undef MSGPACK_OS_QNX
-#   if !defined(MSGPACK_OS_QNX) && defined(_NTO_VERSION)
-#       define MSGPACK_OS_QNX MSGPACK_PREDEF_MAKE_10_VVRR(_NTO_VERSION)
-#   endif
-#   if !defined(MSGPACK_OS_QNX) && defined(__QNX__)
-#       define MSGPACK_OS_QNX MSGPACK_VERSION_NUMBER(4,0,0)
-#   endif
-#   if !defined(MSGPACK_OS_QNX)
-#       define MSGPACK_OS_QNX MSGPACK_VERSION_NUMBER_AVAILABLE
-#   endif
+#if !defined(MSGPACK_PREDEF_DETAIL_OS_DETECTED) &&                             \
+    (defined(__QNX__) || defined(__QNXNTO__))
+#undef MSGPACK_OS_QNX
+#if !defined(MSGPACK_OS_QNX) && defined(_NTO_VERSION)
+#define MSGPACK_OS_QNX MSGPACK_PREDEF_MAKE_10_VVRR(_NTO_VERSION)
+#endif
+#if !defined(MSGPACK_OS_QNX) && defined(__QNX__)
+#define MSGPACK_OS_QNX MSGPACK_VERSION_NUMBER(4, 0, 0)
+#endif
+#if !defined(MSGPACK_OS_QNX)
+#define MSGPACK_OS_QNX MSGPACK_VERSION_NUMBER_AVAILABLE
+#endif
 #endif
 
 #if MSGPACK_OS_QNX
-#   define MSGPACK_OS_QNX_AVAILABLE
-#   include <msgpack/predef/detail/os_detected.h>
+#define MSGPACK_OS_QNX_AVAILABLE
+#include <msgpack/predef/detail/os_detected.h>
 #endif
 
 #define MSGPACK_OS_QNX_NAME "QNX"
 
 #include <msgpack/predef/detail/test.h>
-MSGPACK_PREDEF_DECLARE_TEST(MSGPACK_OS_QNX,MSGPACK_OS_QNX_NAME)
-
+MSGPACK_PREDEF_DECLARE_TEST(MSGPACK_OS_QNX, MSGPACK_OS_QNX_NAME)
 
 #endif

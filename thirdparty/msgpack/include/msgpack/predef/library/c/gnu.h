@@ -39,24 +39,22 @@ Version number available as major, and minor.
 #define MSGPACK_LIB_C_GNU MSGPACK_VERSION_NUMBER_NOT_AVAILABLE
 
 #if defined(__GLIBC__) || defined(__GNU_LIBRARY__)
-#   undef MSGPACK_LIB_C_GNU
-#   if defined(__GLIBC__)
-#       define MSGPACK_LIB_C_GNU \
-            MSGPACK_VERSION_NUMBER(__GLIBC__,__GLIBC_MINOR__,0)
-#   else
-#       define MSGPACK_LIB_C_GNU \
-            MSGPACK_VERSION_NUMBER(__GNU_LIBRARY__,__GNU_LIBRARY_MINOR__,0)
-#   endif
+#undef MSGPACK_LIB_C_GNU
+#if defined(__GLIBC__)
+#define MSGPACK_LIB_C_GNU MSGPACK_VERSION_NUMBER(__GLIBC__, __GLIBC_MINOR__, 0)
+#else
+#define MSGPACK_LIB_C_GNU                                                      \
+  MSGPACK_VERSION_NUMBER(__GNU_LIBRARY__, __GNU_LIBRARY_MINOR__, 0)
+#endif
 #endif
 
 #if MSGPACK_LIB_C_GNU
-#   define MSGPACK_LIB_C_GNU_AVAILABLE
+#define MSGPACK_LIB_C_GNU_AVAILABLE
 #endif
 
 #define MSGPACK_LIB_C_GNU_NAME "GNU"
 
 #include <msgpack/predef/detail/test.h>
-MSGPACK_PREDEF_DECLARE_TEST(MSGPACK_LIB_C_GNU,MSGPACK_LIB_C_GNU_NAME)
-
+MSGPACK_PREDEF_DECLARE_TEST(MSGPACK_LIB_C_GNU, MSGPACK_LIB_C_GNU_NAME)
 
 #endif

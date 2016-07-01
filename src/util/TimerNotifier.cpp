@@ -18,12 +18,12 @@ but WITHOUT ANY WARRANTY of any kind.
 
 #include "TimerNotifier.h"
 
-#include <cassert>        // assert
-#include <gobjfs_log.h> // LOG
-#include <strings.h>      // bzero
-#include <sys/epoll.h>    // epoll
-#include <sys/timerfd.h>  // timerfd
-#include <unistd.h>       // read
+#include <cassert>       // assert
+#include <gobjfs_log.h>  // LOG
+#include <strings.h>     // bzero
+#include <sys/epoll.h>   // epoll
+#include <sys/timerfd.h> // timerfd
+#include <unistd.h>      // read
 
 namespace gobjfs {
 namespace os {

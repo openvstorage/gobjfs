@@ -2,7 +2,9 @@
 #include <boost/log/trivial.hpp>
 
 #define LOG(level) LOG_##level
-#define LOG_IF(level, cond) if(cond) LOG_##level
+#define LOG_IF(level, cond)                                                    \
+  if (cond)                                                                    \
+  LOG_##level
 
 #define LOG_DEBUG BOOST_LOG_TRIVIAL(debug)
 #define LOG_INFO BOOST_LOG_TRIVIAL(info)
@@ -15,4 +17,3 @@
 
 // TODO logging Need to reimplement glog functionality here
 #define LOG_EVERY_N(level, number) LOG_##level
-

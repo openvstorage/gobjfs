@@ -34,40 +34,40 @@ Version number available as major, minor, and patch.
 #define MSGPACK_COMP_IBM MSGPACK_VERSION_NUMBER_NOT_AVAILABLE
 
 #if defined(__IBMCPP__) || defined(__xlC__) || defined(__xlc__)
-#   if !defined(MSGPACK_COMP_IBM_DETECTION) && defined(__COMPILER_VER__)
-#       define MSGPACK_COMP_IBM_DETECTION MSGPACK_PREDEF_MAKE_0X_VRRPPPP(__COMPILER_VER__)
-#   endif
-#   if !defined(MSGPACK_COMP_IBM_DETECTION) && defined(__xlC__)
-#       define MSGPACK_COMP_IBM_DETECTION MSGPACK_PREDEF_MAKE_0X_VVRR(__xlC__)
-#   endif
-#   if !defined(MSGPACK_COMP_IBM_DETECTION) && defined(__xlc__)
-#       define MSGPACK_COMP_IBM_DETECTION MSGPACK_PREDEF_MAKE_0X_VVRR(__xlc__)
-#   endif
-#   if !defined(MSGPACK_COMP_IBM_DETECTION)
-#       define MSGPACK_COMP_IBM_DETECTION MSGPACK_PREDEF_MAKE_10_VRP(__IBMCPP__)
-#   endif
+#if !defined(MSGPACK_COMP_IBM_DETECTION) && defined(__COMPILER_VER__)
+#define MSGPACK_COMP_IBM_DETECTION                                             \
+  MSGPACK_PREDEF_MAKE_0X_VRRPPPP(__COMPILER_VER__)
+#endif
+#if !defined(MSGPACK_COMP_IBM_DETECTION) && defined(__xlC__)
+#define MSGPACK_COMP_IBM_DETECTION MSGPACK_PREDEF_MAKE_0X_VVRR(__xlC__)
+#endif
+#if !defined(MSGPACK_COMP_IBM_DETECTION) && defined(__xlc__)
+#define MSGPACK_COMP_IBM_DETECTION MSGPACK_PREDEF_MAKE_0X_VVRR(__xlc__)
+#endif
+#if !defined(MSGPACK_COMP_IBM_DETECTION)
+#define MSGPACK_COMP_IBM_DETECTION MSGPACK_PREDEF_MAKE_10_VRP(__IBMCPP__)
+#endif
 #endif
 
 #ifdef MSGPACK_COMP_IBM_DETECTION
-#   if defined(MSGPACK_PREDEF_DETAIL_COMP_DETECTED)
-#       define MSGPACK_COMP_IBM_EMULATED MSGPACK_COMP_IBM_DETECTION
-#   else
-#       undef MSGPACK_COMP_IBM
-#       define MSGPACK_COMP_IBM MSGPACK_COMP_IBM_DETECTION
-#   endif
-#   define MSGPACK_COMP_IBM_AVAILABLE
-#   include <msgpack/predef/detail/comp_detected.h>
+#if defined(MSGPACK_PREDEF_DETAIL_COMP_DETECTED)
+#define MSGPACK_COMP_IBM_EMULATED MSGPACK_COMP_IBM_DETECTION
+#else
+#undef MSGPACK_COMP_IBM
+#define MSGPACK_COMP_IBM MSGPACK_COMP_IBM_DETECTION
+#endif
+#define MSGPACK_COMP_IBM_AVAILABLE
+#include <msgpack/predef/detail/comp_detected.h>
 #endif
 
 #define MSGPACK_COMP_IBM_NAME "IBM XL C/C++"
 
 #include <msgpack/predef/detail/test.h>
-MSGPACK_PREDEF_DECLARE_TEST(MSGPACK_COMP_IBM,MSGPACK_COMP_IBM_NAME)
+MSGPACK_PREDEF_DECLARE_TEST(MSGPACK_COMP_IBM, MSGPACK_COMP_IBM_NAME)
 
 #ifdef MSGPACK_COMP_IBM_EMULATED
 #include <msgpack/predef/detail/test.h>
-MSGPACK_PREDEF_DECLARE_TEST(MSGPACK_COMP_IBM_EMULATED,MSGPACK_COMP_IBM_NAME)
+MSGPACK_PREDEF_DECLARE_TEST(MSGPACK_COMP_IBM_EMULATED, MSGPACK_COMP_IBM_NAME)
 #endif
-
 
 #endif

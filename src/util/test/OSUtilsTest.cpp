@@ -37,47 +37,46 @@ TEST(OSUtils, fileIsOpen) {
 TEST(OSUtils, IsDirectIOAligned) {
 
   {
-    bool ret = IsDirectIOAligned(0);  
+    bool ret = IsDirectIOAligned(0);
     EXPECT_TRUE(ret);
   }
   {
-    bool ret = IsDirectIOAligned(511);  
+    bool ret = IsDirectIOAligned(511);
     EXPECT_FALSE(ret);
   }
   {
-    bool ret = IsDirectIOAligned(512);  
+    bool ret = IsDirectIOAligned(512);
     EXPECT_TRUE(ret);
   }
   {
-    bool ret = IsDirectIOAligned(4096);  
+    bool ret = IsDirectIOAligned(4096);
     EXPECT_TRUE(ret);
   }
   {
-    bool ret = IsDirectIOAligned(65535);  
+    bool ret = IsDirectIOAligned(65535);
     EXPECT_FALSE(ret);
   }
-
 }
 
 TEST(OSUtils, RoundToNext512) {
- 
+
   {
-    uint64_t newVal = RoundToNext512(0);  
+    uint64_t newVal = RoundToNext512(0);
     EXPECT_EQ(newVal, 0);
   }
 
   {
-    uint64_t newVal = RoundToNext512(511);  
+    uint64_t newVal = RoundToNext512(511);
     EXPECT_EQ(newVal, 512);
   }
 
   {
-    uint64_t newVal = RoundToNext512(512);  
+    uint64_t newVal = RoundToNext512(512);
     EXPECT_EQ(newVal, 512);
   }
 
   {
-    uint64_t newVal = RoundToNext512(513);  
+    uint64_t newVal = RoundToNext512(513);
     EXPECT_EQ(newVal, 1024);
   }
 }

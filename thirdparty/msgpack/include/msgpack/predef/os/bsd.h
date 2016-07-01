@@ -21,13 +21,15 @@ http://www.boost.org/LICENSE_1_0.txt)
 /*`
 [heading `MSGPACK_OS_BSD`]
 
-[@http://en.wikipedia.org/wiki/Berkeley_Software_Distribution BSD] operating system.
+[@http://en.wikipedia.org/wiki/Berkeley_Software_Distribution BSD] operating
+system.
 
 BSD has various branch operating systems possible and each detected
 individually. This detects the following variations and sets a specific
 version number macro to match:
 
-* `MSGPACK_OS_BSD_DRAGONFLY` [@http://en.wikipedia.org/wiki/DragonFly_BSD DragonFly BSD]
+* `MSGPACK_OS_BSD_DRAGONFLY` [@http://en.wikipedia.org/wiki/DragonFly_BSD
+DragonFly BSD]
 * `MSGPACK_OS_BSD_FREE` [@http://en.wikipedia.org/wiki/Freebsd FreeBSD]
 * `MSGPACK_OS_BSD_BSDI` [@http://en.wikipedia.org/wiki/BSD/OS BSDi BSD/OS]
 * `MSGPACK_OS_BSD_NET` [@http://en.wikipedia.org/wiki/Netbsd NetBSD]
@@ -59,37 +61,35 @@ of BSD. If the above variants is detected the corresponding macro is also set.]
 #define MSGPACK_OS_BSD MSGPACK_VERSION_NUMBER_NOT_AVAILABLE
 #endif
 
-#if !defined(MSGPACK_PREDEF_DETAIL_OS_DETECTED) && ( \
-    defined(BSD) || \
-    defined(_SYSTYPE_BSD) \
-    )
-#   undef MSGPACK_OS_BSD
-#   include <sys/param.h>
-#   if !defined(MSGPACK_OS_BSD) && defined(BSD4_4)
-#       define MSGPACK_OS_BSD MSGPACK_VERSION_NUMBER(4,4,0)
-#   endif
-#   if !defined(MSGPACK_OS_BSD) && defined(BSD4_3)
-#       define MSGPACK_OS_BSD MSGPACK_VERSION_NUMBER(4,3,0)
-#   endif
-#   if !defined(MSGPACK_OS_BSD) && defined(BSD4_2)
-#       define MSGPACK_OS_BSD MSGPACK_VERSION_NUMBER(4,2,0)
-#   endif
-#   if !defined(MSGPACK_OS_BSD) && defined(BSD)
-#       define MSGPACK_OS_BSD MSGPACK_PREDEF_MAKE_10_VVRR(BSD)
-#   endif
-#   if !defined(MSGPACK_OS_BSD)
-#       define MSGPACK_OS_BSD MSGPACK_VERSION_NUMBER_AVAILABLE
-#   endif
+#if !defined(MSGPACK_PREDEF_DETAIL_OS_DETECTED) &&                             \
+    (defined(BSD) || defined(_SYSTYPE_BSD))
+#undef MSGPACK_OS_BSD
+#include <sys/param.h>
+#if !defined(MSGPACK_OS_BSD) && defined(BSD4_4)
+#define MSGPACK_OS_BSD MSGPACK_VERSION_NUMBER(4, 4, 0)
+#endif
+#if !defined(MSGPACK_OS_BSD) && defined(BSD4_3)
+#define MSGPACK_OS_BSD MSGPACK_VERSION_NUMBER(4, 3, 0)
+#endif
+#if !defined(MSGPACK_OS_BSD) && defined(BSD4_2)
+#define MSGPACK_OS_BSD MSGPACK_VERSION_NUMBER(4, 2, 0)
+#endif
+#if !defined(MSGPACK_OS_BSD) && defined(BSD)
+#define MSGPACK_OS_BSD MSGPACK_PREDEF_MAKE_10_VVRR(BSD)
+#endif
+#if !defined(MSGPACK_OS_BSD)
+#define MSGPACK_OS_BSD MSGPACK_VERSION_NUMBER_AVAILABLE
+#endif
 #endif
 
 #if MSGPACK_OS_BSD
-#   define MSGPACK_OS_BSD_AVAILABLE
-#   include <msgpack/predef/detail/os_detected.h>
+#define MSGPACK_OS_BSD_AVAILABLE
+#include <msgpack/predef/detail/os_detected.h>
 #endif
 
 #define MSGPACK_OS_BSD_NAME "BSD"
 
 #include <msgpack/predef/detail/test.h>
-MSGPACK_PREDEF_DECLARE_TEST(MSGPACK_OS_BSD,MSGPACK_OS_BSD_NAME)
+MSGPACK_PREDEF_DECLARE_TEST(MSGPACK_OS_BSD, MSGPACK_OS_BSD_NAME)
 
 #endif

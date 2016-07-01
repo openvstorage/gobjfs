@@ -14,7 +14,8 @@ http://www.boost.org/LICENSE_1_0.txt)
 /*`
 [heading `MSGPACK_OS_WINDOWS`]
 
-[@http://en.wikipedia.org/wiki/Category:Microsoft_Windows Microsoft Windows] operating system.
+[@http://en.wikipedia.org/wiki/Category:Microsoft_Windows Microsoft Windows]
+operating system.
 
 [table
     [[__predef_symbol__] [__predef_version__]]
@@ -29,23 +30,21 @@ http://www.boost.org/LICENSE_1_0.txt)
 
 #define MSGPACK_OS_WINDOWS MSGPACK_VERSION_NUMBER_NOT_AVAILABLE
 
-#if !defined(MSGPACK_PREDEF_DETAIL_OS_DETECTED) && ( \
-    defined(_WIN32) || defined(_WIN64) || \
-    defined(__WIN32__) || defined(__TOS_WIN__) || \
-    defined(__WINDOWS__) \
-    )
-#   undef MSGPACK_OS_WINDOWS
-#   define MSGPACK_OS_WINDOWS MSGPACK_VERSION_NUMBER_AVAILABLE
+#if !defined(MSGPACK_PREDEF_DETAIL_OS_DETECTED) &&                             \
+    (defined(_WIN32) || defined(_WIN64) || defined(__WIN32__) ||               \
+     defined(__TOS_WIN__) || defined(__WINDOWS__))
+#undef MSGPACK_OS_WINDOWS
+#define MSGPACK_OS_WINDOWS MSGPACK_VERSION_NUMBER_AVAILABLE
 #endif
 
 #if MSGPACK_OS_WINDOWS
-#   define MSGPACK_OS_WINDOWS_AVAILABLE
-#   include <msgpack/predef/detail/os_detected.h>
+#define MSGPACK_OS_WINDOWS_AVAILABLE
+#include <msgpack/predef/detail/os_detected.h>
 #endif
 
 #define MSGPACK_OS_WINDOWS_NAME "Microsoft Windows"
 
 #include <msgpack/predef/detail/test.h>
-MSGPACK_PREDEF_DECLARE_TEST(MSGPACK_OS_WINDOWS,MSGPACK_OS_WINDOWS_NAME)
+MSGPACK_PREDEF_DECLARE_TEST(MSGPACK_OS_WINDOWS, MSGPACK_OS_WINDOWS_NAME)
 
 #endif

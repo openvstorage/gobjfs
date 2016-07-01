@@ -14,7 +14,8 @@ http://www.boost.org/LICENSE_1_0.txt)
 /*`
 [heading `MSGPACK_COMP_DIAB`]
 
-[@http://www.windriver.com/products/development_suite/wind_river_compiler/ Diab C/C++] compiler.
+[@http://www.windriver.com/products/development_suite/wind_river_compiler/ Diab
+C/C++] compiler.
 Version number available as major, minor, and patch.
 
 [table
@@ -29,29 +30,29 @@ Version number available as major, minor, and patch.
 #define MSGPACK_COMP_DIAB MSGPACK_VERSION_NUMBER_NOT_AVAILABLE
 
 #if defined(__DCC__)
-#   define MSGPACK_COMP_DIAB_DETECTION MSGPACK_PREDEF_MAKE_10_VRPP(__VERSION_NUMBER__)
+#define MSGPACK_COMP_DIAB_DETECTION                                            \
+  MSGPACK_PREDEF_MAKE_10_VRPP(__VERSION_NUMBER__)
 #endif
 
 #ifdef MSGPACK_COMP_DIAB_DETECTION
-#   if defined(MSGPACK_PREDEF_DETAIL_COMP_DETECTED)
-#       define MSGPACK_COMP_DIAB_EMULATED MSGPACK_COMP_DIAB_DETECTION
-#   else
-#       undef MSGPACK_COMP_DIAB
-#       define MSGPACK_COMP_DIAB MSGPACK_COMP_DIAB_DETECTION
-#   endif
-#   define MSGPACK_COMP_DIAB_AVAILABLE
-#   include <msgpack/predef/detail/comp_detected.h>
+#if defined(MSGPACK_PREDEF_DETAIL_COMP_DETECTED)
+#define MSGPACK_COMP_DIAB_EMULATED MSGPACK_COMP_DIAB_DETECTION
+#else
+#undef MSGPACK_COMP_DIAB
+#define MSGPACK_COMP_DIAB MSGPACK_COMP_DIAB_DETECTION
+#endif
+#define MSGPACK_COMP_DIAB_AVAILABLE
+#include <msgpack/predef/detail/comp_detected.h>
 #endif
 
 #define MSGPACK_COMP_DIAB_NAME "Diab C/C++"
 
 #include <msgpack/predef/detail/test.h>
-MSGPACK_PREDEF_DECLARE_TEST(MSGPACK_COMP_DIAB,MSGPACK_COMP_DIAB_NAME)
+MSGPACK_PREDEF_DECLARE_TEST(MSGPACK_COMP_DIAB, MSGPACK_COMP_DIAB_NAME)
 
 #ifdef MSGPACK_COMP_DIAB_EMULATED
 #include <msgpack/predef/detail/test.h>
-MSGPACK_PREDEF_DECLARE_TEST(MSGPACK_COMP_DIAB_EMULATED,MSGPACK_COMP_DIAB_NAME)
+MSGPACK_PREDEF_DECLARE_TEST(MSGPACK_COMP_DIAB_EMULATED, MSGPACK_COMP_DIAB_NAME)
 #endif
-
 
 #endif

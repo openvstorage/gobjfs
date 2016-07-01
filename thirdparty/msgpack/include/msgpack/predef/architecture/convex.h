@@ -32,36 +32,34 @@ http://www.boost.org/LICENSE_1_0.txt)
 #define MSGPACK_ARCH_CONVEX MSGPACK_VERSION_NUMBER_NOT_AVAILABLE
 
 #if defined(__convex__)
-#   undef MSGPACK_ARCH_CONVEX
-#   if !defined(MSGPACK_ARCH_CONVEX) && defined(__convex_c1__)
-#       define MSGPACK_ARCH_CONVEX MSGPACK_VERSION_NUMBER(1,0,0)
-#   endif
-#   if !defined(MSGPACK_ARCH_CONVEX) && defined(__convex_c2__)
-#       define MSGPACK_ARCH_CONVEX MSGPACK_VERSION_NUMBER(2,0,0)
-#   endif
-#   if !defined(MSGPACK_ARCH_CONVEX) && defined(__convex_c32__)
-#       define MSGPACK_ARCH_CONVEX MSGPACK_VERSION_NUMBER(3,2,0)
-#   endif
-#   if !defined(MSGPACK_ARCH_CONVEX) && defined(__convex_c34__)
-#       define MSGPACK_ARCH_CONVEX MSGPACK_VERSION_NUMBER(3,4,0)
-#   endif
-#   if !defined(MSGPACK_ARCH_CONVEX) && defined(__convex_c38__)
-#       define MSGPACK_ARCH_CONVEX MSGPACK_VERSION_NUMBER(3,8,0)
-#   endif
-#   if !defined(MSGPACK_ARCH_CONVEX)
-#       define MSGPACK_ARCH_CONVEX MSGPACK_VERSION_NUMBER_AVAILABLE
-#   endif
+#undef MSGPACK_ARCH_CONVEX
+#if !defined(MSGPACK_ARCH_CONVEX) && defined(__convex_c1__)
+#define MSGPACK_ARCH_CONVEX MSGPACK_VERSION_NUMBER(1, 0, 0)
+#endif
+#if !defined(MSGPACK_ARCH_CONVEX) && defined(__convex_c2__)
+#define MSGPACK_ARCH_CONVEX MSGPACK_VERSION_NUMBER(2, 0, 0)
+#endif
+#if !defined(MSGPACK_ARCH_CONVEX) && defined(__convex_c32__)
+#define MSGPACK_ARCH_CONVEX MSGPACK_VERSION_NUMBER(3, 2, 0)
+#endif
+#if !defined(MSGPACK_ARCH_CONVEX) && defined(__convex_c34__)
+#define MSGPACK_ARCH_CONVEX MSGPACK_VERSION_NUMBER(3, 4, 0)
+#endif
+#if !defined(MSGPACK_ARCH_CONVEX) && defined(__convex_c38__)
+#define MSGPACK_ARCH_CONVEX MSGPACK_VERSION_NUMBER(3, 8, 0)
+#endif
+#if !defined(MSGPACK_ARCH_CONVEX)
+#define MSGPACK_ARCH_CONVEX MSGPACK_VERSION_NUMBER_AVAILABLE
+#endif
 #endif
 
 #if MSGPACK_ARCH_CONVEX
-#   define MSGPACK_ARCH_CONVEX_AVAILABLE
+#define MSGPACK_ARCH_CONVEX_AVAILABLE
 #endif
 
 #define MSGPACK_ARCH_CONVEX_NAME "Convex Computer"
 
 #include <msgpack/predef/detail/test.h>
-MSGPACK_PREDEF_DECLARE_TEST(MSGPACK_ARCH_CONVEX,MSGPACK_ARCH_CONVEX_NAME)
-
-
+MSGPACK_PREDEF_DECLARE_TEST(MSGPACK_ARCH_CONVEX, MSGPACK_ARCH_CONVEX_NAME)
 
 #endif

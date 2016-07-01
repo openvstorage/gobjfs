@@ -26,8 +26,8 @@ but WITHOUT ANY WARRANTY of any kind.
 
 //#include <gIOExecFile.h>
 
-typedef void* gobjfs_xio_server_handle;
-typedef int (* FileTranslatorFunc)(const char*, size_t, char*);
+typedef void *gobjfs_xio_server_handle;
+typedef int (*FileTranslatorFunc)(const char *, size_t, char *);
 // C API
 #ifdef __cplusplus
 extern "C" {
@@ -40,21 +40,17 @@ extern "C" {
 // @param queue_depth : kernel queue depth to allocate for async io
 // @param is_new_instance : cleans up old directories
 // @return server_handle OR nullptr
-gobjfs_xio_server_handle gobjfs_xio_server_start(
-  const char* transport,
-  const char* host,
-  int port,
-  int32_t number_cores,
-  int32_t queue_depth,
-  FileTranslatorFunc file_translator_func,
-  bool is_new_instance);
+gobjfs_xio_server_handle
+gobjfs_xio_server_start(const char *transport, const char *host, int port,
+                        int32_t number_cores, int32_t queue_depth,
+                        FileTranslatorFunc file_translator_func,
+                        bool is_new_instance);
 
 // @param server_handle : handle returned from "server_start"
 // @return 0 on success, else negative error code
-int gobjfs_xio_server_stop(
-  gobjfs_xio_server_handle server_handle);
+int gobjfs_xio_server_stop(gobjfs_xio_server_handle server_handle);
 
-typedef enum { TRACE,DEBUG, INFO, WARNING, ERROR, FATAL} gobjfs_log_level;
+typedef enum { TRACE, DEBUG, INFO, WARNING, ERROR, FATAL } gobjfs_log_level;
 void gobjfs_init_logging(gobjfs_log_level level);
 
 #ifdef __cplusplus

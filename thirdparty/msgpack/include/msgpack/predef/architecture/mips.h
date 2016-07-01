@@ -38,37 +38,38 @@ http://www.boost.org/LICENSE_1_0.txt)
 
 #define MSGPACK_ARCH_MIPS MSGPACK_VERSION_NUMBER_NOT_AVAILABLE
 
-#if defined(__mips__) || defined(__mips) || \
-    defined(__MIPS__)
-#   undef MSGPACK_ARCH_MIPS
-#   if !defined(MSGPACK_ARCH_MIPS) && (defined(__mips))
-#       define MSGPACK_ARCH_MIPS MSGPACK_VERSION_NUMBER(__mips,0,0)
-#   endif
-#   if !defined(MSGPACK_ARCH_MIPS) && (defined(_MIPS_ISA_MIPS1) || defined(_R3000))
-#       define MSGPACK_ARCH_MIPS MSGPACK_VERSION_NUMBER(1,0,0)
-#   endif
-#   if !defined(MSGPACK_ARCH_MIPS) && (defined(_MIPS_ISA_MIPS2) || defined(__MIPS_ISA2__) || defined(_R4000))
-#       define MSGPACK_ARCH_MIPS MSGPACK_VERSION_NUMBER(2,0,0)
-#   endif
-#   if !defined(MSGPACK_ARCH_MIPS) && (defined(_MIPS_ISA_MIPS3) || defined(__MIPS_ISA3__))
-#       define MSGPACK_ARCH_MIPS MSGPACK_VERSION_NUMBER(3,0,0)
-#   endif
-#   if !defined(MSGPACK_ARCH_MIPS) && (defined(_MIPS_ISA_MIPS4) || defined(__MIPS_ISA4__))
-#       define MSGPACK_ARCH_MIPS MSGPACK_VERSION_NUMBER(4,0,0)
-#   endif
-#   if !defined(MSGPACK_ARCH_MIPS)
-#       define MSGPACK_ARCH_MIPS MSGPACK_VERSION_NUMBER_AVAILABLE
-#   endif
+#if defined(__mips__) || defined(__mips) || defined(__MIPS__)
+#undef MSGPACK_ARCH_MIPS
+#if !defined(MSGPACK_ARCH_MIPS) && (defined(__mips))
+#define MSGPACK_ARCH_MIPS MSGPACK_VERSION_NUMBER(__mips, 0, 0)
+#endif
+#if !defined(MSGPACK_ARCH_MIPS) && (defined(_MIPS_ISA_MIPS1) || defined(_R3000))
+#define MSGPACK_ARCH_MIPS MSGPACK_VERSION_NUMBER(1, 0, 0)
+#endif
+#if !defined(MSGPACK_ARCH_MIPS) &&                                             \
+    (defined(_MIPS_ISA_MIPS2) || defined(__MIPS_ISA2__) || defined(_R4000))
+#define MSGPACK_ARCH_MIPS MSGPACK_VERSION_NUMBER(2, 0, 0)
+#endif
+#if !defined(MSGPACK_ARCH_MIPS) &&                                             \
+    (defined(_MIPS_ISA_MIPS3) || defined(__MIPS_ISA3__))
+#define MSGPACK_ARCH_MIPS MSGPACK_VERSION_NUMBER(3, 0, 0)
+#endif
+#if !defined(MSGPACK_ARCH_MIPS) &&                                             \
+    (defined(_MIPS_ISA_MIPS4) || defined(__MIPS_ISA4__))
+#define MSGPACK_ARCH_MIPS MSGPACK_VERSION_NUMBER(4, 0, 0)
+#endif
+#if !defined(MSGPACK_ARCH_MIPS)
+#define MSGPACK_ARCH_MIPS MSGPACK_VERSION_NUMBER_AVAILABLE
+#endif
 #endif
 
 #if MSGPACK_ARCH_MIPS
-#   define MSGPACK_ARCH_MIPS_AVAILABLE
+#define MSGPACK_ARCH_MIPS_AVAILABLE
 #endif
 
 #define MSGPACK_ARCH_MIPS_NAME "MIPS"
 
 #include <msgpack/predef/detail/test.h>
-MSGPACK_PREDEF_DECLARE_TEST(MSGPACK_ARCH_MIPS,MSGPACK_ARCH_MIPS_NAME)
-
+MSGPACK_PREDEF_DECLARE_TEST(MSGPACK_ARCH_MIPS, MSGPACK_ARCH_MIPS_NAME)
 
 #endif

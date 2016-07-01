@@ -26,15 +26,14 @@ but WITHOUT ANY WARRANTY of any kind.
 
 namespace po = boost::program_options;
 
-int ParseConfigFile(const char *configFileName, 
-  IOExecutor::Config &config) {
+int ParseConfigFile(const char *configFileName, IOExecutor::Config &config) {
 
   // print boost compile time version for diagnostic purposes
   // in case it differs from link time version
-  LOG(INFO) << "Compile-time Boost version is "     
-    << BOOST_VERSION / 100000     << "."  // major version
-    << BOOST_VERSION / 100 % 1000 << "."  // minor version
-    << BOOST_VERSION % 100;                // patch level
+  LOG(INFO) << "Compile-time Boost version is " << BOOST_VERSION / 100000
+            << "."                               // major version
+            << BOOST_VERSION / 100 % 1000 << "." // minor version
+            << BOOST_VERSION % 100;              // patch level
 
   po::options_description desc("allowed options");
 
@@ -52,7 +51,7 @@ int ParseConfigFile(const char *configFileName,
     po::notify(vm);
 
     VLOG(2) << "read config file=" << configFileName;
-    
+
   } else {
     LOG(ERROR) << "Failed to open the file" << configFileName;
     ret = -1;

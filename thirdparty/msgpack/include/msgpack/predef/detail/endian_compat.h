@@ -11,16 +11,16 @@ http://www.boost.org/LICENSE_1_0.txt)
 #include <msgpack/predef/other/endian.h>
 
 #if MSGPACK_ENDIAN_BIG_BYTE
-#   define MSGPACK_BIG_ENDIAN
-#   define MSGPACK_BYTE_ORDER 4321
+#define MSGPACK_BIG_ENDIAN
+#define MSGPACK_BYTE_ORDER 4321
 #endif
 #if MSGPACK_ENDIAN_LITTLE_BYTE
-#   define MSGPACK_LITTLE_ENDIAN
-#   define MSGPACK_BYTE_ORDER 1234
+#define MSGPACK_LITTLE_ENDIAN
+#define MSGPACK_BYTE_ORDER 1234
 #endif
 #if MSGPACK_ENDIAN_LITTLE_WORD
-#   define MSGPACK_PDP_ENDIAN
-#   define MSGPACK_BYTE_ORDER 2134
+#define MSGPACK_PDP_ENDIAN
+#define MSGPACK_BYTE_ORDER 2134
 #endif
 
 #endif

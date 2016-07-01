@@ -19,7 +19,9 @@ TEST(StatsCounter, check1) {
   std::ostringstream s;
   s << a;
   LOG(INFO) << s.str();
-  EXPECT_EQ(s.str(), "{\"min\":0,\"avg\":4.5,\"stddev\":3.02765,\"max\":9,\"numSamples\":10}");
+  EXPECT_EQ(
+      s.str(),
+      "{\"min\":0,\"avg\":4.5,\"stddev\":3.02765,\"max\":9,\"numSamples\":10}");
 }
 
 TEST(Histogram, check1) {
@@ -32,9 +34,8 @@ TEST(Histogram, check1) {
   std::ostringstream s;
   s << a;
   LOG(INFO) << a;
-  EXPECT_EQ(
-      s.str(),
-      "{\"numSamples\":11,\"histogram\":[1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0]}");
+  EXPECT_EQ(s.str(), "{\"numSamples\":11,\"histogram\":[1,1,1,1,1,1,1,1,1,1,1,"
+                     "0,0,0,0,0,0,0,0,0,0]}");
 }
 
 TEST(MinValue, check1) {

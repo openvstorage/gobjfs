@@ -34,36 +34,35 @@ Version number available as major, minor, and patch (if available).
 #define MSGPACK_COMP_GNUC MSGPACK_VERSION_NUMBER_NOT_AVAILABLE
 
 #if defined(__GNUC__)
-#   if !defined(MSGPACK_COMP_GNUC_DETECTION) && defined(__GNUC_PATCHLEVEL__)
-#       define MSGPACK_COMP_GNUC_DETECTION \
-            MSGPACK_VERSION_NUMBER(__GNUC__,__GNUC_MINOR__,__GNUC_PATCHLEVEL__)
-#   endif
-#   if !defined(MSGPACK_COMP_GNUC_DETECTION)
-#       define MSGPACK_COMP_GNUC_DETECTION \
-            MSGPACK_VERSION_NUMBER(__GNUC__,__GNUC_MINOR__,0)
-#   endif
+#if !defined(MSGPACK_COMP_GNUC_DETECTION) && defined(__GNUC_PATCHLEVEL__)
+#define MSGPACK_COMP_GNUC_DETECTION                                            \
+  MSGPACK_VERSION_NUMBER(__GNUC__, __GNUC_MINOR__, __GNUC_PATCHLEVEL__)
+#endif
+#if !defined(MSGPACK_COMP_GNUC_DETECTION)
+#define MSGPACK_COMP_GNUC_DETECTION                                            \
+  MSGPACK_VERSION_NUMBER(__GNUC__, __GNUC_MINOR__, 0)
+#endif
 #endif
 
 #ifdef MSGPACK_COMP_GNUC_DETECTION
-#   if defined(MSGPACK_PREDEF_DETAIL_COMP_DETECTED)
-#       define MSGPACK_COMP_GNUC_EMULATED MSGPACK_COMP_GNUC_DETECTION
-#   else
-#       undef MSGPACK_COMP_GNUC
-#       define MSGPACK_COMP_GNUC MSGPACK_COMP_GNUC_DETECTION
-#   endif
-#   define MSGPACK_COMP_GNUC_AVAILABLE
-#   include <msgpack/predef/detail/comp_detected.h>
+#if defined(MSGPACK_PREDEF_DETAIL_COMP_DETECTED)
+#define MSGPACK_COMP_GNUC_EMULATED MSGPACK_COMP_GNUC_DETECTION
+#else
+#undef MSGPACK_COMP_GNUC
+#define MSGPACK_COMP_GNUC MSGPACK_COMP_GNUC_DETECTION
+#endif
+#define MSGPACK_COMP_GNUC_AVAILABLE
+#include <msgpack/predef/detail/comp_detected.h>
 #endif
 
 #define MSGPACK_COMP_GNUC_NAME "Gnu GCC C/C++"
 
 #include <msgpack/predef/detail/test.h>
-MSGPACK_PREDEF_DECLARE_TEST(MSGPACK_COMP_GNUC,MSGPACK_COMP_GNUC_NAME)
+MSGPACK_PREDEF_DECLARE_TEST(MSGPACK_COMP_GNUC, MSGPACK_COMP_GNUC_NAME)
 
 #ifdef MSGPACK_COMP_GNUC_EMULATED
 #include <msgpack/predef/detail/test.h>
-MSGPACK_PREDEF_DECLARE_TEST(MSGPACK_COMP_GNUC_EMULATED,MSGPACK_COMP_GNUC_NAME)
+MSGPACK_PREDEF_DECLARE_TEST(MSGPACK_COMP_GNUC_EMULATED, MSGPACK_COMP_GNUC_NAME)
 #endif
-
 
 #endif

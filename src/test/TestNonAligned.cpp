@@ -32,17 +32,17 @@ but WITHOUT ANY WARRANTY of any kind.
 
 using namespace gobjfs::xio;
 
-static int fileTranslator(const char* old_name, size_t old_length, char* new_name);
+static int fileTranslator(const char *old_name, size_t old_length,
+                          char *new_name);
 
 class IOExecFileTest : public testing::Test {
-  
-  int configFileFd {-1};
+
+  int configFileFd{-1};
 
 public:
-
   char configFile[512];
 
-  int testDataFd {gobjfs::os::FD_INVALID};
+  int testDataFd{gobjfs::os::FD_INVALID};
   static const std::string testDataFilePath;
   static const std::string testDataFileName;
   static const std::string testDataFileFullName;
@@ -51,23 +51,20 @@ public:
   IOExecEventFdHandle evHandle;
   int readFd;
 
-
-  IOExecFileTest() {
-  }
+  IOExecFileTest() {}
 
   void createConfigFile() {
 
-    strcpy(configFile,  "ioexecfiletestXXXXXX");
+    strcpy(configFile, "ioexecfiletestXXXXXX");
 
     configFileFd = mkstemp(configFile);
 
-    const char* configContents = 
-      "[ioexec]\n"
-      "ctx_queue_depth=200\n"
-      "cpu_core=0\n"
-      ;
+    const char *configContents = "[ioexec]\n"
+                                 "ctx_queue_depth=200\n"
+                                 "cpu_core=0\n";
 
-    ssize_t writeSz = write(configFileFd, configContents, strlen(configContents));
+    ssize_t writeSz =
+        write(configFileFd, configContents, strlen(configContents));
 
     EXPECT_EQ(writeSz, strlen(configContents));
   }
@@ -115,130 +112,123 @@ public:
     deleteConfigFile();
   }
 
-  virtual ~IOExecFileTest() {
-  }
+  virtual ~IOExecFileTest() {}
 };
 
 const std::string IOExecFileTest::testDataFilePath = "/tmp/";
 
 const std::string IOExecFileTest::testDataFileName = "abcd";
 
-const std::string IOExecFileTest::testDataFileFullName = 
-  std::string(IOExecFileTest::testDataFilePath) + 
-  std::string(IOExecFileTest::testDataFileName);
+const std::string IOExecFileTest::testDataFileFullName =
+    std::string(IOExecFileTest::testDataFilePath) +
+    std::string(IOExecFileTest::testDataFileName);
 
-int fileTranslator(const char* old_name, size_t old_length, char* new_name)
-{
+int fileTranslator(const char *old_name, size_t old_length, char *new_name) {
   strcpy(new_name, IOExecFileTest::testDataFilePath.c_str());
   strncat(new_name, old_name, old_length);
   return 0;
 }
 
-// Nonaligned write succeeds with files opened with O_DIRECT 
+// Nonaligned write succeeds with files opened with O_DIRECT
 TEST_F(IOExecFileTest, NonAlignedWriteWithoutDirectIO) {
 
-    ssize_t ret = 0;
-    char fillChar = 'a' + (getpid() % 26);
+  ssize_t ret = 0;
+  char fillChar = 'a' + (getpid() % 26);
 
-    // write the file
-    {
-      auto fileHandle = IOExecFileOpen(serviceHandle, 
-        testDataFileName.c_str(),
-        testDataFileName.size(),
-        O_CREAT | O_WRONLY);
-
-      auto batch = gIOBatchAlloc(1);
-      gIOExecFragment& frag = batch->array[0];
-      frag.offset = 0;
-      const size_t bufSize = 65536 - 10;
-      frag.size = bufSize;
-      frag.addr = (char*)gMempool_alloc(bufSize);
-      memset(frag.addr, fillChar, bufSize);
-      frag.completionId = reinterpret_cast<uint64_t>(batch);
-  
-      ret = IOExecFileWrite(fileHandle, batch, evHandle);
-      EXPECT_EQ(ret, 0);
-  
-      gIOStatus ioStatus;
-      ret = ::read(readFd, &ioStatus, sizeof(ioStatus));
-      EXPECT_EQ(ret, sizeof(ioStatus));
-      EXPECT_EQ(ioStatus.errorCode, 0);
-      EXPECT_EQ(ioStatus.completionId, reinterpret_cast<uint64_t>(batch));
-  
-      gIOBatchFree(batch);
-
-      IOExecFileClose(fileHandle);
-    }
-
-    // read and verify buffer
-    {
-      auto fileHandle = IOExecFileOpen(serviceHandle, 
-        testDataFileName.c_str(),
-        testDataFileName.size(),
-        O_DIRECT | O_CREAT | O_RDONLY);
-
-      auto batch = gIOBatchAlloc(1);
-      gIOExecFragment& frag = batch->array[0];
-      frag.offset = 0;
-      const size_t bufSize = 65536 - 10;
-      frag.size = bufSize;
-      frag.addr = (char*)gMempool_alloc(bufSize);
-      frag.completionId = reinterpret_cast<uint64_t>(batch);
-  
-      ret = IOExecFileRead(fileHandle, batch, evHandle);
-      EXPECT_EQ(ret, 0);
-  
-      gIOStatus ioStatus;
-      ret = ::read(readFd, &ioStatus, sizeof(ioStatus));
-      EXPECT_EQ(ret, sizeof(ioStatus));
-      EXPECT_EQ(ioStatus.errorCode, 0);
-      EXPECT_EQ(ioStatus.completionId, reinterpret_cast<uint64_t>(batch));
-
-      for (size_t idx = 0; idx < bufSize; idx ++)
-      {
-        EXPECT_EQ(frag.addr[idx], fillChar);
-      }
-  
-      gIOBatchFree(batch);
-
-      IOExecFileClose(fileHandle);
-    }
-
-    ret = ::unlink(testDataFileFullName.c_str());
-    ASSERT_EQ(ret, 0);
-}
-
-// Nonaligned write fails with files opened with O_DIRECT 
-TEST_F(IOExecFileTest, NonAlignedWriteWithDirectIO) {
-
-    auto fileHandle = IOExecFileOpen(serviceHandle, 
-      testDataFileName.c_str(),
-      testDataFileName.size(),
-      O_DIRECT | O_CREAT | O_WRONLY);
+  // write the file
+  {
+    auto fileHandle =
+        IOExecFileOpen(serviceHandle, testDataFileName.c_str(),
+                       testDataFileName.size(), O_CREAT | O_WRONLY);
 
     auto batch = gIOBatchAlloc(1);
-    gIOExecFragment& frag = batch->array[0];
+    gIOExecFragment &frag = batch->array[0];
     frag.offset = 0;
     const size_t bufSize = 65536 - 10;
     frag.size = bufSize;
-    frag.addr = (char*)gMempool_alloc(bufSize);
-    memset(frag.addr, 'a', bufSize);
+    frag.addr = (char *)gMempool_alloc(bufSize);
+    memset(frag.addr, fillChar, bufSize);
     frag.completionId = reinterpret_cast<uint64_t>(batch);
 
-    int ret = IOExecFileWrite(fileHandle, batch, evHandle);
+    ret = IOExecFileWrite(fileHandle, batch, evHandle);
     EXPECT_EQ(ret, 0);
 
     gIOStatus ioStatus;
     ret = ::read(readFd, &ioStatus, sizeof(ioStatus));
     EXPECT_EQ(ret, sizeof(ioStatus));
-    EXPECT_EQ(ioStatus.errorCode, -EINVAL);
+    EXPECT_EQ(ioStatus.errorCode, 0);
     EXPECT_EQ(ioStatus.completionId, reinterpret_cast<uint64_t>(batch));
 
     gIOBatchFree(batch);
 
     IOExecFileClose(fileHandle);
+  }
 
-    ret = ::unlink(testDataFileFullName.c_str());
-    ASSERT_EQ(ret, 0);
+  // read and verify buffer
+  {
+    auto fileHandle =
+        IOExecFileOpen(serviceHandle, testDataFileName.c_str(),
+                       testDataFileName.size(), O_DIRECT | O_CREAT | O_RDONLY);
+
+    auto batch = gIOBatchAlloc(1);
+    gIOExecFragment &frag = batch->array[0];
+    frag.offset = 0;
+    const size_t bufSize = 65536 - 10;
+    frag.size = bufSize;
+    frag.addr = (char *)gMempool_alloc(bufSize);
+    frag.completionId = reinterpret_cast<uint64_t>(batch);
+
+    ret = IOExecFileRead(fileHandle, batch, evHandle);
+    EXPECT_EQ(ret, 0);
+
+    gIOStatus ioStatus;
+    ret = ::read(readFd, &ioStatus, sizeof(ioStatus));
+    EXPECT_EQ(ret, sizeof(ioStatus));
+    EXPECT_EQ(ioStatus.errorCode, 0);
+    EXPECT_EQ(ioStatus.completionId, reinterpret_cast<uint64_t>(batch));
+
+    for (size_t idx = 0; idx < bufSize; idx++) {
+      EXPECT_EQ(frag.addr[idx], fillChar);
+    }
+
+    gIOBatchFree(batch);
+
+    IOExecFileClose(fileHandle);
+  }
+
+  ret = ::unlink(testDataFileFullName.c_str());
+  ASSERT_EQ(ret, 0);
 }
 
+// Nonaligned write fails with files opened with O_DIRECT
+TEST_F(IOExecFileTest, NonAlignedWriteWithDirectIO) {
+
+  auto fileHandle =
+      IOExecFileOpen(serviceHandle, testDataFileName.c_str(),
+                     testDataFileName.size(), O_DIRECT | O_CREAT | O_WRONLY);
+
+  auto batch = gIOBatchAlloc(1);
+  gIOExecFragment &frag = batch->array[0];
+  frag.offset = 0;
+  const size_t bufSize = 65536 - 10;
+  frag.size = bufSize;
+  frag.addr = (char *)gMempool_alloc(bufSize);
+  memset(frag.addr, 'a', bufSize);
+  frag.completionId = reinterpret_cast<uint64_t>(batch);
+
+  int ret = IOExecFileWrite(fileHandle, batch, evHandle);
+  EXPECT_EQ(ret, 0);
+
+  gIOStatus ioStatus;
+  ret = ::read(readFd, &ioStatus, sizeof(ioStatus));
+  EXPECT_EQ(ret, sizeof(ioStatus));
+  EXPECT_EQ(ioStatus.errorCode, -EINVAL);
+  EXPECT_EQ(ioStatus.completionId, reinterpret_cast<uint64_t>(batch));
+
+  gIOBatchFree(batch);
+
+  IOExecFileClose(fileHandle);
+
+  ret = ::unlink(testDataFileFullName.c_str());
+  ASSERT_EQ(ret, 0);
+}

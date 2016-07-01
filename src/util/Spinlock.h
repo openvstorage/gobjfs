@@ -2,7 +2,8 @@
 
 #include <atomic>
 
-namespace gobjfs { namespace os {
+namespace gobjfs {
+namespace os {
 
 /**
  * this class is "BasicLockable" as per boost
@@ -12,19 +13,16 @@ namespace gobjfs { namespace os {
  * }
  *
  */
-class Spinlock 
-{
-  private:
-    std::atomic_flag  flag = ATOMIC_FLAG_INIT;
-  public:
-    void lock()
-    {
-       while (flag.test_and_set(std::memory_order_acquire));
-    }
-    void unlock()
-    {
-       flag.clear(std::memory_order_release);
-    }
-};
+class Spinlock {
+private:
+  std::atomic_flag flag = ATOMIC_FLAG_INIT;
 
-}}
+public:
+  void lock() {
+    while (flag.test_and_set(std::memory_order_acquire))
+      ;
+  }
+  void unlock() { flag.clear(std::memory_order_release); }
+};
+}
+}

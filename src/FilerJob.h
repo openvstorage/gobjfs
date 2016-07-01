@@ -35,7 +35,7 @@ class FilerJob : public Queueable {
 public:
   FileOp op_{FileOp::Nop};
   off_t offset_{0};
-  size_t size_{0}; // userSize rounded to DirectIOSize
+  size_t size_{0};     // userSize rounded to DirectIOSize
   size_t userSize_{0}; // size given by user
 
   // returned from kernel

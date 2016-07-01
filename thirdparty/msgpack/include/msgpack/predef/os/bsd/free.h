@@ -26,35 +26,31 @@ http://www.boost.org/LICENSE_1_0.txt)
 
 #define MSGPACK_OS_BSD_FREE MSGPACK_VERSION_NUMBER_NOT_AVAILABLE
 
-#if !defined(MSGPACK_PREDEF_DETAIL_OS_DETECTED) && ( \
-    defined(__FreeBSD__) \
-    )
-#   ifndef MSGPACK_OS_BSD_AVAILABLE
-#       define MSGPACK_OS_BSD MSGPACK_VERSION_NUMBER_AVAILABLE
-#       define MSGPACK_OS_BSD_AVAILABLE
-#   endif
-#   undef MSGPACK_OS_BSD_FREE
-#   if defined(__FreeBSD_version)
-#       if __FreeBSD_version < 500000
-#           define MSGPACK_OS_BSD_FREE \
-                MSGPACK_PREDEF_MAKE_10_VRP000(__FreeBSD_version)
-#       else
-#           define MSGPACK_OS_BSD_FREE \
-                MSGPACK_PREDEF_MAKE_10_VRR000(__FreeBSD_version)
-#       endif
-#   else
-#       define MSGPACK_OS_BSD_FREE MSGPACK_VERSION_NUMBER_AVAILABLE
-#   endif
+#if !defined(MSGPACK_PREDEF_DETAIL_OS_DETECTED) && (defined(__FreeBSD__))
+#ifndef MSGPACK_OS_BSD_AVAILABLE
+#define MSGPACK_OS_BSD MSGPACK_VERSION_NUMBER_AVAILABLE
+#define MSGPACK_OS_BSD_AVAILABLE
+#endif
+#undef MSGPACK_OS_BSD_FREE
+#if defined(__FreeBSD_version)
+#if __FreeBSD_version < 500000
+#define MSGPACK_OS_BSD_FREE MSGPACK_PREDEF_MAKE_10_VRP000(__FreeBSD_version)
+#else
+#define MSGPACK_OS_BSD_FREE MSGPACK_PREDEF_MAKE_10_VRR000(__FreeBSD_version)
+#endif
+#else
+#define MSGPACK_OS_BSD_FREE MSGPACK_VERSION_NUMBER_AVAILABLE
+#endif
 #endif
 
 #if MSGPACK_OS_BSD_FREE
-#   define MSGPACK_OS_BSD_FREE_AVAILABLE
-#   include <msgpack/predef/detail/os_detected.h>
+#define MSGPACK_OS_BSD_FREE_AVAILABLE
+#include <msgpack/predef/detail/os_detected.h>
 #endif
 
 #define MSGPACK_OS_BSD_FREE_NAME "Free BSD"
 
 #include <msgpack/predef/detail/test.h>
-MSGPACK_PREDEF_DECLARE_TEST(MSGPACK_OS_BSD_FREE,MSGPACK_OS_BSD_FREE_NAME)
+MSGPACK_PREDEF_DECLARE_TEST(MSGPACK_OS_BSD_FREE, MSGPACK_OS_BSD_FREE_NAME)
 
 #endif

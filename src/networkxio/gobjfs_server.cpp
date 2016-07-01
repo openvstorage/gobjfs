@@ -31,83 +31,60 @@ but WITHOUT ANY WARRANTY of any kind.
 
 using gobjfs::xio::NetworkXioServer;
 
-struct gobjfs_xio_server_int
-{
+struct gobjfs_xio_server_int {
   std::unique_ptr<NetworkXioServer> server;
   std::future<void> future;
 
-  gobjfs_xio_server_int(std::unique_ptr<NetworkXioServer>& xs)
-  {
+  gobjfs_xio_server_int(std::unique_ptr<NetworkXioServer> &xs) {
     server = std::move(xs);
   }
-  ~gobjfs_xio_server_int()
-  {
-  }
+  ~gobjfs_xio_server_int() {}
 };
 
+gobjfs_xio_server_handle
+gobjfs_xio_server_start(const char *transport, const char *host, int port,
+                        int32_t number_cores, int32_t queue_depth,
+                        FileTranslatorFunc file_translator_func,
+                        bool is_new_instance) {
+  const std::string uri = transport + std::string("://") + host +
+                          std::string(":") + std::to_string(port);
 
-gobjfs_xio_server_handle gobjfs_xio_server_start(
-  const char* transport,
-  const char* host,
-  int port,
-  int32_t number_cores,
-  int32_t queue_depth,
-  FileTranslatorFunc file_translator_func,
-  bool is_new_instance)
-{
-  const std::string uri = transport + std::string("://") +
-    host + std::string(":") + std::to_string(port);
-
-  auto xs = gobjfs::make_unique<NetworkXioServer>(uri,
-    number_cores,
-    queue_depth,
-    file_translator_func,
-    is_new_instance);
+  auto xs = gobjfs::make_unique<NetworkXioServer>(
+      uri, number_cores, queue_depth, file_translator_func, is_new_instance);
 
   std::promise<void> pr;
   auto init_future = pr.get_future();
 
-  gobjfs_xio_server_int* s = new gobjfs_xio_server_int(xs);
+  gobjfs_xio_server_int *s = new gobjfs_xio_server_int(xs);
 
-  s->future = std::async(std::launch::async,
-    [&] () { s->server->run(pr); });
+  s->future = std::async(std::launch::async, [&]() { s->server->run(pr); });
 
   init_future.wait();
 
   return s;
 }
 
-int gobjfs_xio_server_stop(
-  gobjfs_xio_server_handle server_handle)
-{
-  gobjfs_xio_server_int* handle = (gobjfs_xio_server_int*) server_handle;
-  handle -> server->shutdown();
+int gobjfs_xio_server_stop(gobjfs_xio_server_handle server_handle) {
+  gobjfs_xio_server_int *handle = (gobjfs_xio_server_int *)server_handle;
+  handle->server->shutdown();
 
-  handle -> future.wait();
+  handle->future.wait();
 
   delete handle;
 
   return 0;
 }
 
-
 namespace logging = boost::log;
 
-void gobjfs_init_logging(gobjfs_log_level level){
+void gobjfs_init_logging(gobjfs_log_level level) {
 
-  std::vector<logging::trivial::severity_level> severities {
-      logging::trivial::trace,
-      logging::trivial::debug,
-      logging::trivial::info,
-      logging::trivial::warning,
-      logging::trivial::error,
-      logging::trivial::fatal
-  };
+  std::vector<logging::trivial::severity_level> severities{
+      logging::trivial::trace, logging::trivial::debug,
+      logging::trivial::info,  logging::trivial::warning,
+      logging::trivial::error, logging::trivial::fatal};
   auto severity = severities[level];
-  logging::core::get()->set_filter(
-      logging::trivial::severity >= severity
-      );
+  logging::core::get()->set_filter(logging::trivial::severity >= severity);
 
   BOOST_LOG_TRIVIAL(info) << "logging initialized";
-
 }

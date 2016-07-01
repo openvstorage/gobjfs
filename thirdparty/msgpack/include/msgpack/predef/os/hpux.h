@@ -27,22 +27,20 @@ http://www.boost.org/LICENSE_1_0.txt)
 
 #define MSGPACK_OS_HPUX MSGPACK_VERSION_NUMBER_NOT_AVAILABLE
 
-#if !defined(MSGPACK_PREDEF_DETAIL_OS_DETECTED) && ( \
-    defined(hpux) || defined(_hpux) || defined(__hpux) \
-    )
-#   undef MSGPACK_OS_HPUX
-#   define MSGPACK_OS_HPUX MSGPACK_VERSION_NUMBER_AVAILABLE
+#if !defined(MSGPACK_PREDEF_DETAIL_OS_DETECTED) &&                             \
+    (defined(hpux) || defined(_hpux) || defined(__hpux))
+#undef MSGPACK_OS_HPUX
+#define MSGPACK_OS_HPUX MSGPACK_VERSION_NUMBER_AVAILABLE
 #endif
 
 #if MSGPACK_OS_HPUX
-#   define MSGPACK_OS_HPUX_AVAILABLE
-#   include <msgpack/predef/detail/os_detected.h>
+#define MSGPACK_OS_HPUX_AVAILABLE
+#include <msgpack/predef/detail/os_detected.h>
 #endif
 
 #define MSGPACK_OS_HPUX_NAME "HP-UX"
 
 #include <msgpack/predef/detail/test.h>
-MSGPACK_PREDEF_DECLARE_TEST(MSGPACK_OS_HPUX,MSGPACK_OS_HPUX_NAME)
-
+MSGPACK_PREDEF_DECLARE_TEST(MSGPACK_OS_HPUX, MSGPACK_OS_HPUX_NAME)
 
 #endif

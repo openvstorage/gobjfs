@@ -31,8 +31,8 @@ but WITHOUT ANY WARRANTY of any kind.
 #include <util/Stats.h>
 #include "NetworkXioProtocol.h"
 
-namespace gobjfs { namespace xio
-{
+namespace gobjfs {
+namespace xio {
 
 struct aio_request;
 
@@ -41,202 +41,152 @@ MAKE_EXCEPTION(XioClientRegHandlerException);
 MAKE_EXCEPTION(XioClientQueueIsBusyException);
 MAKE_EXCEPTION(FailedRegisterEventHandler);
 
-extern void ovs_xio_aio_complete_request(void *request,
-                                         ssize_t retval,
+extern void ovs_xio_aio_complete_request(void *request, ssize_t retval,
                                          int errval);
 
-extern void ovs_xio_complete_request_control(void *request,
-                                             ssize_t retval,
+extern void ovs_xio_complete_request_control(void *request, ssize_t retval,
                                              int errval);
 
-class NetworkXioClient
-{
+class NetworkXioClient {
 public:
-    NetworkXioClient(const std::string& uri, const uint64_t qd);
+  NetworkXioClient(const std::string &uri, const uint64_t qd);
 
-    ~NetworkXioClient();
+  ~NetworkXioClient();
 
-    struct session_data
-    {
-        xio_context *ctx{nullptr};
-        bool disconnected{false};
-        bool disconnecting{false};
-    };
-
-    struct xio_msg_s
-    {
-        xio_msg xreq;
-        const void *opaque{nullptr};
-        NetworkXioMsg msg;
-        std::string s_msg;
-    };
-
-    struct xio_ctl_s
-    {
-        xio_msg_s xmsg;
-        session_data sdata;
-        std::vector<std::string> *vec;
-        uint64_t size{0};
-    };
-
-    void
-    xio_send_open_request(const void *opaque);
-
-    void
-    xio_send_close_request(const void *opaque);
-
-    void
-    xio_send_read_request(const std::string& filename,
-                        void *buf,
-                        const uint64_t size_in_bytes,
-                        const uint64_t offset_in_bytes,
-                        const void *opaque);
-
-    int
-    allocate(xio_reg_mem *mem,
-             const uint64_t size);
-
-    void
-    deallocate(xio_reg_mem *reg_mem);
-
-    int
-    on_session_event(xio_session *session,
-                     xio_session_event_data *event_data);
-
-    int
-    on_response(xio_session *session,
-                xio_msg* reply,
-                int last_in_rxq);
-
-    int
-    on_msg_error(xio_session *session,
-                 xio_status error,
-                 xio_msg_direction direction,
-                 xio_msg *msg);
-
-    void
-    evfd_stop_loop(int fd, int events, void *data);
-
-    void
-    run(std::promise<bool>& promise);
-
-    bool
-    is_queue_empty();
-
-    xio_msg_s*
-    pop_request();
-
-    void
-    push_request(xio_msg_s *req);
-
-    void
-    xstop_loop();
-
-    static void
-    xio_destroy_ctx_shutdown(xio_context *ctx);
-
-    struct statistics {
-
-      std::atomic<uint64_t> num_queued{0};
-      // num_completed includes num_failed
-      std::atomic<uint64_t> num_completed{0};
-      std::atomic<uint64_t> num_failed{0};
-
-      gobjfs::stats::Histogram<int64_t> rtt_hist;
-      gobjfs::stats::StatsCounter<int64_t> rtt_stats;
-
-      std::string ToString() const;
-
-    } stats;
-
-    void update_stats(void* req, bool req_failed);
-
-    const bool&
-    is_disconnected()
-    {
-        return disconnected;
-    }
-private:
-    std::shared_ptr<xio_context> ctx;
-    std::shared_ptr<xio_session> session;
-    xio_connection *conn{nullptr};
-    xio_session_params params;
-    xio_connection_params cparams;
-
-    std::string uri_;
-    bool stopping{false};
-    bool stopped{false};
-    std::thread xio_thread_;
-
-    gobjfs::os::Spinlock inflight_lock;
-
-    std::queue<xio_msg_s*> inflight_reqs;
-
-    xio_session_ops ses_ops;
+  struct session_data {
+    xio_context *ctx{nullptr};
     bool disconnected{false};
-    bool disconnecting;
+    bool disconnecting{false};
+  };
 
-    int64_t nr_req_queue{0};
-    std::mutex req_queue_lock;
-    std::condition_variable req_queue_cond;
+  struct xio_msg_s {
+    xio_msg xreq;
+    const void *opaque{nullptr};
+    NetworkXioMsg msg;
+    std::string s_msg;
+  };
 
-    EventFD evfd;
+  struct xio_ctl_s {
+    xio_msg_s xmsg;
+    session_data sdata;
+    std::vector<std::string> *vec;
+    uint64_t size{0};
+  };
 
-    std::shared_ptr<xio_mempool> mpool;
+  void xio_send_open_request(const void *opaque);
 
-    void
-    xio_run_loop_worker(void *arg);
+  void xio_send_close_request(const void *opaque);
 
-    void
-    req_queue_wait_until(xio_msg_s *xmsg);
+  void xio_send_read_request(const std::string &filename, void *buf,
+                             const uint64_t size_in_bytes,
+                             const uint64_t offset_in_bytes,
+                             const void *opaque);
 
-    void
-    req_queue_release();
+  int allocate(xio_reg_mem *mem, const uint64_t size);
 
-    void
-    shutdown();
+  void deallocate(xio_reg_mem *reg_mem);
 
-    template<class E>
-    void set_exception_ptr(E e);
+  int on_session_event(xio_session *session,
+                       xio_session_event_data *event_data);
 
-    static xio_connection*
-    create_connection_control(session_data *sdata,
-                              const std::string& uri);
+  int on_response(xio_session *session, xio_msg *reply, int last_in_rxq);
 
-    static int
-    on_msg_control(xio_session *session,
-                   xio_msg *reply,
-                   int last_in_rqx,
-                   void *cb_user_context);
+  int on_msg_error(xio_session *session, xio_status error,
+                   xio_msg_direction direction, xio_msg *msg);
 
-    static int
-    on_msg_error_control(xio_session *session,
-                         xio_status error,
-                         xio_msg_direction direction,
-                         xio_msg *msg,
-                         void *cb_user_context);
+  void evfd_stop_loop(int fd, int events, void *data);
 
-    static int
-    on_session_event_control(xio_session *session,
-                             xio_session_event_data *event_data,
-                             void *cb_user_context);
+  void run(std::promise<bool> &promise);
 
-    static void
-    xio_submit_request(const std::string& uri,
-                       xio_ctl_s *xctl,
-                       void *opaque);
+  bool is_queue_empty();
 
-    static void
-    xio_msg_prepare(xio_msg_s *xmsg);
+  xio_msg_s *pop_request();
 
-    static void
-    create_vec_from_buf(xio_ctl_s *xctl,
-                        xio_iovec_ex *sglist,
-                        int vec_size);
+  void push_request(xio_msg_s *req);
 
+  void xstop_loop();
+
+  static void xio_destroy_ctx_shutdown(xio_context *ctx);
+
+  struct statistics {
+
+    std::atomic<uint64_t> num_queued{0};
+    // num_completed includes num_failed
+    std::atomic<uint64_t> num_completed{0};
+    std::atomic<uint64_t> num_failed{0};
+
+    gobjfs::stats::Histogram<int64_t> rtt_hist;
+    gobjfs::stats::StatsCounter<int64_t> rtt_stats;
+
+    std::string ToString() const;
+
+  } stats;
+
+  void update_stats(void *req, bool req_failed);
+
+  const bool &is_disconnected() { return disconnected; }
+
+private:
+  std::shared_ptr<xio_context> ctx;
+  std::shared_ptr<xio_session> session;
+  xio_connection *conn{nullptr};
+  xio_session_params params;
+  xio_connection_params cparams;
+
+  std::string uri_;
+  bool stopping{false};
+  bool stopped{false};
+  std::thread xio_thread_;
+
+  gobjfs::os::Spinlock inflight_lock;
+
+  std::queue<xio_msg_s *> inflight_reqs;
+
+  xio_session_ops ses_ops;
+  bool disconnected{false};
+  bool disconnecting;
+
+  int64_t nr_req_queue{0};
+  std::mutex req_queue_lock;
+  std::condition_variable req_queue_cond;
+
+  EventFD evfd;
+
+  std::shared_ptr<xio_mempool> mpool;
+
+  void xio_run_loop_worker(void *arg);
+
+  void req_queue_wait_until(xio_msg_s *xmsg);
+
+  void req_queue_release();
+
+  void shutdown();
+
+  template <class E> void set_exception_ptr(E e);
+
+  static xio_connection *create_connection_control(session_data *sdata,
+                                                   const std::string &uri);
+
+  static int on_msg_control(xio_session *session, xio_msg *reply,
+                            int last_in_rqx, void *cb_user_context);
+
+  static int on_msg_error_control(xio_session *session, xio_status error,
+                                  xio_msg_direction direction, xio_msg *msg,
+                                  void *cb_user_context);
+
+  static int on_session_event_control(xio_session *session,
+                                      xio_session_event_data *event_data,
+                                      void *cb_user_context);
+
+  static void xio_submit_request(const std::string &uri, xio_ctl_s *xctl,
+                                 void *opaque);
+
+  static void xio_msg_prepare(xio_msg_s *xmsg);
+
+  static void create_vec_from_buf(xio_ctl_s *xctl, xio_iovec_ex *sglist,
+                                  int vec_size);
 };
 
 typedef std::shared_ptr<NetworkXioClient> NetworkXioClientPtr;
-
-}} //namespace
-
+}
+} // namespace

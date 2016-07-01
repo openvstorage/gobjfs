@@ -29,8 +29,8 @@ but WITHOUT ANY WARRANTY of any kind.
 #include <networkxio/NetworkXioWorkQueue.h>
 #include <networkxio/NetworkXioRequest.h>
 
-namespace gobjfs { namespace xio 
-{
+namespace gobjfs {
+namespace xio {
 
 MAKE_EXCEPTION(FailedBindXioServer);
 MAKE_EXCEPTION(FailedCreateXioContext);
@@ -39,119 +39,91 @@ MAKE_EXCEPTION(FailedCreateXioMempool);
 
 class NetworkXioClientData;
 
-class NetworkXioServer
-{
+class NetworkXioServer {
 public:
+  NetworkXioServer(const std::string &uri, int32_t numCoresForIO,
+                   int32_t queueDepthForIO,
+                   FileTranslatorFunc fileTranslatorFunc, bool newInstance,
+                   size_t snd_rcv_queue_depth = 256);
 
-    NetworkXioServer(const std::string& uri,
-                    int32_t numCoresForIO,
-                    int32_t queueDepthForIO,
-                    FileTranslatorFunc fileTranslatorFunc,
-                    bool newInstance,
-                    size_t snd_rcv_queue_depth = 256);
+  ~NetworkXioServer();
 
-    ~NetworkXioServer();
+  NetworkXioServer(const NetworkXioServer &) = delete;
 
-    NetworkXioServer(const NetworkXioServer&) = delete;
+  NetworkXioServer &operator=(const NetworkXioServer &) = delete;
 
-    NetworkXioServer&
-    operator=(const NetworkXioServer&) = delete;
+  int on_request(xio_session *session, xio_msg *req, int last_in_rxq,
+                 void *cb_user_context);
 
-    int
-    on_request(xio_session *session,
-               xio_msg *req,
-               int last_in_rxq,
-               void *cb_user_context);
+  int on_session_event(xio_session *session,
+                       xio_session_event_data *event_data);
 
-    int
-    on_session_event(xio_session *session,
-                     xio_session_event_data *event_data);
+  int on_new_session(xio_session *session, xio_new_session_req *req);
 
-    int
-    on_new_session(xio_session *session,
-                   xio_new_session_req *req);
+  int on_msg_send_complete(xio_session *session, xio_msg *msg,
+                           void *cb_user_context);
 
-    int
-    on_msg_send_complete(xio_session *session,
-                         xio_msg *msg,
-                         void *cb_user_context);
+  int on_msg_error(xio_session *session, xio_status error,
+                   xio_msg_direction direction, xio_msg *msg);
 
-    int
-    on_msg_error(xio_session *session,
-                 xio_status error,
-                 xio_msg_direction direction,
-                 xio_msg *msg);
+  int assign_data_in_buf(xio_msg *msg);
 
-    int
-    assign_data_in_buf(xio_msg *msg);
+  void run(std::promise<void> &promise);
 
-    void
-    run(std::promise<void> &promise);
+  void shutdown();
 
-    void
-    shutdown();
+  void xio_send_reply(NetworkXioRequest *req);
 
-    void
-    xio_send_reply(NetworkXioRequest *req);
+  void evfd_stop_loop(int fd, int events, void *data);
 
-    void
-    evfd_stop_loop(int fd, int events, void *data);
-
-    static void
-    xio_destroy_ctx_shutdown(xio_context *ctx);
+  static void xio_destroy_ctx_shutdown(xio_context *ctx);
 
 private:
-//    DECLARE_LOGGER("NetworkXioServer");
+  //    DECLARE_LOGGER("NetworkXioServer");
 
-    std::string uri_;
-    std::string configFileName_; 
+  std::string uri_;
+  std::string configFileName_;
 
-    int32_t numCoresForIO_{0};
-    int32_t queueDepthForIO_{0};
+  int32_t numCoresForIO_{0};
+  int32_t queueDepthForIO_{0};
 
-    FileTranslatorFunc fileTranslatorFunc_{nullptr};
+  FileTranslatorFunc fileTranslatorFunc_{nullptr};
 
-    bool newInstance_;
+  bool newInstance_;
 
-    // owned by NetworkXioServer
-    IOExecServiceHandle    serviceHandle_{nullptr}; 
+  // owned by NetworkXioServer
+  IOExecServiceHandle serviceHandle_{nullptr};
 
-    bool stopping{false};
-    bool stopped{false};
+  bool stopping{false};
+  bool stopped{false};
 
-    std::mutex mutex_;
-    std::condition_variable cv_;
+  std::mutex mutex_;
+  std::condition_variable cv_;
 
-    EventFD evfd;
+  EventFD evfd;
 
-    int queue_depth;
+  int queue_depth;
 
-    NetworkXioWorkQueuePtr wq_;
+  NetworkXioWorkQueuePtr wq_;
 
-    std::shared_ptr<xio_context> ctx;
-    std::shared_ptr<xio_server> server;
-    std::shared_ptr<xio_mempool> xio_mpool;
+  std::shared_ptr<xio_context> ctx;
+  std::shared_ptr<xio_server> server;
+  std::shared_ptr<xio_mempool> xio_mpool;
 
-    int
-    create_session_connection(xio_session *session,
-                              xio_session_event_data *event_data);
+  int create_session_connection(xio_session *session,
+                                xio_session_event_data *event_data);
 
-    void
-    destroy_session_connection(xio_session *session,
-                               xio_session_event_data *event_data);
+  void destroy_session_connection(xio_session *session,
+                                  xio_session_event_data *event_data);
 
-    NetworkXioRequest*
-    allocate_request(NetworkXioClientData *cd, xio_msg *xio_req);
+  NetworkXioRequest *allocate_request(NetworkXioClientData *cd,
+                                      xio_msg *xio_req);
 
-    void
-    deallocate_request(NetworkXioRequest *req);
+  void deallocate_request(NetworkXioRequest *req);
 
-    void
-    free_request(NetworkXioRequest *req);
+  void free_request(NetworkXioRequest *req);
 
-    NetworkXioClientData*
-    allocate_client_data();
+  NetworkXioClientData *allocate_client_data();
 };
-
-}} //namespace
-
+}
+} // namespace

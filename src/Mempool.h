@@ -26,7 +26,6 @@ namespace gobjfs {
 
 class Mempool {
 protected:
-
   struct Stats {
     std::atomic<uint64_t> bytesAllocated_{0};
     std::atomic<uint64_t> numAllocCalls_{0};

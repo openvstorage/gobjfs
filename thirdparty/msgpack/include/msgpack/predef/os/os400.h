@@ -25,22 +25,19 @@ http://www.boost.org/LICENSE_1_0.txt)
 
 #define MSGPACK_OS_OS400 MSGPACK_VERSION_NUMBER_NOT_AVAILABLE
 
-#if !defined(MSGPACK_PREDEF_DETAIL_OS_DETECTED) && ( \
-    defined(__OS400__) \
-    )
-#   undef MSGPACK_OS_OS400
-#   define MSGPACK_OS_OS400 MSGPACK_VERSION_NUMBER_AVAILABLE
+#if !defined(MSGPACK_PREDEF_DETAIL_OS_DETECTED) && (defined(__OS400__))
+#undef MSGPACK_OS_OS400
+#define MSGPACK_OS_OS400 MSGPACK_VERSION_NUMBER_AVAILABLE
 #endif
 
 #if MSGPACK_OS_OS400
-#   define MSGPACK_OS_OS400_AVAILABLE
-#   include <msgpack/predef/detail/os_detected.h>
+#define MSGPACK_OS_OS400_AVAILABLE
+#include <msgpack/predef/detail/os_detected.h>
 #endif
 
 #define MSGPACK_OS_OS400_NAME "IBM OS/400"
 
 #include <msgpack/predef/detail/test.h>
-MSGPACK_PREDEF_DECLARE_TEST(MSGPACK_OS_OS400,MSGPACK_OS_OS400_NAME)
-
+MSGPACK_PREDEF_DECLARE_TEST(MSGPACK_OS_OS400, MSGPACK_OS_OS400_NAME)
 
 #endif

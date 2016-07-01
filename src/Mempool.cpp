@@ -94,34 +94,31 @@ public:
     bool yes = false;
     if (!freeList.empty()) {
       yes = freeList.pop(ptr);
-      stats_.numReused_ ++;
+      stats_.numReused_++;
     }
     if (!yes) {
-      ptr =  malloc(objSize_);
+      ptr = malloc(objSize_);
     }
-    stats_.numAllocCalls_ ++;
+    stats_.numAllocCalls_++;
     stats_.bytesAllocated_ += allocSize;
     return ptr;
   }
 
-  virtual void Free(void *ptr) override 
-  { 
+  virtual void Free(void *ptr) override {
     bool ret = freeList.push(ptr);
     if (ret == false) {
       free(ptr);
-    } 
-    stats_.numFreeCalls_ ++;
+    }
+    stats_.numFreeCalls_++;
   }
 
-  virtual std::string GetStats() const override
-  {
+  virtual std::string GetStats() const override {
     std::ostringstream os;
-    os << "for objmempool thisptr=" << (void*)this
-      << ":bytes alloc=" << stats_.bytesAllocated_
-      << ":num alloc=" << stats_.numAllocCalls_
-      << ":num reused=" << stats_.numReused_
-      << ":num free=" << stats_.numFreeCalls_
-      << std::endl;
+    os << "for objmempool thisptr=" << (void *)this
+       << ":bytes alloc=" << stats_.bytesAllocated_
+       << ":num alloc=" << stats_.numAllocCalls_
+       << ":num reused=" << stats_.numReused_
+       << ":num free=" << stats_.numFreeCalls_ << std::endl;
     return os.str();
   }
 

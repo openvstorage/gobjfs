@@ -28,63 +28,58 @@ int times = 10;
 
 using namespace gobjfs::xio;
 
-void NetworkServerWriteReadTest()
-{
-    auto ctx_attr = ctx_attr_new();
+void NetworkServerWriteReadTest() {
+  auto ctx_attr = ctx_attr_new();
 
-    ctx_attr_set_transport(ctx_attr,
-                                         "tcp",
-                                         "127.0.0.1",
-                                         21321);
+  ctx_attr_set_transport(ctx_attr, "tcp", "127.0.0.1", 21321);
 
-    client_ctx_ptr ctx = ctx_new(ctx_attr);
-    assert(ctx != nullptr);
+  client_ctx_ptr ctx = ctx_new(ctx_attr);
+  assert(ctx != nullptr);
 
-    int err = ctx_init(ctx);
-    if (err < 0) {
-        GLOG_ERROR("Volume open failed ");
-        return;
-    }
+  int err = ctx_init(ctx);
+  if (err < 0) {
+    GLOG_ERROR("Volume open failed ");
+    return;
+  }
 
-    std::vector<giocb*> iocb_vec;
-    std::vector<std::string> filename_vec;
+  std::vector<giocb *> iocb_vec;
+  std::vector<std::string> filename_vec;
 
-    for (int i = 0; i < times; i ++) {
+  for (int i = 0; i < times; i++) {
 
-      auto rbuf = (char*)malloc(4096);
-      assert(rbuf != nullptr);
+    auto rbuf = (char *)malloc(4096);
+    assert(rbuf != nullptr);
 
-      giocb* iocb = (giocb*)malloc(sizeof(giocb));
-      iocb->aio_buf = rbuf;
-      iocb->aio_offset = times * 4096;
-      iocb->aio_nbytes = 4096;
+    giocb *iocb = (giocb *)malloc(sizeof(giocb));
+    iocb->aio_buf = rbuf;
+    iocb->aio_offset = times * 4096;
+    iocb->aio_nbytes = 4096;
 
-      iocb_vec.push_back(iocb);
-      filename_vec.push_back("abcd");
-    }
+    iocb_vec.push_back(iocb);
+    filename_vec.push_back("abcd");
+  }
 
-    auto ret = aio_readv(ctx, filename_vec, iocb_vec);
+  auto ret = aio_readv(ctx, filename_vec, iocb_vec);
 
-    if (ret == 0) {
-      ret = aio_suspendv(ctx, iocb_vec, nullptr); 
-    } 
+  if (ret == 0) {
+    ret = aio_suspendv(ctx, iocb_vec, nullptr);
+  }
 
-    for (auto& elem : iocb_vec) {
-      aio_finish(ctx, elem);
-      free(elem->aio_buf);
-      free(elem);
-    }
+  for (auto &elem : iocb_vec) {
+    aio_finish(ctx, elem);
+    free(elem->aio_buf);
+    free(elem);
+  }
 
-
-    GLOG_DEBUG("\n\n------------------- ctx_destroy Successful -------------- \n\n");
-
+  GLOG_DEBUG(
+      "\n\n------------------- ctx_destroy Successful -------------- \n\n");
 }
 
 int main(int argc, char *argv[]) {
 
   if (argc > 1) {
     times = atoi(argv[1]);
-  } 
+  }
 
   NetworkServerWriteReadTest();
 }

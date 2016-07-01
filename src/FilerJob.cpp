@@ -78,8 +78,7 @@ int32_t FilerJob::prepareCallblock(iocb *cb) {
 bool FilerJob::isValid(std::ostringstream &ostr) {
   bool isValid = true;
 
-  if ((op_ != FileOp::Read) && (op_ != FileOp::Write))
-  {
+  if ((op_ != FileOp::Read) && (op_ != FileOp::Write)) {
     return isValid;
   }
 
@@ -102,7 +101,6 @@ bool FilerJob::isValid(std::ostringstream &ostr) {
 
   return isValid;
 }
-
 
 void FilerJob::setBuffer(off_t fileOffset, char *buffer, size_t size) {
   buffer_ = buffer;

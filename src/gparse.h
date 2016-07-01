@@ -22,5 +22,4 @@ but WITHOUT ANY WARRANTY of any kind.
 
 using gobjfs::IOExecutor;
 
-int ParseConfigFile(const char *configFileName, 
-  IOExecutor::Config &config);
+int ParseConfigFile(const char *configFileName, IOExecutor::Config &config);

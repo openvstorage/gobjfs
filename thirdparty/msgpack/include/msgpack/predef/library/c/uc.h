@@ -30,19 +30,19 @@ http://www.boost.org/LICENSE_1_0.txt)
 #define MSGPACK_LIB_C_UC MSGPACK_VERSION_NUMBER_NOT_AVAILABLE
 
 #if defined(__UCLIBC__)
-#   undef MSGPACK_LIB_C_UC
-#   define MSGPACK_LIB_C_UC MSGPACK_VERSION_NUMBER(\
-        __UCLIBC_MAJOR__,__UCLIBC_MINOR__,__UCLIBC_SUBLEVEL__)
+#undef MSGPACK_LIB_C_UC
+#define MSGPACK_LIB_C_UC                                                       \
+  MSGPACK_VERSION_NUMBER(__UCLIBC_MAJOR__, __UCLIBC_MINOR__,                   \
+                         __UCLIBC_SUBLEVEL__)
 #endif
 
 #if MSGPACK_LIB_C_UC
-#   define MSGPACK_LIB_C_UC_AVAILABLE
+#define MSGPACK_LIB_C_UC_AVAILABLE
 #endif
 
 #define MSGPACK_LIB_C_UC_NAME "uClibc"
 
 #include <msgpack/predef/detail/test.h>
-MSGPACK_PREDEF_DECLARE_TEST(MSGPACK_LIB_C_UC,MSGPACK_LIB_C_UC_NAME)
-
+MSGPACK_PREDEF_DECLARE_TEST(MSGPACK_LIB_C_UC, MSGPACK_LIB_C_UC_NAME)
 
 #endif

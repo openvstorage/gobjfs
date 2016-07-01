@@ -14,7 +14,8 @@ http://www.boost.org/LICENSE_1_0.txt)
 /*`
 [heading `MSGPACK_COMP_PGI`]
 
-[@http://en.wikipedia.org/wiki/The_Portland_Group Portland Group C/C++] compiler.
+[@http://en.wikipedia.org/wiki/The_Portland_Group Portland Group C/C++]
+compiler.
 
 [table
     [[__predef_symbol__] [__predef_version__]]
@@ -28,34 +29,36 @@ http://www.boost.org/LICENSE_1_0.txt)
 #define MSGPACK_COMP_PGI MSGPACK_VERSION_NUMBER_NOT_AVAILABLE
 
 #if defined(__PGI)
-#   if !defined(MSGPACK_COMP_PGI_DETECTION) && (defined(__PGIC__) && defined(__PGIC_MINOR__) && defined(__PGIC_PATCHLEVEL__))
-#       define MSGPACK_COMP_PGI_DETECTION MSGPACK_VERSION_NUMBER(__PGIC__,__PGIC_MINOR__,__PGIC_PATCHLEVEL__)
-#   endif
-#   if !defined(MSGPACK_COMP_PGI_DETECTION)
-#       define MSGPACK_COMP_PGI_DETECTION MSGPACK_VERSION_NUMBER_AVAILABLE
-#   endif
+#if !defined(MSGPACK_COMP_PGI_DETECTION) &&                                    \
+    (defined(__PGIC__) && defined(__PGIC_MINOR__) &&                           \
+     defined(__PGIC_PATCHLEVEL__))
+#define MSGPACK_COMP_PGI_DETECTION                                             \
+  MSGPACK_VERSION_NUMBER(__PGIC__, __PGIC_MINOR__, __PGIC_PATCHLEVEL__)
+#endif
+#if !defined(MSGPACK_COMP_PGI_DETECTION)
+#define MSGPACK_COMP_PGI_DETECTION MSGPACK_VERSION_NUMBER_AVAILABLE
+#endif
 #endif
 
 #ifdef MSGPACK_COMP_PGI_DETECTION
-#   if defined(MSGPACK_PREDEF_DETAIL_COMP_DETECTED)
-#       define MSGPACK_COMP_PGI_EMULATED MSGPACK_COMP_PGI_DETECTION
-#   else
-#       undef MSGPACK_COMP_PGI
-#       define MSGPACK_COMP_PGI MSGPACK_COMP_PGI_DETECTION
-#   endif
-#   define MSGPACK_COMP_PGI_AVAILABLE
-#   include <msgpack/predef/detail/comp_detected.h>
+#if defined(MSGPACK_PREDEF_DETAIL_COMP_DETECTED)
+#define MSGPACK_COMP_PGI_EMULATED MSGPACK_COMP_PGI_DETECTION
+#else
+#undef MSGPACK_COMP_PGI
+#define MSGPACK_COMP_PGI MSGPACK_COMP_PGI_DETECTION
+#endif
+#define MSGPACK_COMP_PGI_AVAILABLE
+#include <msgpack/predef/detail/comp_detected.h>
 #endif
 
 #define MSGPACK_COMP_PGI_NAME "Portland Group C/C++"
 
 #include <msgpack/predef/detail/test.h>
-MSGPACK_PREDEF_DECLARE_TEST(MSGPACK_COMP_PGI,MSGPACK_COMP_PGI_NAME)
+MSGPACK_PREDEF_DECLARE_TEST(MSGPACK_COMP_PGI, MSGPACK_COMP_PGI_NAME)
 
 #ifdef MSGPACK_COMP_PGI_EMULATED
 #include <msgpack/predef/detail/test.h>
-MSGPACK_PREDEF_DECLARE_TEST(MSGPACK_COMP_PGI_EMULATED,MSGPACK_COMP_PGI_NAME)
+MSGPACK_PREDEF_DECLARE_TEST(MSGPACK_COMP_PGI_EMULATED, MSGPACK_COMP_PGI_NAME)
 #endif
-
 
 #endif

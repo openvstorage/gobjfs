@@ -20,189 +20,99 @@
 
 #include <networkxio/NetworkXioCommon.h>
 
-namespace gobjfs { namespace xio {
+namespace gobjfs {
+namespace xio {
 
-class NetworkXioMsg
-{
+class NetworkXioMsg {
 public:
-    explicit NetworkXioMsg(NetworkXioMsgOpcode opcode =
-                                NetworkXioMsgOpcode::Noop,
-                           const std::string& filename = "",
-                           const size_t size = 0,
-                           const uint64_t offset = 0,
-                           const ssize_t retval = 0,
-                           const int errval = 0,
-                           const uintptr_t opaque = 0,
-                           const int64_t timeout = 0)
-    : opcode_(opcode)
-    , filename_(filename)
-    , size_(size)
-    , offset_(offset)
-    , retval_(retval)
-    , errval_(errval)
-    , opaque_(opaque)
-    , timeout_(timeout)
-    {}
+  explicit NetworkXioMsg(NetworkXioMsgOpcode opcode = NetworkXioMsgOpcode::Noop,
+                         const std::string &filename = "",
+                         const size_t size = 0, const uint64_t offset = 0,
+                         const ssize_t retval = 0, const int errval = 0,
+                         const uintptr_t opaque = 0, const int64_t timeout = 0)
+      : opcode_(opcode), filename_(filename), size_(size), offset_(offset),
+        retval_(retval), errval_(errval), opaque_(opaque), timeout_(timeout) {}
 
 public:
-    NetworkXioMsgOpcode opcode_;
-    std::string         filename_;
-    size_t              size_;
-    uint64_t            offset_;
-    ssize_t             retval_;
-    int                 errval_;
-    uintptr_t           opaque_;
-    int64_t             timeout_;
+  NetworkXioMsgOpcode opcode_;
+  std::string filename_;
+  size_t size_;
+  uint64_t offset_;
+  ssize_t retval_;
+  int errval_;
+  uintptr_t opaque_;
+  int64_t timeout_;
 
 public:
-    const NetworkXioMsgOpcode&
-    opcode() const
-    {
-        return opcode_;
-    }
+  const NetworkXioMsgOpcode &opcode() const { return opcode_; }
 
-    void
-    opcode(const NetworkXioMsgOpcode& op)
-    {
-        opcode_ = op;
-    }
+  void opcode(const NetworkXioMsgOpcode &op) { opcode_ = op; }
 
-    const std::string&
-    filename() const
-    {
-        return filename_;
-    }
+  const std::string &filename() const { return filename_; }
 
-    void
-    filename(const std::string& fname)
-    {
-        filename_ = fname;
-    }
+  void filename(const std::string &fname) { filename_ = fname; }
 
-    const uintptr_t&
-    opaque() const
-    {
-        return opaque_;
-    }
+  const uintptr_t &opaque() const { return opaque_; }
 
-    void
-    opaque(const uintptr_t& opq)
-    {
-        opaque_ = opq;
-    }
+  void opaque(const uintptr_t &opq) { opaque_ = opq; }
 
-    const size_t&
-    size() const
-    {
-        return size_;
-    }
+  const size_t &size() const { return size_; }
 
-    void
-    size(const size_t& size)
-    {
-        size_ = size;
-    }
+  void size(const size_t &size) { size_ = size; }
 
-    const ssize_t&
-    retval() const
-    {
-        return retval_;
-    }
+  const ssize_t &retval() const { return retval_; }
 
-    void
-    retval(const ssize_t& retval)
-    {
-        retval_ = retval;
-    }
+  void retval(const ssize_t &retval) { retval_ = retval; }
 
-    const int&
-    errval() const
-    {
-        return errval_;
-    }
+  const int &errval() const { return errval_; }
 
-    void
-    errval(const int& errval)
-    {
-        errval_ = errval;
-    }
+  void errval(const int &errval) { errval_ = errval; }
 
-    const uint64_t&
-    offset() const
-    {
-        return offset_;
-    }
+  const uint64_t &offset() const { return offset_; }
 
-    void
-    offset(const uint64_t& offset)
-    {
-        offset_ = offset;
-    }
+  void offset(const uint64_t &offset) { offset_ = offset; }
 
-    const int64_t&
-    timeout() const
-    {
-        return timeout_;
-    }
+  const int64_t &timeout() const { return timeout_; }
 
-    void
-    timeout(const int64_t& timeout)
-    {
-        timeout_ = timeout;
-    }
+  void timeout(const int64_t &timeout) { timeout_ = timeout; }
 
-    const std::string
-    pack_msg() const
-    {
-        std::stringstream sbuf;
-        msgpack::pack(sbuf, *this);
-        return sbuf.str();
-    }
+  const std::string pack_msg() const {
+    std::stringstream sbuf;
+    msgpack::pack(sbuf, *this);
+    return sbuf.str();
+  }
 
-    void
-    unpack_msg(const char *sbuf,
-               const size_t size)
-    {
-        msgpack::unpacked msg;
-        msgpack::unpack(&msg, sbuf, size);
-        msgpack::object obj = msg.get();
-        obj.convert(this);
-    }
+  void unpack_msg(const char *sbuf, const size_t size) {
+    msgpack::unpacked msg;
+    msgpack::unpack(&msg, sbuf, size);
+    msgpack::object obj = msg.get();
+    obj.convert(this);
+  }
 
-    void
-    unpack_msg(const std::string& sbuf)
-    {
-        msgpack::unpacked msg;
-        msgpack::unpack(&msg, sbuf.data(), sbuf.size());
-        msgpack::object obj = msg.get();
-        obj.convert(this);
-    }
+  void unpack_msg(const std::string &sbuf) {
+    msgpack::unpacked msg;
+    msgpack::unpack(&msg, sbuf.data(), sbuf.size());
+    msgpack::object obj = msg.get();
+    obj.convert(this);
+  }
 
-    void
-    clear()
-    {
-        opcode_ = NetworkXioMsgOpcode::Noop;
-        filename_.clear();
-        size_ = 0;
-        offset_ = 0;
-        retval_ = 0;
-        errval_ = 0;
-        opaque_ = 0;
-        timeout_ = 0;
-    }
+  void clear() {
+    opcode_ = NetworkXioMsgOpcode::Noop;
+    filename_.clear();
+    size_ = 0;
+    offset_ = 0;
+    retval_ = 0;
+    errval_ = 0;
+    opaque_ = 0;
+    timeout_ = 0;
+  }
+
 public:
-    MSGPACK_DEFINE(opcode_,
-                   filename_,
-                   size_,
-                   offset_,
-                   retval_,
-                   errval_,
-                   opaque_,
-                   timeout_);
+  MSGPACK_DEFINE(opcode_, filename_, size_, offset_, retval_, errval_, opaque_,
+                 timeout_);
 };
+}
+}
 
-}}
-
-// compilation errors ensue if you put this macro inside namespace 
+// compilation errors ensue if you put this macro inside namespace
 MSGPACK_ADD_ENUM(gobjfs::xio::NetworkXioMsgOpcode);
-

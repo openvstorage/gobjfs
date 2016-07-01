@@ -108,7 +108,8 @@ FilerCtx::~FilerCtx() {
 std::string FilerCtx::getState() const {
   std::ostringstream s;
   // json format
-  s << " \"ctx\":{\"numAvail\":" << numAvailable_ << ",\"queueDepth\":" << ioQueueDepth_ << "}";
+  s << " \"ctx\":{\"numAvail\":" << numAvailable_
+    << ",\"queueDepth\":" << ioQueueDepth_ << "}";
   return s.str();
 }
 
@@ -137,16 +138,15 @@ void IOExecutor::Config::print() const {
 
 namespace po = boost::program_options;
 
-int
-IOExecutor::Config::addOptions(boost::program_options::options_description& desc) {
+int IOExecutor::Config::addOptions(
+    boost::program_options::options_description &desc) {
 
   po::options_description ioexecOptions("ioexec config");
 
-  ioexecOptions.add_options()
-    ("ioexec.ctx_queue_depth", 
-      po::value<uint32_t>(&queueDepth_), 
-      "io depth of each context in IOExecutor")
-    ("ioexec.cpu_core", 
+  ioexecOptions.add_options()("ioexec.ctx_queue_depth",
+                              po::value<uint32_t>(&queueDepth_),
+                              "io depth of each context in IOExecutor")(
+      "ioexec.cpu_core",
       po::value<std::vector<CoreId>>(&cpuCores_)->multitoken(),
       "cpu cores dedicated to IO");
 
@@ -162,7 +162,7 @@ void IOExecutor::Statistics::incrementOps(FilerJob *job) {
   if (job->op_ == FileOp::Write) {
 
     assert(job->size_);
-    write_.numOps_ ++;
+    write_.numOps_++;
     write_.numBytes_ += job->size_;
     write_.waitTime_ = job->waitTime();
     write_.serviceTime_ = job->serviceTime();
@@ -172,7 +172,7 @@ void IOExecutor::Statistics::incrementOps(FilerJob *job) {
   } else if (job->op_ == FileOp::NonAlignedWrite) {
 
     assert(job->size_);
-    nonAlignedWrite_.numOps_ ++;
+    nonAlignedWrite_.numOps_++;
     nonAlignedWrite_.numBytes_ += job->size_;
     nonAlignedWrite_.waitTime_ = job->waitTime();
     nonAlignedWrite_.serviceTime_ = job->serviceTime();
@@ -182,7 +182,7 @@ void IOExecutor::Statistics::incrementOps(FilerJob *job) {
   } else if (job->op_ == FileOp::Read) {
 
     assert(job->size_);
-    read_.numOps_ ++;
+    read_.numOps_++;
     read_.numBytes_ += job->size_;
     read_.waitTime_ = job->waitTime();
     read_.serviceTime_ = job->serviceTime();
@@ -191,8 +191,8 @@ void IOExecutor::Statistics::incrementOps(FilerJob *job) {
 
   } else if (job->op_ == FileOp::Delete) {
 
-    delete_.numOps_ ++;
-    //delete_.numBytes_ += job->size_; not increment
+    delete_.numOps_++;
+    // delete_.numBytes_ += job->size_; not increment
     delete_.waitTime_ = job->waitTime();
     delete_.serviceTime_ = job->serviceTime();
     delete_.waitHist_ = job->waitTime();
@@ -220,12 +220,10 @@ std::string IOExecutor::Statistics::getState() const {
 
   // json format
   s << "{\"stats\":{"
-    << "\"write\":"   << write_.getState() 
-    << ",\"nonAlignedWrite\":"   << nonAlignedWrite_.getState() 
-    << ",\"read\":"    << read_.getState() 
-    << ",\"delete\":"  << delete_.getState() 
-    << ",\"numQueued\":" << numQueued_
-    << ",\"numSubmitted\":" << numSubmitted_ 
+    << "\"write\":" << write_.getState()
+    << ",\"nonAlignedWrite\":" << nonAlignedWrite_.getState()
+    << ",\"read\":" << read_.getState() << ",\"delete\":" << delete_.getState()
+    << ",\"numQueued\":" << numQueued_ << ",\"numSubmitted\":" << numSubmitted_
     << ",\"numCompleted\":" << numCompleted_
     << ",\"maxRequestQueueSize\":" << maxRequestQueueSize_
     << ",\"maxFdQueueSize\":" << maxFdQueueSize_
@@ -234,8 +232,7 @@ std::string IOExecutor::Statistics::getState() const {
     << ",\"numCompletionEvents\":" << numCompletionEvents_
     << ",\"requestQueueLow1\":" << requestQueueLow1_
     << ",\"requestQueueLow2\":" << requestQueueLow2_
-    << ",\"requestQueueFull\":" << requestQueueFull_
-    << "}}";
+    << ",\"requestQueueFull\":" << requestQueueFull_ << "}}";
 
   return s.str();
 }
@@ -244,13 +241,10 @@ std::string IOExecutor::Statistics::OpStats::getState() const {
   std::ostringstream s;
 
   // json format
-  s << " {\"numOps\":" << numOps_ 
-    << ",\"numBytes\":" << numBytes_
-    << ",\"waitTime\":" << waitTime_ 
-    << ",\"waitHist\":" << waitHist_
-    << ",\"serviceTime\":" << serviceTime_ 
-    << ",\"serviceHist\":" << serviceHist_
-    << "}";
+  s << " {\"numOps\":" << numOps_ << ",\"numBytes\":" << numBytes_
+    << ",\"waitTime\":" << waitTime_ << ",\"waitHist\":" << waitHist_
+    << ",\"serviceTime\":" << serviceTime_
+    << ",\"serviceHist\":" << serviceHist_ << "}";
 
   return s.str();
 }
@@ -358,8 +352,8 @@ void IOExecutor::execute() {
                 << ":idleloop=" << stats_.idleLoop_
                 << ":minSubmitSize=" << minSubmitSize_
                 << ":numReads=" << stats_.read_.numOps_
-                << ":numWrites=" << stats_.write_.numOps_ 
-                << ":numNonAlignedWrites=" << stats_.nonAlignedWrite_.numOps_ 
+                << ":numWrites=" << stats_.write_.numOps_
+                << ":numNonAlignedWrites=" << stats_.nonAlignedWrite_.numOps_
                 << ":state=" << state_;
             submitterWaitingForNewRequests_ = false;
           }
@@ -578,7 +572,7 @@ int32_t IOExecutor::ProcessFdQueue() {
 
       if (job->op_ == FileOp::Delete) {
         job->setWaitTime();
-        stats_.numSubmitted_ ++;
+        stats_.numSubmitted_++;
         int retcode = ::unlink(job->fileName_.c_str());
         job->retcode_ = (retcode == 0) ? 0 : -errno;
         if (retcode != 0) {
@@ -587,13 +581,13 @@ int32_t IOExecutor::ProcessFdQueue() {
         }
       } else if (job->op_ == FileOp::NonAlignedWrite) {
         job->setWaitTime();
-        stats_.numSubmitted_ ++;
-        ssize_t writeSz = ::pwrite(job->fd_, job->buffer_, job->userSize_, job->offset_);
+        stats_.numSubmitted_++;
+        ssize_t writeSz =
+            ::pwrite(job->fd_, job->buffer_, job->userSize_, job->offset_);
         if (writeSz != job->userSize_) {
           job->retcode_ = -errno;
-          LOG(ERROR) << "op=" << job->op_ 
-            << " failed for job=" << (void *)job
-            << " errno=" << job->retcode_;
+          LOG(ERROR) << "op=" << job->op_ << " failed for job=" << (void *)job
+                     << " errno=" << job->retcode_;
         } else {
           job->retcode_ = 0;
         }
@@ -642,13 +636,13 @@ int IOExecutor::submitTask(FilerJob *job, bool blocking) {
       }
     }
 
-    if ((job->op_ == FileOp::Delete) || 
-      (job->op_ == FileOp::Sync) ||
-      (job->op_ == FileOp::NonAlignedWrite)) {
+    if ((job->op_ == FileOp::Delete) || (job->op_ == FileOp::Sync) ||
+        (job->op_ == FileOp::NonAlignedWrite)) {
 
       if (fdQueueSize_ > (int32_t)config_.maxRequestQueueSize_) {
         if (!blocking) {
-          LOG(ERROR) << "FD Queue full.  rejecting nonblocking job=" << (void *)job;
+          LOG(ERROR) << "FD Queue full.  rejecting nonblocking job="
+                     << (void *)job;
           ret = job->retcode_ = -EAGAIN;
           break;
         } else {
@@ -675,12 +669,12 @@ int IOExecutor::submitTask(FilerJob *job, bool blocking) {
       break;
     }
 
-    else if ((job->op_ == FileOp::Write) || 
-      (job->op_ == FileOp::Read)) {
+    else if ((job->op_ == FileOp::Write) || (job->op_ == FileOp::Read)) {
 
       if (requestQueueSize_ > (int32_t)config_.maxRequestQueueSize_) {
         if (!blocking) {
-          LOG(ERROR) << "Async Queue full.  rejecting nonblocking job=" << (void *)job;
+          LOG(ERROR) << "Async Queue full.  rejecting nonblocking job="
+                     << (void *)job;
           ret = job->retcode_ = -EAGAIN;
           break;
         } else {
@@ -856,7 +850,8 @@ void IOExecutor::ProcessCompletions() {
         }
 
       } else {
-        LOG(ERROR) << "got unknown event with ptr=" << static_cast<void*>(thisEvent.data.ptr);
+        LOG(ERROR) << "got unknown event with ptr="
+                   << static_cast<void *>(thisEvent.data.ptr);
       }
     }
 
@@ -879,7 +874,7 @@ void IOExecutor::ProcessCompletions() {
             << ":numCompleted=" << stats_.numCompleted_
             << ":numEventsProcessed=" << stats_.numCompletionEvents_;
 
-  //google::FlushLogFiles(0); TODO logging
+  // google::FlushLogFiles(0); TODO logging
 }
 
 int32_t IOExecutor::ProcessCallbacks(io_event *events, int32_t numEvents) {
@@ -898,8 +893,8 @@ int32_t IOExecutor::ProcessCallbacks(io_event *events, int32_t numEvents) {
       LOG(ERROR) << "IOerror for job=" << (void *)job << ":fd=" << job->fd_
                  << ":op=" << job->op_ << ":size=" << job->size_
                  << ":offset=" << job->offset_ << ":error=" << job->retcode_;
-    } else if ((events[idx].res != job->userSize_) 
-      && (events[idx].res != job->size_)) {
+    } else if ((events[idx].res != job->userSize_) &&
+               (events[idx].res != job->size_)) {
 
       job->retcode_ = -EIO;
       LOG(ERROR) << "partial read/write for job=" << (void *)job
@@ -920,7 +915,7 @@ int32_t IOExecutor::ProcessCallbacks(io_event *events, int32_t numEvents) {
 }
 
 int32_t IOExecutor::doPostProcessingOfJob(FilerJob *job) {
-  job->reset(); 
+  job->reset();
   // incrementOps() has to be done after reset() because
   // reset() sets serviceTime , which is used by stats
   stats_.incrementOps(job);

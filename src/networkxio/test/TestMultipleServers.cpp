@@ -33,11 +33,12 @@ but WITHOUT ANY WARRANTY of any kind.
 
 using namespace gobjfs::xio;
 
-static int fileTranslatorFunc(const char* old_name, size_t old_length, char* new_name);
+static int fileTranslatorFunc(const char *old_name, size_t old_length,
+                              char *new_name);
 
 class MultiServerTest : public testing::Test {
-  
-  int fd {-1};
+
+  int fd{-1};
 
 public:
   static constexpr size_t NUM_SERVERS = 2;
@@ -50,7 +51,7 @@ public:
   std::future<void> fut[NUM_SERVERS];
   int portNumber[NUM_SERVERS];
 
-  int testDataFd {gobjfs::os::FD_INVALID};
+  int testDataFd{gobjfs::os::FD_INVALID};
   static const std::string testDataFilePath;
   static const std::string testDataFileName;
   static const std::string testDataFileFullName;
@@ -63,15 +64,13 @@ public:
 
   virtual void SetUp() override {
 
-    strcpy(configFile,  "ioexecfiletestXXXXXX");
+    strcpy(configFile, "ioexecfiletestXXXXXX");
 
     fd = mkstemp(configFile);
 
-    const char* configContents = 
-      "[ioexec]\n"
-      "ctx_queue_depth=200\n"
-      "cpu_core=0\n"
-      ;
+    const char *configContents = "[ioexec]\n"
+                                 "ctx_queue_depth=200\n"
+                                 "cpu_core=0\n";
 
     ssize_t writeSz = write(fd, configContents, strlen(configContents));
 
@@ -79,16 +78,10 @@ public:
 
     bool newInstance = true;
     for (size_t idx = 0; idx < NUM_SERVERS; idx++) {
-      xs[idx] = gobjfs_xio_server_start("tcp", 
-        "127.0.0.1", 
-        portNumber[idx], 
-        1, 
-        200, 
-        fileTranslatorFunc, 
-        newInstance);
+      xs[idx] = gobjfs_xio_server_start("tcp", "127.0.0.1", portNumber[idx], 1,
+                                        200, fileTranslatorFunc, newInstance);
       EXPECT_NE(xs[idx], nullptr);
     }
-  
   }
 
   virtual void TearDown() override {
@@ -105,14 +98,14 @@ public:
       ret = ::unlink(configFile);
       ASSERT_EQ(ret, 0);
     }
-
   }
 
   void createDataFile() {
 
     gMempool_init(512);
 
-    auto serviceHandle = IOExecFileServiceInit(configFile, fileTranslatorFunc, true);
+    auto serviceHandle =
+        IOExecFileServiceInit(configFile, fileTranslatorFunc, true);
 
     ssize_t ret;
 
@@ -122,17 +115,16 @@ public:
     auto readFd = IOExecEventFdGetReadFd(evHandle);
     EXPECT_NE(fd, gobjfs::os::FD_INVALID);
 
-    auto fileHandle = IOExecFileOpen(serviceHandle, 
-        testDataFileName.c_str(),
-        testDataFileName.size(),
-        O_CREAT | O_WRONLY);
+    auto fileHandle =
+        IOExecFileOpen(serviceHandle, testDataFileName.c_str(),
+                       testDataFileName.size(), O_CREAT | O_WRONLY);
 
     auto batch = gIOBatchAlloc(1);
-    gIOExecFragment& frag = batch->array[0];
+    gIOExecFragment &frag = batch->array[0];
     frag.offset = 0;
     const size_t bufSize = 65536 * 1024;
     frag.size = bufSize;
-    frag.addr = (char*)gMempool_alloc(bufSize);
+    frag.addr = (char *)gMempool_alloc(bufSize);
     memset(frag.addr, 'a', bufSize);
     frag.completionId = reinterpret_cast<uint64_t>(batch);
 
@@ -152,30 +144,26 @@ public:
     IOExecEventFdClose(evHandle);
 
     IOExecFileServiceDestroy(serviceHandle);
-
   }
 
   void removeDataFile(bool check = true) {
 
     int ret = ::unlink(testDataFileFullName.c_str());
-    if (check) 
+    if (check)
       ASSERT_EQ(ret, 0);
-
   }
 
-
-  virtual ~MultiServerTest() {
-  }
+  virtual ~MultiServerTest() {}
 };
 
 const std::string MultiServerTest::testDataFilePath = "/tmp/";
 const std::string MultiServerTest::testDataFileName = "abcd";
-const std::string MultiServerTest::testDataFileFullName = 
-  std::string(MultiServerTest::testDataFilePath) + 
-  std::string(MultiServerTest::testDataFileName);
+const std::string MultiServerTest::testDataFileFullName =
+    std::string(MultiServerTest::testDataFilePath) +
+    std::string(MultiServerTest::testDataFileName);
 
-int fileTranslatorFunc(const char* old_name, size_t old_length, char* new_name)
-{
+int fileTranslatorFunc(const char *old_name, size_t old_length,
+                       char *new_name) {
   strcpy(new_name, MultiServerTest::testDataFilePath.c_str());
   strncat(new_name, old_name, old_length);
   return 0;
@@ -185,14 +173,11 @@ TEST_F(MultiServerTest, MultiServers) {
 
   client_ctx_attr_ptr ctx_attr[NUM_SERVERS];
 
-  for (size_t idx = 0; idx < NUM_SERVERS; idx ++) {
+  for (size_t idx = 0; idx < NUM_SERVERS; idx++) {
 
     ctx_attr[idx] = ctx_attr_new();
 
-    ctx_attr_set_transport(ctx_attr[idx],
-                     "tcp",
-                     "127.0.0.1",
-                     portNumber[idx]);   
+    ctx_attr_set_transport(ctx_attr[idx], "tcp", "127.0.0.1", portNumber[idx]);
   }
 
   std::vector<client_ctx_ptr> ptr_vec;
@@ -202,18 +187,16 @@ TEST_F(MultiServerTest, MultiServers) {
     for (size_t i = 0; i < NUM_CLIENTS; i++) {
       auto ctx = ctx_new(ctx_attr[idx]);
       EXPECT_NE(ctx, nullptr);
-  
+
       int err = ctx_init(ctx);
       EXPECT_EQ(err, 0);
-  
+
       ptr_vec.push_back(ctx);
     }
-
   }
 
-  for (auto& ctx_ptr : ptr_vec) {
+  for (auto &ctx_ptr : ptr_vec) {
     // disconnect the client from server
     ctx_ptr.reset();
   }
 }
-

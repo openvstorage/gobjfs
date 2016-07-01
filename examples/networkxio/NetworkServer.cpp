@@ -39,29 +39,29 @@ but WITHOUT ANY WARRANTY of any kind.
 #include <gobjfs_client.h>
 #include <networkxio/NetworkXioServer.h>
 
-
 using namespace gobjfs::xio;
 using namespace std;
 
 int main(int argc, char *argv[]) {
 
-    string Url = "tcp://127.0.0.1:21321";
+  string Url = "tcp://127.0.0.1:21321";
 
-    // log files are in /tmp
-    // google::InitGoogleLogging(argv[0]); TODO logging
+  // log files are in /tmp
+  // google::InitGoogleLogging(argv[0]); TODO logging
 
-    std::string configFileName = "./gioexecfile.conf";
-    bool newInstance = true;
+  std::string configFileName = "./gioexecfile.conf";
+  bool newInstance = true;
 
-    if (argc > 1) {
-      configFileName = argv[1];
-    }
+  if (argc > 1) {
+    configFileName = argv[1];
+  }
 
-    std::promise<void> _pr;
+  std::promise<void> _pr;
 
-    FileTranslatorFunc fileTranslatorFunc{nullptr};
+  FileTranslatorFunc fileTranslatorFunc{nullptr};
 
-    NetworkXioServer *xs = new NetworkXioServer(Url, 2, 200, fileTranslatorFunc, newInstance);
+  NetworkXioServer *xs =
+      new NetworkXioServer(Url, 2, 200, fileTranslatorFunc, newInstance);
 
-    xs->run(_pr);
+  xs->run(_pr);
 }

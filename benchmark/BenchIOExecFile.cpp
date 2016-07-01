@@ -83,11 +83,11 @@ struct Config {
         "percent of total read write scale")(
         "total_read_write_scale",
         value<uint32_t>(&totalReadWriteScale)->required(),
-        "total scale")(
-        "shorten_file_size", value<uint32_t>(&shortenFileSize), "shorten the"
-" size by this much to test nonaliged reads")(
+        "total scale")("shorten_file_size", value<uint32_t>(&shortenFileSize),
+                       "shorten the"
+                       " size by this much to test nonaliged reads")(
         "new_instance", value<bool>(&newInstance)->required(),
-                       "create files from scratch")(
+        "create files from scratch")(
         "mountpoint",
         value<std::vector<std::string>>(&dirPrefix)->required()->multitoken(),
         "ssd mount point");
@@ -221,7 +221,7 @@ struct FixedSizeFileManager {
   std::string getFilename(uint64_t fileNum) {
     static const auto numDir = config.dirPrefix.size();
     return config.dirPrefix[fileNum % numDir] + buildFileName(fileNum);
-    //return buildFileName(fileNum);
+    // return buildFileName(fileNum);
   }
 
   int createFile(IOExecFileHandle &handle, uint64_t &retFilenum) {
@@ -234,10 +234,8 @@ struct FixedSizeFileManager {
     retFilenum = FilesCtr++;
     auto str = getFilename(retFilenum);
 
-    handle = IOExecFileOpen(serviceHandle, 
-        str.c_str(), 
-        str.size(),
-        O_RDWR | O_SYNC | O_CREAT);
+    handle = IOExecFileOpen(serviceHandle, str.c_str(), str.size(),
+                            O_RDWR | O_SYNC | O_CREAT);
 
     if (handle != nullptr) {
       std::unique_lock<std::mutex> lck(mutex);
@@ -261,10 +259,7 @@ struct FixedSizeFileManager {
 
     try {
       auto str = Directory.at(index);
-      handle = IOExecFileOpen(serviceHandle, 
-        str.c_str(), 
-        str.size(),
-        O_RDONLY);
+      handle = IOExecFileOpen(serviceHandle, str.c_str(), str.size(), O_RDONLY);
 
       if (config.doMemCheck && actualNumber) {
         auto filename = basename(str.c_str());
@@ -372,7 +367,6 @@ struct StatusExt {
   IOExecFileHandle handle{nullptr};
   gobjfs::stats::Timer timer;
   OpType op{Invalid};
-
 };
 
 static constexpr size_t MAX_EVENTS = 10;
@@ -417,9 +411,11 @@ static int wait_for_iocompletion(int epollfd, int efd, ThreadCtx *ctx) {
             if (ext->isWrite()) {
               ctx->totalWriteLatency = ext->timer.elapsedMicroseconds();
               ctr++;
-              //IOExecFileTruncate(ext->handle, ext->batch->array[0].size - config.shortenFileSize); NonAligned Option2 truncate after write
+              // IOExecFileTruncate(ext->handle, ext->batch->array[0].size -
+              // config.shortenFileSize); NonAligned Option2 truncate after
+              // write
               if (iostatus.errorCode != 0) {
-                ctx->failedWrites ++;        
+                ctx->failedWrites++;
               }
             } else if (ext->isRead()) {
               if (config.doMemCheck) {
@@ -443,7 +439,7 @@ static int wait_for_iocompletion(int epollfd, int efd, ThreadCtx *ctx) {
                 }
               }
               if (iostatus.errorCode != 0) {
-                ctx->failedReads ++;
+                ctx->failedReads++;
               }
               ctx->totalReadLatency = ext->timer.elapsedMicroseconds();
               ctr++;
@@ -641,14 +637,16 @@ static void doRandomReadWrite(ThreadCtx *ctx) {
 
       if (ext->isWrite()) {
         frag.offset = 0;
-        frag.size = (config.blockSize * config.maxBlocks) - config.shortenFileSize; // TEST unaligned writes
+        frag.size = (config.blockSize * config.maxBlocks) -
+                    config.shortenFileSize; // TEST unaligned writes
         frag.addr = (caddr_t)gMempool_alloc(frag.size);
         memset(frag.addr, 'a' + (ext->actualFilenum % 26), frag.size);
         assert(frag.addr != nullptr);
       } else if (ext->isRead()) {
         uint64_t blockNum = blockGenerator(seedGen);
         frag.offset = blockNum * config.blockSize;
-        frag.size = config.blockSize - config.shortenFileSize; // TEST unaligned reads
+        frag.size =
+            config.blockSize - config.shortenFileSize; // TEST unaligned reads
         frag.addr = (caddr_t)gMempool_alloc(frag.size);
         assert(frag.addr != nullptr);
       } else if (ext->isDelete()) {
@@ -674,7 +672,7 @@ static void doRandomReadWrite(ThreadCtx *ctx) {
       }
 
       if (ret == -EAGAIN) {
-	if (sleepTimeMicrosec < 10) 
+        if (sleepTimeMicrosec < 10)
           sleepTimeMicrosec *= 2;
         usleep(sleepTimeMicrosec);
         LOG(WARNING) << "too fast sleep=" << sleepTimeMicrosec;
@@ -698,11 +696,9 @@ static void doRandomReadWrite(ThreadCtx *ctx) {
   int64_t timeMilli = timer.elapsedMilliseconds();
   std::ostringstream s;
 
-  s << "thread=" << gobjfs::os::GetCpuCore() 
-    << ":num_io=" << ctx->perThreadIO
+  s << "thread=" << gobjfs::os::GetCpuCore() << ":num_io=" << ctx->perThreadIO
     << ":failed_reads=" << ctx->failedReads
-    << ":failed_writes=" << ctx->failedWrites
-    << ":time(msec)=" << timeMilli
+    << ":failed_writes=" << ctx->failedWrites << ":time(msec)=" << timeMilli
     << ":read_latency(usec)=" << ctx->totalReadLatency
     << ":write_latency(usec)=" << ctx->totalWriteLatency
     << ":delete_latency(usec)=" << ctx->totalDeleteLatency
@@ -722,11 +718,10 @@ int main(int argc, char *argv[]) {
 
   config.readConfig("./benchioexec.conf");
 
-  FileTranslatorFunc fileTranslatorFunc {nullptr};
+  FileTranslatorFunc fileTranslatorFunc{nullptr};
 
-  auto serviceHandle = IOExecFileServiceInit("./gioexecfile.conf", 
-    fileTranslatorFunc,
-    config.newInstance);
+  auto serviceHandle = IOExecFileServiceInit(
+      "./gioexecfile.conf", fileTranslatorFunc, config.newInstance);
 
   gMempool_init(config.alignSize);
 
@@ -789,10 +784,8 @@ int main(int argc, char *argv[]) {
     LOG(INFO) << s.str();
 
     if (totalFailedReads || totalFailedWrites) {
-      LOG(ERROR) 
-        << "failed reads=" << totalFailedReads
-        << " failed writes=" << totalFailedWrites
-        ;
+      LOG(ERROR) << "failed reads=" << totalFailedReads
+                 << " failed writes=" << totalFailedWrites;
     }
   }
 

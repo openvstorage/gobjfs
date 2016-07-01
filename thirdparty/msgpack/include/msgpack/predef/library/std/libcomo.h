@@ -16,7 +16,8 @@ http://www.boost.org/LICENSE_1_0.txt)
 /*`
 [heading `MSGPACK_LIB_STD_COMO`]
 
-[@http://www.comeaucomputing.com/libcomo/ Comeau Computing] Standard C++ Library.
+[@http://www.comeaucomputing.com/libcomo/ Comeau Computing] Standard C++
+Library.
 Version number available as major.
 
 [table
@@ -31,18 +32,17 @@ Version number available as major.
 #define MSGPACK_LIB_STD_COMO MSGPACK_VERSION_NUMBER_NOT_AVAILABLE
 
 #if defined(__LIBCOMO__)
-#   undef MSGPACK_LIB_STD_COMO
-#   define MSGPACK_LIB_STD_COMO MSGPACK_VERSION_NUMBER(__LIBCOMO_VERSION__,0,0)
+#undef MSGPACK_LIB_STD_COMO
+#define MSGPACK_LIB_STD_COMO MSGPACK_VERSION_NUMBER(__LIBCOMO_VERSION__, 0, 0)
 #endif
 
 #if MSGPACK_LIB_STD_COMO
-#   define MSGPACK_LIB_STD_COMO_AVAILABLE
+#define MSGPACK_LIB_STD_COMO_AVAILABLE
 #endif
 
 #define MSGPACK_LIB_STD_COMO_NAME "Comeau Computing"
 
 #include <msgpack/predef/detail/test.h>
-MSGPACK_PREDEF_DECLARE_TEST(MSGPACK_LIB_STD_COMO,MSGPACK_LIB_STD_COMO_NAME)
-
+MSGPACK_PREDEF_DECLARE_TEST(MSGPACK_LIB_STD_COMO, MSGPACK_LIB_STD_COMO_NAME)
 
 #endif

@@ -34,35 +34,34 @@ If available versions \[1-5\] are specifically detected.
 #define MSGPACK_ARCH_SH MSGPACK_VERSION_NUMBER_NOT_AVAILABLE
 
 #if defined(__sh__)
-#   undef MSGPACK_ARCH_SH
-#   if !defined(MSGPACK_ARCH_SH) && (defined(__SH5__))
-#       define MSGPACK_ARCH_SH MSGPACK_VERSION_NUMBER(5,0,0)
-#   endif
-#   if !defined(MSGPACK_ARCH_SH) && (defined(__SH4__))
-#       define MSGPACK_ARCH_SH MSGPACK_VERSION_NUMBER(4,0,0)
-#   endif
-#   if !defined(MSGPACK_ARCH_SH) && (defined(__sh3__) || defined(__SH3__))
-#       define MSGPACK_ARCH_SH MSGPACK_VERSION_NUMBER(3,0,0)
-#   endif
-#   if !defined(MSGPACK_ARCH_SH) && (defined(__sh2__))
-#       define MSGPACK_ARCH_SH MSGPACK_VERSION_NUMBER(2,0,0)
-#   endif
-#   if !defined(MSGPACK_ARCH_SH) && (defined(__sh1__))
-#       define MSGPACK_ARCH_SH MSGPACK_VERSION_NUMBER(1,0,0)
-#   endif
-#   if !defined(MSGPACK_ARCH_SH)
-#       define MSGPACK_ARCH_SH MSGPACK_VERSION_NUMBER_AVAILABLE
-#   endif
+#undef MSGPACK_ARCH_SH
+#if !defined(MSGPACK_ARCH_SH) && (defined(__SH5__))
+#define MSGPACK_ARCH_SH MSGPACK_VERSION_NUMBER(5, 0, 0)
+#endif
+#if !defined(MSGPACK_ARCH_SH) && (defined(__SH4__))
+#define MSGPACK_ARCH_SH MSGPACK_VERSION_NUMBER(4, 0, 0)
+#endif
+#if !defined(MSGPACK_ARCH_SH) && (defined(__sh3__) || defined(__SH3__))
+#define MSGPACK_ARCH_SH MSGPACK_VERSION_NUMBER(3, 0, 0)
+#endif
+#if !defined(MSGPACK_ARCH_SH) && (defined(__sh2__))
+#define MSGPACK_ARCH_SH MSGPACK_VERSION_NUMBER(2, 0, 0)
+#endif
+#if !defined(MSGPACK_ARCH_SH) && (defined(__sh1__))
+#define MSGPACK_ARCH_SH MSGPACK_VERSION_NUMBER(1, 0, 0)
+#endif
+#if !defined(MSGPACK_ARCH_SH)
+#define MSGPACK_ARCH_SH MSGPACK_VERSION_NUMBER_AVAILABLE
+#endif
 #endif
 
 #if MSGPACK_ARCH_SH
-#   define MSGPACK_ARCH_SH_AVAILABLE
+#define MSGPACK_ARCH_SH_AVAILABLE
 #endif
 
 #define MSGPACK_ARCH_SH_NAME "SuperH"
 
 #include <msgpack/predef/detail/test.h>
-MSGPACK_PREDEF_DECLARE_TEST(MSGPACK_ARCH_SH,MSGPACK_ARCH_SH_NAME)
-
+MSGPACK_PREDEF_DECLARE_TEST(MSGPACK_ARCH_SH, MSGPACK_ARCH_SH_NAME)
 
 #endif

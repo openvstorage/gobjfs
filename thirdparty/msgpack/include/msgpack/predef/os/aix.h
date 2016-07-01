@@ -32,36 +32,34 @@ Version number available as major, minor, and patch.
 
 #define MSGPACK_OS_AIX MSGPACK_VERSION_NUMBER_NOT_AVAILABLE
 
-#if !defined(MSGPACK_PREDEF_DETAIL_OS_DETECTED) && ( \
-    defined(_AIX) || defined(__TOS_AIX__) \
-    )
-#   undef MSGPACK_OS_AIX
-#   if !defined(MSGPACK_OS_AIX) && defined(_AIX43)
-#       define MSGPACK_OS_AIX MSGPACK_VERSION_NUMBER(4,3,0)
-#   endif
-#   if !defined(MSGPACK_OS_AIX) && defined(_AIX41)
-#       define MSGPACK_OS_AIX MSGPACK_VERSION_NUMBER(4,1,0)
-#   endif
-#   if !defined(MSGPACK_OS_AIX) && defined(_AIX32)
-#       define MSGPACK_OS_AIX MSGPACK_VERSION_NUMBER(3,2,0)
-#   endif
-#   if !defined(MSGPACK_OS_AIX) && defined(_AIX3)
-#       define MSGPACK_OS_AIX MSGPACK_VERSION_NUMBER(3,0,0)
-#   endif
-#   if !defined(MSGPACK_OS_AIX)
-#       define MSGPACK_OS_AIX MSGPACK_VERSION_NUMBER_AVAILABLE
-#   endif
+#if !defined(MSGPACK_PREDEF_DETAIL_OS_DETECTED) &&                             \
+    (defined(_AIX) || defined(__TOS_AIX__))
+#undef MSGPACK_OS_AIX
+#if !defined(MSGPACK_OS_AIX) && defined(_AIX43)
+#define MSGPACK_OS_AIX MSGPACK_VERSION_NUMBER(4, 3, 0)
+#endif
+#if !defined(MSGPACK_OS_AIX) && defined(_AIX41)
+#define MSGPACK_OS_AIX MSGPACK_VERSION_NUMBER(4, 1, 0)
+#endif
+#if !defined(MSGPACK_OS_AIX) && defined(_AIX32)
+#define MSGPACK_OS_AIX MSGPACK_VERSION_NUMBER(3, 2, 0)
+#endif
+#if !defined(MSGPACK_OS_AIX) && defined(_AIX3)
+#define MSGPACK_OS_AIX MSGPACK_VERSION_NUMBER(3, 0, 0)
+#endif
+#if !defined(MSGPACK_OS_AIX)
+#define MSGPACK_OS_AIX MSGPACK_VERSION_NUMBER_AVAILABLE
+#endif
 #endif
 
 #if MSGPACK_OS_AIX
-#   define MSGPACK_OS_AIX_AVAILABLE
-#   include <msgpack/predef/detail/os_detected.h>
+#define MSGPACK_OS_AIX_AVAILABLE
+#include <msgpack/predef/detail/os_detected.h>
 #endif
 
 #define MSGPACK_OS_AIX_NAME "IBM AIX"
 
 #include <msgpack/predef/detail/test.h>
-MSGPACK_PREDEF_DECLARE_TEST(MSGPACK_OS_AIX,MSGPACK_OS_AIX_NAME)
-
+MSGPACK_PREDEF_DECLARE_TEST(MSGPACK_OS_AIX, MSGPACK_OS_AIX_NAME)
 
 #endif

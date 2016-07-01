@@ -39,9 +39,9 @@ using gobjfs::os::IsDirectIOAligned;
 
 // objpool holds freelist of batches with only one fragment
 // Not used anymore
-//static gobjfs::MempoolSPtr objpool =
-    //gobjfs::MempoolFactory::createObjectMempool(
-        //"object", sizeof(gIOBatch) + sizeof(gIOExecFragment));
+// static gobjfs::MempoolSPtr objpool =
+// gobjfs::MempoolFactory::createObjectMempool(
+//"object", sizeof(gIOBatch) + sizeof(gIOExecFragment));
 
 // =======================================================
 
@@ -68,11 +68,12 @@ gIOBatch *gIOBatchAlloc(size_t count) {
 
 void gIOBatchFree(gIOBatch *ptr) {
 
-  if (!ptr) return;
+  if (!ptr)
+    return;
 
   for (size_t idx = 0; idx < ptr->count; idx++) {
     gIOExecFragment &frag = ptr->array[idx];
-    //assert(IsDirectIOAligned(frag.size));
+    // assert(IsDirectIOAligned(frag.size));
     assert(IsDirectIOAligned(frag.offset));
     assert(frag.completionId != 0);
 
@@ -105,8 +106,7 @@ struct IOExecServiceInt {
   gobjfs::stats::Histogram<int64_t> fileTranslatorHist_;
 
   // could use std::forward
-  int callTranslator(const char* old_name, size_t len, char* new_name)
-  {
+  int callTranslator(const char *old_name, size_t len, char *new_name) {
     gobjfs::stats::Timer timer(true);
 
     int ret = 0;
@@ -117,7 +117,7 @@ struct IOExecServiceInt {
     }
 
     auto time = timer.elapsedNanoseconds();
-    
+
     // lock the stats update
     std::unique_lock<std::mutex> l(mutex);
     fileTranslatorStats_ = time;
@@ -129,10 +129,8 @@ struct IOExecServiceInt {
 
     std::ostringstream s;
 
-    s 
-      << " fileTranslatorStats=" << fileTranslatorStats_
-      << ",fileTranslatorHist=" << fileTranslatorHist_
-      << std::endl;
+    s << " fileTranslatorStats=" << fileTranslatorStats_
+      << ",fileTranslatorHist=" << fileTranslatorHist_ << std::endl;
 
     return s.str();
   }
@@ -150,15 +148,13 @@ int32_t IOExecGetNumExecutors(IOExecServiceHandle serviceHandle) {
   return serviceHandle->ioexecVec.size();
 }
 
-int32_t IOExecGetStats(IOExecServiceHandle serviceHandle, char* buf,
-  int32_t len)
-{
+int32_t IOExecGetStats(IOExecServiceHandle serviceHandle, char *buf,
+                       int32_t len) {
   decltype(len) curOffset = 0;
 
   auto str = serviceHandle->getFileTranslatorStats();
   uint32_t copyLen = str.size();
-  if ((ssize_t)str.size() >= len - curOffset)
-  {
+  if ((ssize_t)str.size() >= len - curOffset) {
     // truncate the string to be copied
     copyLen = len;
   }
@@ -167,19 +163,16 @@ int32_t IOExecGetStats(IOExecServiceHandle serviceHandle, char* buf,
 
   if (curOffset < len) {
 
-    for (auto& elem : serviceHandle->ioexecVec) 
-    {
+    for (auto &elem : serviceHandle->ioexecVec) {
       auto str = elem->getState();
       uint32_t copyLen = str.size();
-      if ((ssize_t)str.size() >= len - curOffset)
-      {
+      if ((ssize_t)str.size() >= len - curOffset) {
         // truncate the string to be copied
         copyLen = len;
       }
       strncpy(buf + curOffset, str.c_str(), copyLen);
       curOffset += copyLen;
-      if (curOffset >= len) 
-      {
+      if (curOffset >= len) {
         LOG(WARNING) << "input buffer len=" << len << " insufficient for stats";
         break;
       }
@@ -189,8 +182,7 @@ int32_t IOExecGetStats(IOExecServiceHandle serviceHandle, char* buf,
   return curOffset;
 }
 
-static int32_t doCommonInit(IOExecServiceHandle handle)
-{
+static int32_t doCommonInit(IOExecServiceHandle handle) {
   int32_t ret = 0;
 
   do {
@@ -213,29 +205,28 @@ static int32_t doCommonInit(IOExecServiceHandle handle)
     }
   } while (0);
 
-  //google::FlushLogFiles(0); TODO logging
+  // google::FlushLogFiles(0); TODO logging
   return ret;
 }
 
 IOExecServiceHandle IOExecFileServiceInit(int32_t numCoresForIO,
-  int32_t queueDepthForIO,
-  FileTranslatorFunc fileTranslatorFunc,
-  bool createFlag) {
+                                          int32_t queueDepthForIO,
+                                          FileTranslatorFunc fileTranslatorFunc,
+                                          bool createFlag) {
 
   int ret = 0;
 
   if ((numCoresForIO == 0) || (queueDepthForIO == 0)) {
     LOG(ERROR) << "parameters need to be non-zero "
-      << " numCores=" << numCoresForIO
-      << " queueDepth=" << queueDepthForIO;
+               << " numCores=" << numCoresForIO
+               << " queueDepth=" << queueDepthForIO;
     return nullptr;
   }
 
   IOExecServiceHandle handle = new IOExecServiceInt;
   handle->fileTranslatorFunc = fileTranslatorFunc;
 
-  for (int32_t idx = 0; idx < numCoresForIO; idx ++)
-  {
+  for (int32_t idx = 0; idx < numCoresForIO; idx++) {
     handle->ioConfig.cpuCores_.push_back(idx);
   }
   handle->ioConfig.queueDepth_ = queueDepthForIO;
@@ -250,9 +241,9 @@ IOExecServiceHandle IOExecFileServiceInit(int32_t numCoresForIO,
   return handle;
 }
 
-IOExecServiceHandle IOExecFileServiceInit(const char *pConfigFileName, 
-  FileTranslatorFunc fileTranslatorFunc,
-  bool createFlag) {
+IOExecServiceHandle IOExecFileServiceInit(const char *pConfigFileName,
+                                          FileTranslatorFunc fileTranslatorFunc,
+                                          bool createFlag) {
 
   int32_t ret = 0;
 
@@ -268,10 +259,11 @@ IOExecServiceHandle IOExecFileServiceInit(const char *pConfigFileName,
 
     if (handle->ioConfig.cpuCores_.size() == 0) {
       LOG(ERROR) << "config file=" << pConfigFileName
-        << " has zero cpuCores allocated."
-        << "  This can happen if your binary is linked to incorrect boost version."
-        << "  Is your binary linked to boost_program_options version="
-        << BOOST_LIB_VERSION;
+                 << " has zero cpuCores allocated."
+                 << "  This can happen if your binary is linked to incorrect "
+                    "boost version."
+                 << "  Is your binary linked to boost_program_options version="
+                 << BOOST_LIB_VERSION;
       ret = -EINVAL;
       break;
     }
@@ -283,11 +275,10 @@ IOExecServiceHandle IOExecFileServiceInit(const char *pConfigFileName,
   if (ret != 0) {
     delete handle;
     handle = nullptr;
-  } 
-  
+  }
+
   return handle;
 }
-
 
 int32_t IOExecFileServiceDestroy(IOExecServiceHandle serviceHandle) {
   if (!serviceHandle) {
@@ -302,7 +293,6 @@ int32_t IOExecFileServiceDestroy(IOExecServiceHandle serviceHandle) {
   delete serviceHandle;
   return 0;
 }
-
 
 // =======================================================
 
@@ -322,7 +312,6 @@ struct IOExecEventFdInt {
     close(fd[1]);
   }
 };
-
 
 IOExecEventFdHandle IOExecEventFdOpen(IOExecServiceHandle serviceHandle) {
 
@@ -394,8 +383,7 @@ struct IOExecFileInt {
 };
 
 IOExecFileHandle IOExecFileOpen(IOExecServiceHandle serviceHandle,
-                                const char *fileName, 
-                                size_t fileNameLength, 
+                                const char *fileName, size_t fileNameLength,
                                 int32_t flags) {
 
   IOExecFileHandle newHandle{nullptr};
@@ -407,10 +395,12 @@ IOExecFileHandle IOExecFileOpen(IOExecServiceHandle serviceHandle,
 
   char absFileName[PATH_MAX];
 
-  const int translateRet = serviceHandle->callTranslator(fileName, fileNameLength, absFileName);
+  const int translateRet =
+      serviceHandle->callTranslator(fileName, fileNameLength, absFileName);
 
   if (translateRet < 0) {
-    LOG(ERROR) << "file translation failed for fileName=" << std::string(fileName, fileNameLength);
+    LOG(ERROR) << "file translation failed for fileName="
+               << std::string(fileName, fileNameLength);
     return nullptr;
   }
 
@@ -443,7 +433,7 @@ int32_t IOExecFileTruncate(IOExecFileHandle fileHandle, size_t newSize) {
     LOG(ERROR) << "Rejecting truncate with null file handle";
     return -EINVAL;
   }
-  
+
   int ret = ftruncate(fileHandle->fd, newSize);
   if (ret != 0) {
     ret = -errno;
@@ -453,13 +443,10 @@ int32_t IOExecFileTruncate(IOExecFileHandle fileHandle, size_t newSize) {
   return ret;
 }
 
-
-static int32_t IOExecFileOp(const char* name, 
-  FileOp optype,
-  IOExecFileHandle fileHandle, 
-  bool closeFileHandle,
-  const gIOBatch *batch,
-  IOExecEventFdHandle eventFdHandle) {
+static int32_t IOExecFileOp(const char *name, FileOp optype,
+                            IOExecFileHandle fileHandle, bool closeFileHandle,
+                            const gIOBatch *batch,
+                            IOExecEventFdHandle eventFdHandle) {
 
   int retcode = 0;
 
@@ -513,31 +500,31 @@ int32_t IOExecFileWrite(IOExecFileHandle fileHandle, const gIOBatch *batch,
                         IOExecEventFdHandle eventFdHandle) {
 
   bool closeFileHandle = false;
-  return IOExecFileOp("write", FileOp::Write, fileHandle, closeFileHandle, batch, eventFdHandle);
-
+  return IOExecFileOp("write", FileOp::Write, fileHandle, closeFileHandle,
+                      batch, eventFdHandle);
 }
 
 int32_t IOExecFileRead(IOExecFileHandle fileHandle, const gIOBatch *batch,
                        IOExecEventFdHandle eventFdHandle) {
 
   bool closeFileHandle = false;
-  return IOExecFileOp("read", FileOp::Read, fileHandle, closeFileHandle, batch, eventFdHandle);
+  return IOExecFileOp("read", FileOp::Read, fileHandle, closeFileHandle, batch,
+                      eventFdHandle);
 }
 
+int32_t IOExecFileRead(IOExecServiceHandle serviceHandle, const char *fileName,
+                       size_t fileNameLength, const gIOBatch *batch,
+                       IOExecEventFdHandle eventFdHandle) {
 
-int32_t IOExecFileRead(IOExecServiceHandle serviceHandle, 
-  const char* fileName, 
-  size_t fileNameLength,
-  const gIOBatch *batch,
-  IOExecEventFdHandle eventFdHandle) {
-
-  auto fileHandle = IOExecFileOpen(serviceHandle, fileName, fileNameLength, O_RDONLY);
+  auto fileHandle =
+      IOExecFileOpen(serviceHandle, fileName, fileNameLength, O_RDONLY);
   if (fileHandle == nullptr) {
     return -EIO;
   }
 
   bool closeFileHandle = true;
-  auto ret =  IOExecFileOp("read", FileOp::Read, fileHandle, closeFileHandle, batch, eventFdHandle);
+  auto ret = IOExecFileOp("read", FileOp::Read, fileHandle, closeFileHandle,
+                          batch, eventFdHandle);
 
   // close fileHandle but do not close fd which is still in use
   // because the fd will be closed after FilerJob::reset
@@ -546,7 +533,6 @@ int32_t IOExecFileRead(IOExecServiceHandle serviceHandle,
   return ret;
 }
 
-
 int32_t IOExecFileDeleteSync(IOExecServiceHandle serviceHandle,
                              const char *fileName) {
   (void)serviceHandle;
@@ -554,9 +540,11 @@ int32_t IOExecFileDeleteSync(IOExecServiceHandle serviceHandle,
   const size_t fileNameLength = strlen(fileName);
 
   char absFileName[PATH_MAX];
-  const int translateRet = serviceHandle->callTranslator(fileName, fileNameLength, absFileName);
+  const int translateRet =
+      serviceHandle->callTranslator(fileName, fileNameLength, absFileName);
   if (translateRet < 0) {
-    LOG(ERROR) << "file translation failed for fileName=" << std::string(fileName, fileNameLength);
+    LOG(ERROR) << "file translation failed for fileName="
+               << std::string(fileName, fileNameLength);
     return -EINVAL;
   }
 
@@ -569,8 +557,7 @@ int32_t IOExecFileDeleteSync(IOExecServiceHandle serviceHandle,
 }
 
 int32_t IOExecFileDelete(IOExecServiceHandle serviceHandle,
-                         const char *fileName, 
-                         gCompletionID completionId,
+                         const char *fileName, gCompletionID completionId,
                          IOExecEventFdHandle eventFdHandle) {
 
   const size_t fileNameLength = strlen(fileName);
@@ -587,9 +574,11 @@ int32_t IOExecFileDelete(IOExecServiceHandle serviceHandle,
 
   char absFileName[PATH_MAX];
 
-  const int translateRet = serviceHandle->callTranslator(fileName, fileNameLength, absFileName);
+  const int translateRet =
+      serviceHandle->callTranslator(fileName, fileNameLength, absFileName);
   if (translateRet < 0) {
-    LOG(ERROR) << "file translation failed for fileName=" << std::string(fileName, fileNameLength);
+    LOG(ERROR) << "file translation failed for fileName="
+               << std::string(fileName, fileNameLength);
     return -EINVAL;
   }
 
@@ -608,7 +597,8 @@ int32_t IOExecFileDelete(IOExecServiceHandle serviceHandle,
 // ============================================
 
 EXTERNC {
-  service_handle_t gobjfs_ioexecfile_service_init(const char *cfg_name, FileTranslatorFunc trans_func) {
+  service_handle_t gobjfs_ioexecfile_service_init(
+      const char *cfg_name, FileTranslatorFunc trans_func) {
     return IOExecFileServiceInit(cfg_name, trans_func, true);
   }
 
@@ -618,10 +608,10 @@ EXTERNC {
   }
 
   handle_t gobjfs_ioexecfile_file_open(service_handle_t service_handle,
-                                       const char *name, 
-                                       size_t name_length, 
+                                       const char *name, size_t name_length,
                                        int options) {
-    IOExecFileHandle h = IOExecFileOpen(service_handle, name, name_length, options);
+    IOExecFileHandle h =
+        IOExecFileOpen(service_handle, name, name_length, options);
     return (handle_t)h;
   }
 
@@ -638,8 +628,7 @@ EXTERNC {
   }
 
   int32_t gobjfs_ioexecfile_file_delete(service_handle_t service_handle,
-                                        const char *name, 
-                                        completion_id_t cid,
+                                        const char *name, completion_id_t cid,
                                         event_t eventFd) {
     return IOExecFileDelete(service_handle, name, cid,
                             (IOExecEventFdHandle)eventFd);
@@ -685,9 +674,8 @@ EXTERNC {
     LOG(INFO) << "}";
   }
 
-  int32_t gobjfs_ioexecfile_service_getstats(service_handle_t service_handle, 
-    char *buffer, 
-    int32_t len) {
-      return IOExecGetStats(service_handle, buffer, len);
+  int32_t gobjfs_ioexecfile_service_getstats(service_handle_t service_handle,
+                                             char *buffer, int32_t len) {
+    return IOExecGetStats(service_handle, buffer, len);
   }
 }

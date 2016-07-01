@@ -31,10 +31,7 @@ TEST(NetworkXioClientTest, StatsWithoutCtx) {
 
   auto ctx_attr = ctx_attr_new();
 
-  ctx_attr_set_transport(ctx_attr,
-                                       "tcp",
-                                       "127.0.0.1",
-                                       portNumber);
+  ctx_attr_set_transport(ctx_attr, "tcp", "127.0.0.1", portNumber);
 
   client_ctx_ptr ctx;
 
@@ -47,10 +44,7 @@ TEST(NetworkXioClientTest, StatsWithoutClient) {
 
   auto ctx_attr = ctx_attr_new();
 
-  ctx_attr_set_transport(ctx_attr,
-                                       "tcp",
-                                       "127.0.0.1",
-                                       portNumber);
+  ctx_attr_set_transport(ctx_attr, "tcp", "127.0.0.1", portNumber);
 
   auto ctx = ctx_new(ctx_attr);
 
@@ -59,4 +53,3 @@ TEST(NetworkXioClientTest, StatsWithoutClient) {
   EXPECT_NE(str.find("netclient=0"), std::string::npos);
   EXPECT_NE(str.find("invalid ctx or client connection"), std::string::npos);
 }
-

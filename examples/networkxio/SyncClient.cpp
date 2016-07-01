@@ -32,48 +32,43 @@ int times = 10;
 
 using namespace gobjfs::xio;
 
-void NetworkServerWriteReadTest(void)
-{
-    auto ctx_attr = ctx_attr_new();
+void NetworkServerWriteReadTest(void) {
+  auto ctx_attr = ctx_attr_new();
 
-    ctx_attr_set_transport(ctx_attr,
-                                         "tcp",
-                                         "127.0.0.1",
-                                         21321);
+  ctx_attr_set_transport(ctx_attr, "tcp", "127.0.0.1", 21321);
 
-    client_ctx_ptr ctx = ctx_new(ctx_attr);
-    assert(ctx != nullptr);
+  client_ctx_ptr ctx = ctx_new(ctx_attr);
+  assert(ctx != nullptr);
 
-    int err = ctx_init(ctx);
-    if (err < 0) {
-        GLOG_ERROR("Volume open failed ");
-        return;
+  int err = ctx_init(ctx);
+  if (err < 0) {
+    GLOG_ERROR("Volume open failed ");
+    return;
+  }
+
+  for (int i = 0; i < times; i++) {
+
+    auto rbuf = (char *)malloc(BufferSize);
+    assert(rbuf != nullptr);
+
+    size_t readSz = BufferSize - ShortenSize;
+
+    auto sz = gobjfs::xio::read(ctx, "abcd", rbuf, readSz, i * BufferSize);
+
+    if (sz < 0) {
+      GLOG_ERROR("OMG!!read failure with error  : " << sz);
+      break;
     }
-
-    for (int i = 0; i < times; i ++) {
-
-      auto rbuf = (char*)malloc(BufferSize);
-      assert(rbuf != nullptr);
-
-      size_t readSz = BufferSize - ShortenSize;
-  
-      auto sz = gobjfs::xio::read(ctx, "abcd", rbuf, readSz, i * BufferSize);
-  
-      if (sz < 0) {
-        GLOG_ERROR("OMG!!read failure with error  : " << sz);
-        break;
-      }
-      if (sz != (ssize_t) readSz) {
-        GLOG_ERROR("Read Length " << sz << " not matching expected " << BufferSize);
-        break;
-      }
-      free(rbuf);
-      if (i && (i % 1000 == 0)) {
-        std::cout << "completed reads=" << i << std::endl;
-      }
+    if (sz != (ssize_t)readSz) {
+      GLOG_ERROR("Read Length " << sz << " not matching expected "
+                                << BufferSize);
+      break;
     }
-
-
+    free(rbuf);
+    if (i && (i % 1000 == 0)) {
+      std::cout << "completed reads=" << i << std::endl;
+    }
+  }
 }
 
 int main(int argc, char *argv[]) {
@@ -83,5 +78,4 @@ int main(int argc, char *argv[]) {
   }
 
   NetworkServerWriteReadTest();
-
 }

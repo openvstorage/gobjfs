@@ -33,49 +33,45 @@ but WITHOUT ANY WARRANTY of any kind.
 
 using namespace gobjfs::xio;
 
-static int fileTranslatorFunc(const char* old_name, size_t old_length, char* new_name);
+static int fileTranslatorFunc(const char *old_name, size_t old_length,
+                              char *new_name);
 
 class NetworkXioServerTest : public testing::Test {
 
-  int fd {-1};
-
+  int fd{-1};
 
 public:
-
   char configFile[512];
 
   gobjfs_xio_server_handle xs;
   std::future<void> fut;
   int portNumber{21321};
 
-  int testDataFd {gobjfs::os::FD_INVALID};
+  int testDataFd{gobjfs::os::FD_INVALID};
   static const std::string testDataFilePath;
   static const std::string testDataFileName;
   static const std::string testDataFileFullName;
 
-  NetworkXioServerTest() {
-  }
+  NetworkXioServerTest() {}
 
   virtual void SetUp() override {
 
-    strcpy(configFile,  "ioexecfiletestXXXXXX");
+    strcpy(configFile, "ioexecfiletestXXXXXX");
 
     fd = mkstemp(configFile);
 
-    const char* configContents =
-      "[ioexec]\n"
-      "ctx_queue_depth=200\n"
-      "cpu_core=0\n"
-      ;
+    const char *configContents = "[ioexec]\n"
+                                 "ctx_queue_depth=200\n"
+                                 "cpu_core=0\n";
 
     ssize_t writeSz = write(fd, configContents, strlen(configContents));
 
     EXPECT_EQ(writeSz, strlen(configContents));
 
     bool newInstance = true;
-    xs = gobjfs_xio_server_start("tcp", "127.0.0.1", portNumber, 1, 200, fileTranslatorFunc, newInstance);
+    xs = gobjfs_xio_server_start("tcp", "127.0.0.1", portNumber, 1, 200,
+                                 fileTranslatorFunc, newInstance);
     EXPECT_NE(xs, nullptr);
-
   }
 
   virtual void TearDown() override {
@@ -90,14 +86,14 @@ public:
       ret = ::unlink(configFile);
       ASSERT_EQ(ret, 0);
     }
-
   }
 
   void createDataFile() {
 
     gMempool_init(gobjfs::os::DirectIOSize);
 
-    auto serviceHandle = IOExecFileServiceInit(configFile, fileTranslatorFunc, true);
+    auto serviceHandle =
+        IOExecFileServiceInit(configFile, fileTranslatorFunc, true);
 
     ssize_t ret;
 
@@ -107,17 +103,16 @@ public:
     auto readFd = IOExecEventFdGetReadFd(evHandle);
     EXPECT_NE(fd, gobjfs::os::FD_INVALID);
 
-    auto fileHandle = IOExecFileOpen(serviceHandle,
-        testDataFileName.c_str(),
-        testDataFileName.size(),
-        O_CREAT | O_WRONLY);
+    auto fileHandle =
+        IOExecFileOpen(serviceHandle, testDataFileName.c_str(),
+                       testDataFileName.size(), O_CREAT | O_WRONLY);
 
     auto batch = gIOBatchAlloc(1);
-    gIOExecFragment& frag = batch->array[0];
+    gIOExecFragment &frag = batch->array[0];
     frag.offset = 0;
     const size_t bufSize = 65536 * 1024;
     frag.size = bufSize;
-    frag.addr = (char*)gMempool_alloc(bufSize);
+    frag.addr = (char *)gMempool_alloc(bufSize);
     memset(frag.addr, 'a', bufSize);
     frag.completionId = reinterpret_cast<uint64_t>(batch);
 
@@ -137,7 +132,6 @@ public:
     IOExecEventFdClose(evHandle);
 
     IOExecFileServiceDestroy(serviceHandle);
-
   }
 
   void removeDataFile(bool check = true) {
@@ -145,22 +139,19 @@ public:
     int ret = ::unlink(testDataFileFullName.c_str());
     if (check)
       ASSERT_EQ(ret, 0);
-
   }
 
-
-  virtual ~NetworkXioServerTest() {
-  }
+  virtual ~NetworkXioServerTest() {}
 };
 
 const std::string NetworkXioServerTest::testDataFilePath = "/tmp/";
 const std::string NetworkXioServerTest::testDataFileName = "abcd";
 const std::string NetworkXioServerTest::testDataFileFullName =
-  std::string(NetworkXioServerTest::testDataFilePath) +
-  std::string(NetworkXioServerTest::testDataFileName);
+    std::string(NetworkXioServerTest::testDataFilePath) +
+    std::string(NetworkXioServerTest::testDataFileName);
 
-int fileTranslatorFunc(const char* old_name, size_t old_length, char* new_name)
-{
+int fileTranslatorFunc(const char *old_name, size_t old_length,
+                       char *new_name) {
   strcpy(new_name, NetworkXioServerTest::testDataFilePath.c_str());
   strncat(new_name, old_name, old_length);
   return 0;
@@ -170,10 +161,7 @@ TEST_F(NetworkXioServerTest, MultipleClients) {
 
   auto ctx_attr = ctx_attr_new();
 
-  ctx_attr_set_transport(ctx_attr,
-                                       "tcp",
-                                       "127.0.0.1",
-                                       portNumber);
+  ctx_attr_set_transport(ctx_attr, "tcp", "127.0.0.1", portNumber);
 
   std::vector<client_ctx_ptr> ptr_vec;
 
@@ -187,7 +175,7 @@ TEST_F(NetworkXioServerTest, MultipleClients) {
     ptr_vec.push_back(ctx);
   }
 
-  for (auto& ctx_ptr : ptr_vec) {
+  for (auto &ctx_ptr : ptr_vec) {
     // disconnect the client from server
     auto stats_string = ctx_get_stats(ctx_ptr);
     EXPECT_NE(stats_string.find("num_failed=0"), std::string::npos);
@@ -207,10 +195,7 @@ TEST_F(NetworkXioServerTest, FileDoesntExist) {
 
   auto ctx_attr = ctx_attr_new();
 
-  ctx_attr_set_transport(ctx_attr,
-                                       "tcp",
-                                       "127.0.0.1",
-                                       portNumber);
+  ctx_attr_set_transport(ctx_attr, "tcp", "127.0.0.1", portNumber);
 
   client_ctx_ptr ctx = ctx_new(ctx_attr);
   EXPECT_NE(ctx, nullptr);
@@ -218,14 +203,15 @@ TEST_F(NetworkXioServerTest, FileDoesntExist) {
   int err = ctx_init(ctx);
   EXPECT_EQ(err, 0);
 
-  for (decltype(times) i = 0; i < times; i ++) {
+  for (decltype(times) i = 0; i < times; i++) {
 
-    auto rbuf = (char*)malloc((i+1) * BufferSize);
+    auto rbuf = (char *)malloc((i + 1) * BufferSize);
     EXPECT_NE(rbuf, nullptr);
 
     size_t readSz = BufferSize - ShortenSize;
 
-    auto sz = gobjfs::xio::read(ctx, testDataFileName, rbuf, readSz, i * BufferSize);
+    auto sz =
+        gobjfs::xio::read(ctx, testDataFileName, rbuf, readSz, i * BufferSize);
 
     // reads will fail since file doesnt exist
     EXPECT_LT(sz, 0);
@@ -251,10 +237,7 @@ TEST_F(NetworkXioServerTest, AsyncFileDoesntExist) {
 
   auto ctx_attr = ctx_attr_new();
 
-  ctx_attr_set_transport(ctx_attr,
-                                       "tcp",
-                                       "127.0.0.1",
-                                       portNumber);
+  ctx_attr_set_transport(ctx_attr, "tcp", "127.0.0.1", portNumber);
 
   client_ctx_ptr ctx = ctx_new(ctx_attr);
   EXPECT_NE(ctx, nullptr);
@@ -263,17 +246,17 @@ TEST_F(NetworkXioServerTest, AsyncFileDoesntExist) {
   EXPECT_EQ(err, 0);
   EXPECT_EQ(ctx_is_disconnected(ctx), false);
 
-  std::vector<giocb*> iocb_vec;
+  std::vector<giocb *> iocb_vec;
   std::vector<std::string> filename_vec;
 
   size_t readSz = BufferSize - ShortenSize;
 
-  for (decltype(times) i = 0; i < times; i ++) {
+  for (decltype(times) i = 0; i < times; i++) {
 
-    auto rbuf = (char*)malloc(BufferSize);
+    auto rbuf = (char *)malloc(BufferSize);
     EXPECT_NE(rbuf, nullptr);
 
-    giocb* iocb = (giocb*)malloc(sizeof(giocb));
+    giocb *iocb = (giocb *)malloc(sizeof(giocb));
     iocb->aio_buf = rbuf;
     iocb->aio_offset = i * BufferSize;
     iocb->aio_nbytes = readSz;
@@ -288,7 +271,7 @@ TEST_F(NetworkXioServerTest, AsyncFileDoesntExist) {
   ret = aio_suspendv(ctx, iocb_vec, nullptr);
   EXPECT_EQ(ret, 0);
 
-  for (auto& elem : iocb_vec) {
+  for (auto &elem : iocb_vec) {
     auto retcode = aio_return(ctx, elem);
     EXPECT_EQ(retcode, -EIO);
     aio_finish(ctx, elem);
@@ -316,10 +299,7 @@ TEST_F(NetworkXioServerTest, SyncRead) {
 
   auto ctx_attr = ctx_attr_new();
 
-  ctx_attr_set_transport(ctx_attr,
-                                       "tcp",
-                                       "127.0.0.1",
-                                       portNumber);
+  ctx_attr_set_transport(ctx_attr, "tcp", "127.0.0.1", portNumber);
 
   client_ctx_ptr ctx = ctx_new(ctx_attr);
   EXPECT_NE(ctx, nullptr);
@@ -327,14 +307,15 @@ TEST_F(NetworkXioServerTest, SyncRead) {
   int err = ctx_init(ctx);
   EXPECT_EQ(err, 0);
 
-  for (decltype(times) i = 0; i < times; i ++) {
+  for (decltype(times) i = 0; i < times; i++) {
 
-    auto rbuf = (char*)malloc(BufferSize);
+    auto rbuf = (char *)malloc(BufferSize);
     EXPECT_NE(rbuf, nullptr);
 
     size_t readSz = BufferSize - ShortenSize;
 
-    auto sz = gobjfs::xio::read(ctx, testDataFileName, rbuf, readSz, i * BufferSize);
+    auto sz =
+        gobjfs::xio::read(ctx, testDataFileName, rbuf, readSz, i * BufferSize);
 
     // reads will fail since file doesnt exist
     EXPECT_EQ(sz, readSz);
@@ -364,10 +345,7 @@ TEST_F(NetworkXioServerTest, AsyncRead) {
 
   auto ctx_attr = ctx_attr_new();
 
-  ctx_attr_set_transport(ctx_attr,
-                                       "tcp",
-                                       "127.0.0.1",
-                                       portNumber);
+  ctx_attr_set_transport(ctx_attr, "tcp", "127.0.0.1", portNumber);
 
   client_ctx_ptr ctx = ctx_new(ctx_attr);
   EXPECT_NE(ctx, nullptr);
@@ -376,17 +354,16 @@ TEST_F(NetworkXioServerTest, AsyncRead) {
   EXPECT_EQ(err, 0);
   EXPECT_EQ(ctx_is_disconnected(ctx), false);
 
-  std::vector<giocb*> vec;
+  std::vector<giocb *> vec;
 
   size_t readSz = BufferSize - ShortenSize;
 
-  for (decltype(times) i = 0; i < times; i ++) {
+  for (decltype(times) i = 0; i < times; i++) {
 
-
-    auto rbuf = (char*)malloc(BufferSize);
+    auto rbuf = (char *)malloc(BufferSize);
     EXPECT_NE(rbuf, nullptr);
 
-    giocb* iocb = (giocb*)malloc(sizeof(giocb));
+    giocb *iocb = (giocb *)malloc(sizeof(giocb));
     iocb->aio_buf = rbuf;
     iocb->aio_offset = i * BufferSize;
     iocb->aio_nbytes = readSz;
@@ -397,7 +374,7 @@ TEST_F(NetworkXioServerTest, AsyncRead) {
     vec.push_back(iocb);
   }
 
-  for (auto& elem : vec) {
+  for (auto &elem : vec) {
 
     auto ret = aio_suspend(ctx, elem, nullptr);
     EXPECT_EQ(ret, 0);
@@ -433,10 +410,7 @@ TEST_F(NetworkXioServerTest, MultiAsyncRead) {
 
   auto ctx_attr = ctx_attr_new();
 
-  ctx_attr_set_transport(ctx_attr,
-                                       "tcp",
-                                       "127.0.0.1",
-                                       portNumber);
+  ctx_attr_set_transport(ctx_attr, "tcp", "127.0.0.1", portNumber);
 
   client_ctx_ptr ctx = ctx_new(ctx_attr);
   EXPECT_NE(ctx, nullptr);
@@ -444,18 +418,17 @@ TEST_F(NetworkXioServerTest, MultiAsyncRead) {
   int err = ctx_init(ctx);
   EXPECT_EQ(err, 0);
 
-  std::vector<giocb*> iocb_vec;
+  std::vector<giocb *> iocb_vec;
   std::vector<std::string> filename_vec;
 
   size_t readSz = BufferSize - ShortenSize;
 
-  for (decltype(times) i = 0; i < times; i ++) {
+  for (decltype(times) i = 0; i < times; i++) {
 
-    auto rbuf = (char*)malloc(BufferSize);
+    auto rbuf = (char *)malloc(BufferSize);
     EXPECT_NE(rbuf, nullptr);
 
-
-    giocb* iocb = (giocb*)malloc(sizeof(giocb));
+    giocb *iocb = (giocb *)malloc(sizeof(giocb));
     iocb->aio_buf = rbuf;
     iocb->aio_offset = i * BufferSize;
     iocb->aio_nbytes = readSz;
@@ -470,7 +443,7 @@ TEST_F(NetworkXioServerTest, MultiAsyncRead) {
   ret = aio_suspendv(ctx, iocb_vec, nullptr);
   EXPECT_EQ(ret, 0);
 
-  for (auto& elem : iocb_vec) {
+  for (auto &elem : iocb_vec) {
     auto retcode = aio_return(ctx, elem);
     EXPECT_EQ(retcode, readSz);
     aio_finish(ctx, elem);
@@ -493,10 +466,7 @@ TEST_F(NetworkXioServerTest, CheckConnection) {
 
   auto ctx_attr = ctx_attr_new();
 
-  ctx_attr_set_transport(ctx_attr,
-                         "tcp",
-                         "127.0.0.1",
-                         portNumber);
+  ctx_attr_set_transport(ctx_attr, "tcp", "127.0.0.1", portNumber);
 
   client_ctx_ptr ctx = ctx_new(ctx_attr);
   EXPECT_NE(ctx, nullptr);

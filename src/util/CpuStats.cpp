@@ -101,8 +101,7 @@ std::string CpuStats::ToString() const {
     << ",\"system_time(us)\":" << systemTimeMicrosec_
     << ",\"wall_time(us)\":" << wallTimeMicrosec_
     << ",\"vol ctx switch\":" << voluntaryCtxSwitch_
-    << ",\"invol ctx switch\":" << involuntaryCtxSwitch_
-    << "}";
+    << ",\"invol ctx switch\":" << involuntaryCtxSwitch_ << "}";
 
   return s.str();
 }

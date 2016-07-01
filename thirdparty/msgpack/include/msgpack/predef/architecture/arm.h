@@ -37,35 +37,34 @@ http://www.boost.org/LICENSE_1_0.txt)
 
 #define MSGPACK_ARCH_ARM MSGPACK_VERSION_NUMBER_NOT_AVAILABLE
 
-#if defined(__arm__) || defined(__arm64) || defined(__thumb__) || \
-    defined(__TARGET_ARCH_ARM) || defined(__TARGET_ARCH_THUMB) || \
+#if defined(__arm__) || defined(__arm64) || defined(__thumb__) ||              \
+    defined(__TARGET_ARCH_ARM) || defined(__TARGET_ARCH_THUMB) ||              \
     defined(_M_ARM)
-#   undef MSGPACK_ARCH_ARM
-#   if !defined(MSGPACK_ARCH_ARM) && defined(__arm64)
-#       define MSGPACK_ARCH_ARM MSGPACK_VERSION_NUMBER(8,0,0)
-#   endif
-#   if !defined(MSGPACK_ARCH_ARM) && defined(__TARGET_ARCH_ARM)
-#       define MSGPACK_ARCH_ARM MSGPACK_VERSION_NUMBER(__TARGET_ARCH_ARM,0,0)
-#   endif
-#   if !defined(MSGPACK_ARCH_ARM) && defined(__TARGET_ARCH_THUMB)
-#       define MSGPACK_ARCH_ARM MSGPACK_VERSION_NUMBER(__TARGET_ARCH_THUMB,0,0)
-#   endif
-#   if !defined(MSGPACK_ARCH_ARM) && defined(_M_ARM)
-#       define MSGPACK_ARCH_ARM MSGPACK_VERSION_NUMBER(_M_ARM,0,0)
-#   endif
-#   if !defined(MSGPACK_ARCH_ARM)
-#       define MSGPACK_ARCH_ARM MSGPACK_VERSION_NUMBER_AVAILABLE
-#   endif
+#undef MSGPACK_ARCH_ARM
+#if !defined(MSGPACK_ARCH_ARM) && defined(__arm64)
+#define MSGPACK_ARCH_ARM MSGPACK_VERSION_NUMBER(8, 0, 0)
+#endif
+#if !defined(MSGPACK_ARCH_ARM) && defined(__TARGET_ARCH_ARM)
+#define MSGPACK_ARCH_ARM MSGPACK_VERSION_NUMBER(__TARGET_ARCH_ARM, 0, 0)
+#endif
+#if !defined(MSGPACK_ARCH_ARM) && defined(__TARGET_ARCH_THUMB)
+#define MSGPACK_ARCH_ARM MSGPACK_VERSION_NUMBER(__TARGET_ARCH_THUMB, 0, 0)
+#endif
+#if !defined(MSGPACK_ARCH_ARM) && defined(_M_ARM)
+#define MSGPACK_ARCH_ARM MSGPACK_VERSION_NUMBER(_M_ARM, 0, 0)
+#endif
+#if !defined(MSGPACK_ARCH_ARM)
+#define MSGPACK_ARCH_ARM MSGPACK_VERSION_NUMBER_AVAILABLE
+#endif
 #endif
 
 #if MSGPACK_ARCH_ARM
-#   define MSGPACK_ARCH_ARM_AVAILABLE
+#define MSGPACK_ARCH_ARM_AVAILABLE
 #endif
 
 #define MSGPACK_ARCH_ARM_NAME "ARM"
 
 #include <msgpack/predef/detail/test.h>
-MSGPACK_PREDEF_DECLARE_TEST(MSGPACK_ARCH_ARM,MSGPACK_ARCH_ARM_NAME)
-
+MSGPACK_PREDEF_DECLARE_TEST(MSGPACK_ARCH_ARM, MSGPACK_ARCH_ARM_NAME)
 
 #endif

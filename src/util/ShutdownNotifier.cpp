@@ -21,7 +21,7 @@ but WITHOUT ANY WARRANTY of any kind.
 #include <sys/epoll.h>   // epoll
 #include <sys/eventfd.h> // epoll
 #include <unistd.h>      // read
-#include <strings.h>      // bzero
+#include <strings.h>     // bzero
 
 #include <gobjfs_log.h> // LOG
 
@@ -74,7 +74,7 @@ int32_t ShutdownNotifier::recv(uint64_t &counter) {
 int32_t ShutdownNotifier::send() {
   // add one to counter
   uint64_t counter = 1;
-  
+
   int ret = 0;
 
   do {

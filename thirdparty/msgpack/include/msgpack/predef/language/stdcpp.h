@@ -15,7 +15,8 @@ http://www.boost.org/LICENSE_1_0.txt)
 [heading `MSGPACK_LANG_STDCPP`]
 
 [@http://en.wikipedia.org/wiki/C%2B%2B Standard C++] language.
-If available, the year of the standard is detected as YYYY.MM.1 from the Epoc date.
+If available, the year of the standard is detected as YYYY.MM.1 from the Epoc
+date.
 Because of the way the C++ standardization process works the
 defined version year will not be the commonly known year of the standard.
 Specifically the defined versions are:
@@ -38,29 +39,29 @@ Specifically the defined versions are:
 #define MSGPACK_LANG_STDCPP MSGPACK_VERSION_NUMBER_NOT_AVAILABLE
 
 #if defined(__cplusplus)
-#   undef MSGPACK_LANG_STDCPP
-#   if (__cplusplus > 100)
-#       define MSGPACK_LANG_STDCPP MSGPACK_PREDEF_MAKE_YYYYMM(__cplusplus)
-#   else
-#       define MSGPACK_LANG_STDCPP MSGPACK_VERSION_NUMBER_AVAILABLE
-#   endif
+#undef MSGPACK_LANG_STDCPP
+#if (__cplusplus > 100)
+#define MSGPACK_LANG_STDCPP MSGPACK_PREDEF_MAKE_YYYYMM(__cplusplus)
+#else
+#define MSGPACK_LANG_STDCPP MSGPACK_VERSION_NUMBER_AVAILABLE
+#endif
 #endif
 
 #if MSGPACK_LANG_STDCPP
-#   define MSGPACK_LANG_STDCPP_AVAILABLE
+#define MSGPACK_LANG_STDCPP_AVAILABLE
 #endif
 
 #define MSGPACK_LANG_STDCPP_NAME "Standard C++"
 
 #include <msgpack/predef/detail/test.h>
-MSGPACK_PREDEF_DECLARE_TEST(MSGPACK_LANG_STDCPP,MSGPACK_LANG_STDCPP_NAME)
-
+MSGPACK_PREDEF_DECLARE_TEST(MSGPACK_LANG_STDCPP, MSGPACK_LANG_STDCPP_NAME)
 
 /*`
 [heading `MSGPACK_LANG_STDCPPCLI`]
 
 [@http://en.wikipedia.org/wiki/C%2B%2B/CLI Standard C++/CLI] language.
-If available, the year of the standard is detected as YYYY.MM.1 from the Epoc date.
+If available, the year of the standard is detected as YYYY.MM.1 from the Epoc
+date.
 
 [table
     [[__predef_symbol__] [__predef_version__]]
@@ -74,23 +75,22 @@ If available, the year of the standard is detected as YYYY.MM.1 from the Epoc da
 #define MSGPACK_LANG_STDCPPCLI MSGPACK_VERSION_NUMBER_NOT_AVAILABLE
 
 #if defined(__cplusplus_cli)
-#   undef MSGPACK_LANG_STDCPPCLI
-#   if (__cplusplus_cli > 100)
-#       define MSGPACK_LANG_STDCPPCLI MSGPACK_PREDEF_MAKE_YYYYMM(__cplusplus_cli)
-#   else
-#       define MSGPACK_LANG_STDCPPCLI MSGPACK_VERSION_NUMBER_AVAILABLE
-#   endif
+#undef MSGPACK_LANG_STDCPPCLI
+#if (__cplusplus_cli > 100)
+#define MSGPACK_LANG_STDCPPCLI MSGPACK_PREDEF_MAKE_YYYYMM(__cplusplus_cli)
+#else
+#define MSGPACK_LANG_STDCPPCLI MSGPACK_VERSION_NUMBER_AVAILABLE
+#endif
 #endif
 
 #if MSGPACK_LANG_STDCPPCLI
-#   define MSGPACK_LANG_STDCPPCLI_AVAILABLE
+#define MSGPACK_LANG_STDCPPCLI_AVAILABLE
 #endif
 
 #define MSGPACK_LANG_STDCPPCLI_NAME "Standard C++/CLI"
 
 #include <msgpack/predef/detail/test.h>
-MSGPACK_PREDEF_DECLARE_TEST(MSGPACK_LANG_STDCPPCLI,MSGPACK_LANG_STDCPPCLI_NAME)
-
+MSGPACK_PREDEF_DECLARE_TEST(MSGPACK_LANG_STDCPPCLI, MSGPACK_LANG_STDCPPCLI_NAME)
 
 /*`
 [heading `MSGPACK_LANG_STDECPP`]
@@ -107,18 +107,17 @@ MSGPACK_PREDEF_DECLARE_TEST(MSGPACK_LANG_STDCPPCLI,MSGPACK_LANG_STDCPPCLI_NAME)
 #define MSGPACK_LANG_STDECPP MSGPACK_VERSION_NUMBER_NOT_AVAILABLE
 
 #if defined(__embedded_cplusplus)
-#   undef MSGPACK_LANG_STDECPP
-#   define MSGPACK_LANG_STDECPP MSGPACK_VERSION_NUMBER_AVAILABLE
+#undef MSGPACK_LANG_STDECPP
+#define MSGPACK_LANG_STDECPP MSGPACK_VERSION_NUMBER_AVAILABLE
 #endif
 
 #if MSGPACK_LANG_STDECPP
-#   define MSGPACK_LANG_STDECPP_AVAILABLE
+#define MSGPACK_LANG_STDECPP_AVAILABLE
 #endif
 
 #define MSGPACK_LANG_STDECPP_NAME "Standard Embedded C++"
 
 #include <msgpack/predef/detail/test.h>
-MSGPACK_PREDEF_DECLARE_TEST(MSGPACK_LANG_STDECPP,MSGPACK_LANG_STDECPP_NAME)
-
+MSGPACK_PREDEF_DECLARE_TEST(MSGPACK_LANG_STDECPP, MSGPACK_LANG_STDECPP_NAME)
 
 #endif

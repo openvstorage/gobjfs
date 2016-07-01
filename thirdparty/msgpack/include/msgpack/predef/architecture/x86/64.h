@@ -29,21 +29,20 @@ http://www.boost.org/LICENSE_1_0.txt)
 
 #define MSGPACK_ARCH_X86_64 MSGPACK_VERSION_NUMBER_NOT_AVAILABLE
 
-#if defined(__x86_64) || defined(__x86_64__) || \
-    defined(__amd64__) || defined(__amd64) || \
-    defined(_M_X64)
-#   undef MSGPACK_ARCH_X86_64
-#   define MSGPACK_ARCH_X86_64 MSGPACK_VERSION_NUMBER_AVAILABLE
+#if defined(__x86_64) || defined(__x86_64__) || defined(__amd64__) ||          \
+    defined(__amd64) || defined(_M_X64)
+#undef MSGPACK_ARCH_X86_64
+#define MSGPACK_ARCH_X86_64 MSGPACK_VERSION_NUMBER_AVAILABLE
 #endif
 
 #if MSGPACK_ARCH_X86_64
-#   define MSGPACK_ARCH_X86_64_AVAILABLE
+#define MSGPACK_ARCH_X86_64_AVAILABLE
 #endif
 
 #define MSGPACK_ARCH_X86_64_NAME "Intel x86-64"
 
 #include <msgpack/predef/detail/test.h>
-MSGPACK_PREDEF_DECLARE_TEST(MSGPACK_ARCH_X86_64,MSGPACK_ARCH_X86_64_NAME)
+MSGPACK_PREDEF_DECLARE_TEST(MSGPACK_ARCH_X86_64, MSGPACK_ARCH_X86_64_NAME)
 
 #include <msgpack/predef/architecture/x86.h>
 

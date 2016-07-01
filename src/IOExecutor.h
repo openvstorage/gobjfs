@@ -36,9 +36,11 @@ but WITHOUT ANY WARRANTY of any kind.
 #include <util/Timer.h>
 #include <util/os_utils.h>
 
-namespace boost { namespace program_options {
-  class options_description;
-}}
+namespace boost {
+namespace program_options {
+class options_description;
+}
+}
 
 namespace gobjfs {
 
@@ -126,7 +128,7 @@ public:
     void print() const;
 
     // add options needed by IOExecutor to parser config
-    int addOptions(boost::program_options::options_description& desc);
+    int addOptions(boost::program_options::options_description &desc);
   };
 
   static Config defaultConfig_;
@@ -144,7 +146,7 @@ public:
     struct OpStats {
       gobjfs::stats::StatsCounter<int64_t> waitTime_;
       gobjfs::stats::StatsCounter<int64_t> serviceTime_;
-  
+
       gobjfs::stats::Histogram<int64_t> waitHist_;
       gobjfs::stats::Histogram<int64_t> serviceHist_;
 
@@ -155,9 +157,9 @@ public:
     };
 
     // maintain per-op statistics
-    OpStats write_; 
-    OpStats nonAlignedWrite_; 
-    OpStats read_; 
+    OpStats write_;
+    OpStats nonAlignedWrite_;
+    OpStats read_;
     OpStats delete_;
 
     gobjfs::stats::MaxValue<uint32_t> maxRequestQueueSize_;

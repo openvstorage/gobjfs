@@ -24,27 +24,26 @@ http://www.boost.org/LICENSE_1_0.txt)
 
 #define MSGPACK_OS_BSD_DRAGONFLY MSGPACK_VERSION_NUMBER_NOT_AVAILABLE
 
-#if !defined(MSGPACK_PREDEF_DETAIL_OS_DETECTED) && ( \
-    defined(__DragonFly__) \
-    )
-#   ifndef MSGPACK_OS_BSD_AVAILABLE
-#       define MSGPACK_OS_BSD MSGPACK_VERSION_NUMBER_AVAILABLE
-#       define MSGPACK_OS_BSD_AVAILABLE
-#   endif
-#   undef MSGPACK_OS_BSD_DRAGONFLY
-#   if defined(__DragonFly__)
-#       define MSGPACK_OS_DRAGONFLY_BSD MSGPACK_VERSION_NUMBER_AVAILABLE
-#   endif
+#if !defined(MSGPACK_PREDEF_DETAIL_OS_DETECTED) && (defined(__DragonFly__))
+#ifndef MSGPACK_OS_BSD_AVAILABLE
+#define MSGPACK_OS_BSD MSGPACK_VERSION_NUMBER_AVAILABLE
+#define MSGPACK_OS_BSD_AVAILABLE
+#endif
+#undef MSGPACK_OS_BSD_DRAGONFLY
+#if defined(__DragonFly__)
+#define MSGPACK_OS_DRAGONFLY_BSD MSGPACK_VERSION_NUMBER_AVAILABLE
+#endif
 #endif
 
 #if MSGPACK_OS_BSD_DRAGONFLY
-#   define MSGPACK_OS_BSD_DRAGONFLY_AVAILABLE
-#   include <msgpack/predef/detail/os_detected.h>
+#define MSGPACK_OS_BSD_DRAGONFLY_AVAILABLE
+#include <msgpack/predef/detail/os_detected.h>
 #endif
 
 #define MSGPACK_OS_BSD_DRAGONFLY_NAME "DragonFly BSD"
 
 #include <msgpack/predef/detail/test.h>
-MSGPACK_PREDEF_DECLARE_TEST(MSGPACK_OS_BSD_DRAGONFLY,MSGPACK_OS_BSD_DRAGONFLY_NAME)
+MSGPACK_PREDEF_DECLARE_TEST(MSGPACK_OS_BSD_DRAGONFLY,
+                            MSGPACK_OS_BSD_DRAGONFLY_NAME)
 
 #endif

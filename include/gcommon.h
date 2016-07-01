@@ -33,4 +33,3 @@ struct gIOStatus {
   int32_t errorCode;
   int32_t reserved; // for consistent padding
 };
-
