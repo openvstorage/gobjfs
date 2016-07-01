@@ -127,7 +127,7 @@ ctx_new(const client_ctx_attr_ptr attr)
     case TransportType::RDMA:
         ctx->uri = "rdma://" + ctx->host + ":" + std::to_string(ctx->port);
         break;
-    case TransportType::SharedMemory: 
+    case TransportType::SharedMemory:
     case TransportType::Error: /* already catched */
         errno = EINVAL;
         return nullptr;
@@ -138,7 +138,7 @@ ctx_new(const client_ctx_attr_ptr attr)
 int
 ctx_init(client_ctx_ptr ctx)
 {
-    int err = 0;    
+    int err = 0;
     XXEnter();
 
     if (ctx->transport == TransportType::RDMA ||
@@ -185,6 +185,12 @@ ctx_get_stats(client_ctx_ptr ctx)
   return ret_string;
 }
 
+bool
+ctx_is_disconnected(client_ctx_ptr ctx)
+{
+    return ctx->net_client_->is_disconnected();
+}
+
 static int
 _submit_aio_request(client_ctx_ptr ctx,
                         const std::string& filename,
@@ -223,9 +229,9 @@ _submit_aio_request(client_ctx_ptr ctx,
         return -1;
     }
 
-    aio_request *request = create_new_request(op, 
-                                                  giocbp, 
-                                                  cvp, 
+    aio_request *request = create_new_request(op,
+                                                  giocbp,
+                                                  cvp,
                                                   completion);
     if (request == nullptr)
     {
@@ -483,7 +489,7 @@ gbuffer_deallocate(client_ctx_ptr ctx,
 {
     free(ptr);
     return 0;
-    
+
 }
 
 completion*
@@ -569,10 +575,10 @@ aio_wait_completion(completion *completion,
             if (timeout)
             {
                 completion->_cond.wait_for(
-                  l_, 
+                  l_,
                   std::chrono::nanoseconds(
-                    ((uint64_t)timeout->tv_sec * 1000000000) + 
-                      timeout->tv_nsec), 
+                    ((uint64_t)timeout->tv_sec * 1000000000) +
+                      timeout->tv_nsec),
                   func);
             }
             else
@@ -645,7 +651,7 @@ aio_readv(client_ctx_ptr ctx,
 {
   int err = 0;
 
-  if (filename_vec.size() != giocbp_vec.size()) 
+  if (filename_vec.size() != giocbp_vec.size())
   {
     GLOG_ERROR("mismatch between filename vector size=" << filename_vec.size()
       << " and iocb vector size=" << giocbp_vec.size());
@@ -686,7 +692,7 @@ aio_readcb(client_ctx_ptr ctx,
 
 ssize_t
 read(client_ctx_ptr ctx,
-         const std::string& filename, 
+         const std::string& filename,
          void *buf,
          size_t nbytes,
          off_t offset)

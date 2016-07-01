@@ -98,6 +98,15 @@ ctx_init(client_ctx_ptr ctx);
 std::string
 ctx_get_stats(client_ctx_ptr ctx);
 
+
+/*
+ * Check connection status
+ * param ctx: Open vStorage context
+ * return: True if the client has been disconnected, false otherwise
+ */
+bool
+ctx_is_disconnected(client_ctx_ptr ctx);
+
 /*
  * Allocate buffer from the shared memory segment
  * param ctx: Open vStorage context

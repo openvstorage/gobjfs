@@ -36,7 +36,7 @@ using namespace gobjfs::xio;
 static int fileTranslatorFunc(const char* old_name, size_t old_length, char* new_name);
 
 class NetworkXioServerTest : public testing::Test {
-  
+
   int fd {-1};
 
 
@@ -62,7 +62,7 @@ public:
 
     fd = mkstemp(configFile);
 
-    const char* configContents = 
+    const char* configContents =
       "[ioexec]\n"
       "ctx_queue_depth=200\n"
       "cpu_core=0\n"
@@ -75,7 +75,7 @@ public:
     bool newInstance = true;
     xs = gobjfs_xio_server_start("tcp", "127.0.0.1", portNumber, 1, 200, fileTranslatorFunc, newInstance);
     EXPECT_NE(xs, nullptr);
-  
+
   }
 
   virtual void TearDown() override {
@@ -107,7 +107,7 @@ public:
     auto readFd = IOExecEventFdGetReadFd(evHandle);
     EXPECT_NE(fd, gobjfs::os::FD_INVALID);
 
-    auto fileHandle = IOExecFileOpen(serviceHandle, 
+    auto fileHandle = IOExecFileOpen(serviceHandle,
         testDataFileName.c_str(),
         testDataFileName.size(),
         O_CREAT | O_WRONLY);
@@ -143,7 +143,7 @@ public:
   void removeDataFile(bool check = true) {
 
     int ret = ::unlink(testDataFileFullName.c_str());
-    if (check) 
+    if (check)
       ASSERT_EQ(ret, 0);
 
   }
@@ -155,8 +155,8 @@ public:
 
 const std::string NetworkXioServerTest::testDataFilePath = "/tmp/";
 const std::string NetworkXioServerTest::testDataFileName = "abcd";
-const std::string NetworkXioServerTest::testDataFileFullName = 
-  std::string(NetworkXioServerTest::testDataFilePath) + 
+const std::string NetworkXioServerTest::testDataFileFullName =
+  std::string(NetworkXioServerTest::testDataFilePath) +
   std::string(NetworkXioServerTest::testDataFileName);
 
 int fileTranslatorFunc(const char* old_name, size_t old_length, char* new_name)
@@ -203,7 +203,7 @@ TEST_F(NetworkXioServerTest, FileDoesntExist) {
   // shorten read size to test unaligned reads
   static constexpr size_t ShortenSize = 10;
 
-  size_t times = 100; 
+  size_t times = 100;
 
   auto ctx_attr = ctx_attr_new();
 
@@ -247,7 +247,7 @@ TEST_F(NetworkXioServerTest, AsyncFileDoesntExist) {
   // shorten read size to test unaligned reads
   static constexpr size_t ShortenSize = 10;
 
-  size_t times = 10; 
+  size_t times = 10;
 
   auto ctx_attr = ctx_attr_new();
 
@@ -284,7 +284,7 @@ TEST_F(NetworkXioServerTest, AsyncFileDoesntExist) {
   auto ret = aio_readv(ctx, filename_vec, iocb_vec);
   EXPECT_EQ(ret, 0);
 
-  ret = aio_suspendv(ctx, iocb_vec, nullptr); 
+  ret = aio_suspendv(ctx, iocb_vec, nullptr);
   EXPECT_EQ(ret, 0);
 
   for (auto& elem : iocb_vec) {
@@ -310,7 +310,7 @@ TEST_F(NetworkXioServerTest, SyncRead) {
   // shorten read size to test unaligned reads
   static constexpr size_t ShortenSize = 10;
 
-  size_t times = 100; 
+  size_t times = 100;
 
   auto ctx_attr = ctx_attr_new();
 
@@ -358,7 +358,7 @@ TEST_F(NetworkXioServerTest, AsyncRead) {
   // shorten read size to test unaligned reads
   static constexpr size_t ShortenSize = 10;
 
-  size_t times = 100; 
+  size_t times = 100;
 
   auto ctx_attr = ctx_attr_new();
 
@@ -396,7 +396,7 @@ TEST_F(NetworkXioServerTest, AsyncRead) {
 
   for (auto& elem : vec) {
 
-    auto ret = aio_suspend(ctx, elem, nullptr); 
+    auto ret = aio_suspend(ctx, elem, nullptr);
     EXPECT_EQ(ret, 0);
 
     auto retcode = aio_return(ctx, elem);
@@ -425,7 +425,7 @@ TEST_F(NetworkXioServerTest, MultiAsyncRead) {
   // shorten read size to test unaligned reads
   static constexpr size_t ShortenSize = 10;
 
-  size_t times = 100; 
+  size_t times = 100;
 
   auto ctx_attr = ctx_attr_new();
 
@@ -463,7 +463,7 @@ TEST_F(NetworkXioServerTest, MultiAsyncRead) {
   auto ret = aio_readv(ctx, filename_vec, iocb_vec);
   EXPECT_EQ(ret, 0);
 
-  ret = aio_suspendv(ctx, iocb_vec, nullptr); 
+  ret = aio_suspendv(ctx, iocb_vec, nullptr);
   EXPECT_EQ(ret, 0);
 
   for (auto& elem : iocb_vec) {
@@ -480,6 +480,26 @@ TEST_F(NetworkXioServerTest, MultiAsyncRead) {
   auto expected_str = "num_queued=" + std::to_string(times + 1);
   EXPECT_NE(stats_string.find(expected_str), std::string::npos);
   EXPECT_NE(stats_string.find("num_failed=0"), std::string::npos);
+
+  ctx.reset();
+}
+
+TEST_F(NetworkXioServerTest, CheckConnection) {
+
+  auto ctx_attr = ctx_attr_new();
+
+  ctx_attr_set_transport(ctx_attr,
+                         "tcp",
+                         "127.0.0.1",
+                         portNumber);
+
+  client_ctx_ptr ctx = ctx_new(ctx_attr);
+  EXPECT_NE(ctx, nullptr);
+
+  int err = ctx_init(ctx);
+  EXPECT_EQ(err, 0);
+
+  EXPECT_EQ(ctx_is_disconnected(ctx), false);
 
   ctx.reset();
 }

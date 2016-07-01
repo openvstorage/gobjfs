@@ -31,7 +31,7 @@ but WITHOUT ANY WARRANTY of any kind.
 #include <util/Stats.h>
 #include "NetworkXioProtocol.h"
 
-namespace gobjfs { namespace xio 
+namespace gobjfs { namespace xio
 {
 
 struct aio_request;
@@ -151,6 +151,11 @@ public:
 
     void update_stats(void* req, bool req_failed);
 
+    const bool&
+    is_disconnected()
+    {
+        return disconnected;
+    }
 private:
     std::shared_ptr<xio_context> ctx;
     std::shared_ptr<xio_session> session;
@@ -233,5 +238,5 @@ private:
 
 typedef std::shared_ptr<NetworkXioClient> NetworkXioClientPtr;
 
-}} //namespace 
+}} //namespace
 
