@@ -141,6 +141,11 @@ ctx_init(client_ctx_ptr ctx)
     int err = 0;
     XXEnter();
 
+    if (!ctx) {
+      errno = EINVAL;
+      return -1;
+    }
+
     if (ctx->transport == TransportType::RDMA ||
              ctx->transport == TransportType::TCP)
     {
@@ -188,7 +193,11 @@ ctx_get_stats(client_ctx_ptr ctx)
 bool
 ctx_is_disconnected(client_ctx_ptr ctx)
 {
+  if (ctx && ctx->net_client_) {
     return ctx->net_client_->is_disconnected();
+  } else {
+    return true;
+  }
 }
 
 static int
