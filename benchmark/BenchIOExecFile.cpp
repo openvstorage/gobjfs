@@ -235,7 +235,7 @@ struct FixedSizeFileManager {
     auto str = getFilename(retFilenum);
 
     handle = IOExecFileOpen(serviceHandle, str.c_str(), str.size(),
-                            O_RDWR | O_SYNC | O_CREAT);
+                            O_DIRECT | O_RDWR | O_SYNC | O_CREAT);
 
     if (handle != nullptr) {
       std::unique_lock<std::mutex> lck(mutex);
@@ -259,7 +259,7 @@ struct FixedSizeFileManager {
 
     try {
       auto str = Directory.at(index);
-      handle = IOExecFileOpen(serviceHandle, str.c_str(), str.size(), O_RDONLY);
+      handle = IOExecFileOpen(serviceHandle, str.c_str(), str.size(), O_DIRECT | O_RDONLY);
 
       if (config.doMemCheck && actualNumber) {
         auto filename = basename(str.c_str());
