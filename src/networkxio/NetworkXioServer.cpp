@@ -195,7 +195,7 @@ void NetworkXioServer::run(std::promise<void> &promise) {
   }
 
   try {
-    wq_ = std::make_shared<NetworkXioWorkQueue>("ovs_xio_wq", evfd);
+    wq_ = std::make_shared<NetworkXioWorkQueue>("ovs_xio_wq", evfd, numCoresForIO_);
   } catch (const WorkQueueThreadsException &) {
     GLOG_FATAL("failed to create workqueue thread pool");
     xio_context_del_ev_handler(ctx.get(), evfd);

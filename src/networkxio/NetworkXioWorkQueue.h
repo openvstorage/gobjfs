@@ -40,12 +40,12 @@ MAKE_EXCEPTION(WorkQueueThreadsException);
 
 class NetworkXioWorkQueue {
 public:
-  NetworkXioWorkQueue(const std::string &name, EventFD &evfd_)
+  NetworkXioWorkQueue(const std::string &name, EventFD &evfd_, int32_t numCoresForIO)
       : name_(name), nr_threads_(0), nr_queued_work(0),
         protection_period_(5000), stopping(false), stopped(false), evfd(evfd_) {
     XXEnter();
     using namespace std;
-    int ret = create_workqueue_threads(thread::hardware_concurrency());
+    int ret = create_workqueue_threads(numCoresForIO);
     if (ret < 0) {
       throw WorkQueueThreadsException("cannot create worker threads");
     }
@@ -169,12 +169,11 @@ private:
     return false;
   }
 
-  int create_workqueue_threads(size_t nr_threads) {
+  int create_workqueue_threads(size_t requested_threads) {
 
     XXEnter();
-    GLOG_DEBUG(" nr_threads and nr_threads_ are " << nr_threads << " , "
-                                                  << nr_threads_);
-    while (nr_threads_ < nr_threads) {
+
+    while (nr_threads_ < requested_threads) {
       try {
         GLOG_DEBUG(" creating worker thread .. " << name_);
         std::thread thr([&]() {
@@ -186,12 +185,12 @@ private:
         thr.detach();
         nr_threads_++;
       } catch (const std::system_error &) {
-        GLOG_ERROR("cannot create worker thread; created= "
-                   << nr_threads_ << " of " << nr_threads);
+        GLOG_ERROR("cannot create any more worker thread; created "
+                   << nr_threads_ << " out of " << requested_threads);
         return -1;
       }
     }
-    GLOG_DEBUG("Now added " << nr_threads_ << " threads ");
+    GLOG_DEBUG("Requested=" << requested_threads << " workqueue threads. Created " << nr_threads_ << " threads ");
     XXExit();
     return 0;
   }
