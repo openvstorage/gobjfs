@@ -313,7 +313,9 @@ int aio_suspendv(client_ctx_ptr ctx, const std::vector<giocb *> &giocbp_vec,
   {
     if (timeout) {
       // TODO add func
-      cvp->wait_for(timeout);
+      if (cvp->wait_for(timeout) == std::cv_status::timeout) {
+        r = ETIMEDOUT;
+      }
     } else {
       cvp->wait();
     }
@@ -323,6 +325,16 @@ int aio_suspendv(client_ctx_ptr ctx, const std::vector<giocb *> &giocbp_vec,
     r = -1;
     errno = EAGAIN;
     GLOG_DEBUG("TimeOut");
+  }
+
+  for (auto& elem : giocbp_vec) {
+    if (elem->request_->_failed) {
+      // break out on first error
+      // let caller check individual error codes using aio_return
+      errno = elem->request_->_errno;
+      r = -1;
+      break;
+    }
   }
   XXExit();
   return r;
@@ -340,7 +352,9 @@ int aio_suspend(client_ctx_ptr ctx, giocb *giocbp, const timespec *timeout) {
     if (timeout) {
       auto func = [&]() { return giocbp->request_->_signaled; };
       // TODO add func
-      giocbp->request_->_cvp->wait_for(timeout);
+      if (giocbp->request_->_cvp->wait_for(timeout) == std::cv_status::timeout) {
+        r = ETIMEDOUT;
+      }
     } else {
       giocbp->request_->_cvp->wait();
     }
@@ -349,6 +363,9 @@ int aio_suspend(client_ctx_ptr ctx, giocb *giocbp, const timespec *timeout) {
     r = -1;
     errno = EAGAIN;
     GLOG_DEBUG("TimeOut");
+  } else if (giocbp->request_->_failed) {
+    errno = giocbp->request_->_errno;
+    r = -1;
   }
   XXExit();
   return r;
@@ -448,11 +465,15 @@ int aio_wait_completion(completion *completion, const timespec *timeout) {
 
     {
       if (timeout) {
-        completion->_cond.wait_for(
+        auto cv_stat = completion->_cond.wait_for(
             l_,
             std::chrono::nanoseconds(((uint64_t)timeout->tv_sec * 1000000000) +
                                      timeout->tv_nsec),
             func);
+
+        if (not cv_stat) {
+          r = ETIMEDOUT;
+        }
       } else {
         completion->_cond.wait(l_);
       }

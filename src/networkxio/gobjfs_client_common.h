@@ -120,9 +120,9 @@ public:
     }
   }
 
-  void wait_for(const timespec *timeout) {
+  std::cv_status wait_for(const timespec *timeout) {
     std::unique_lock<std::mutex> l(_mutex);
-    _cond.wait_for(l, std::chrono::nanoseconds(
+    return _cond.wait_for(l, std::chrono::nanoseconds(
                           ((uint64_t)timeout->tv_sec * SEC_TO_NANOSEC) +
                           timeout->tv_nsec));
   }
