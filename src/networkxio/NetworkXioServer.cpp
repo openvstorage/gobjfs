@@ -352,6 +352,7 @@ NetworkXioServer::allocate_request(NetworkXioClientData *pClientData,
     req->retval = 0;
     req->errval = 0;
     req->from_pool = true;
+    req->pClientData->ncd_refcnt ++;
     XXExit();
     return req;
   } catch (const std::bad_alloc &) {

@@ -327,7 +327,6 @@ bool NetworkXioIOHandler::process_request(NetworkXioRequest *req) {
   xio_iovec_ex *isglist = vmsg_sglist(&xio_req->in);
   int inents = vmsg_sglist_nents(&xio_req->in);
 
-  req->pClientData->ncd_refcnt++;
   NetworkXioMsg i_msg(NetworkXioMsgOpcode::Noop);
   try {
     i_msg.unpack_msg(static_cast<char *>(xio_req->in.header.iov_base),
