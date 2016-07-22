@@ -18,16 +18,19 @@ but WITHOUT ANY WARRANTY of any kind.
 
 #pragma once
 
+#include <cstdlib>
 #include <iostream>
 #include <mutex>
 #include <condition_variable>
 #include <functional>
 #include <atomic>
 #include <thread>
+#include <type_traits>
 #include <chrono>
 #include <string>
 #include <queue>
 #include <boost/thread/lock_guard.hpp>
+#include <boost/lexical_cast.hpp>
 
 #include <networkxio/gobjfs_client_common.h>
 #include <networkxio/NetworkXioRequest.h>
@@ -40,7 +43,8 @@ MAKE_EXCEPTION(WorkQueueThreadsException);
 
 class NetworkXioWorkQueue {
 public:
-  NetworkXioWorkQueue(const std::string &name, EventFD &evfd_, int32_t numCoresForIO)
+  NetworkXioWorkQueue(const std::string &name, EventFD &evfd_,
+                      int32_t numCoresForIO)
       : name_(name), nr_threads_(0), nr_queued_work(0),
         protection_period_(5000), stopping(false), stopped(false), evfd(evfd_) {
     XXEnter();
@@ -122,8 +126,8 @@ private:
   std::chrono::steady_clock::time_point thread_life_period_;
   uint64_t protection_period_;
 
-  bool stopping{false};
-  bool stopped{false};
+  bool stopping{ false };
+  bool stopped{ false };
   EventFD &evfd;
 
   void xstop_loop(NetworkXioWorkQueue *wq) {
@@ -138,7 +142,8 @@ private:
 
   size_t get_max_wq_depth() {
     XXEnter();
-    size_t Max_Q_depth = std::thread::hardware_concurrency();
+    const size_t Max_Q_depth = get_env_with_default(
+        "GOBJFS_WORKQUEUE_DEPTH", std::thread::hardware_concurrency());
     GLOG_DEBUG("Max WQ Depth = " << Max_Q_depth);
     XXExit();
     return Max_Q_depth;
@@ -184,13 +189,16 @@ private:
         });
         thr.detach();
         nr_threads_++;
-      } catch (const std::system_error &) {
+      }
+      catch (const std::system_error &) {
         GLOG_ERROR("cannot create any more worker thread; created "
                    << nr_threads_ << " out of " << requested_threads);
         return -1;
       }
     }
-    GLOG_DEBUG("Requested=" << requested_threads << " workqueue threads. Created " << nr_threads_ << " threads ");
+    GLOG_DEBUG("Requested=" << requested_threads
+                            << " workqueue threads. Created " << nr_threads_
+                            << " threads ");
     XXExit();
     return 0;
   }
@@ -237,6 +245,30 @@ private:
       }
     }
     XXExit();
+  }
+
+  template <typename T>
+  static T get_env_with_default(const std::string &name,
+                                const T &default_value) {
+    typedef typename std::remove_cv<T>::type T_;
+
+    static_assert(not(std::is_same<T_, uint8_t>::value or
+                          std::is_same<T_, int8_t>::value or
+                              std::is_same<T_, char>::value or
+                                  std::is_same<T_, unsigned char>::value),
+                  "this doesn't work with byte sized types");
+
+    const char *val = getenv(name.c_str());
+    if (val == nullptr) {
+      return default_value;
+    } else {
+      try {
+        return static_cast<T>(boost::lexical_cast<T>(val));
+      }
+      catch (...) {
+        return default_value;
+      }
+    }
   }
 };
 
