@@ -58,7 +58,6 @@ public:
     if (not stopped) {
       stopping = true;
       while (nr_threads_) {
-        std::unique_lock<std::mutex> lock_(inflight_lock);
         inflight_cond.notify_all();
         ::usleep(500);
       }
