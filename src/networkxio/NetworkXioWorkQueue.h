@@ -177,10 +177,9 @@ private:
       try {
         GLOG_DEBUG(" creating worker thread .. " << name_);
         std::thread thr([&]() {
-          auto fp = std::bind(&NetworkXioWorkQueue::worker_routine, this,
-                              std::placeholders::_1);
+          auto fp = std::bind(&NetworkXioWorkQueue::worker_routine, this);
           pthread_setname_np(pthread_self(), name_.c_str());
-          fp(this);
+          fp();
         });
         thr.detach();
         nr_threads_++;
@@ -195,30 +194,29 @@ private:
     return 0;
   }
 
-  void worker_routine(void *arg) {
+  void worker_routine() {
     XXEnter();
-    NetworkXioWorkQueue *wq = reinterpret_cast<NetworkXioWorkQueue *>(arg);
 
     NetworkXioRequest *req;
     while (true) {
-      std::unique_lock<std::mutex> lock_(wq->inflight_lock);
-      if (wq->need_to_shrink()) {
-        wq->nr_threads_--;
-        GLOG_DEBUG("Number of threads shrunk to " << wq->nr_threads_);
+      std::unique_lock<std::mutex> lock_(inflight_lock);
+      if (need_to_shrink()) {
+        nr_threads_--;
+        GLOG_DEBUG("Number of threads shrunk to " << nr_threads_);
         lock_.unlock();
         break;
       }
     retry:
-      if (wq->inflight_queue.empty()) {
-        wq->inflight_cond.wait(lock_);
-        if (wq->stopping) {
-          wq->nr_threads_--;
+      if (inflight_queue.empty()) {
+        inflight_cond.wait(lock_);
+        if (stopping) {
+          nr_threads_--;
           break;
         }
         goto retry;
       }
-      req = wq->inflight_queue.front();
-      wq->inflight_queue.pop();
+      req = inflight_queue.front();
+      inflight_queue.pop();
       lock_.unlock();
       GLOG_DEBUG("Popped request from inflight queue");
       bool finishNow = true;
@@ -229,11 +227,11 @@ private:
       // push in finished queue right here
       // response is sent and request gets freed
       if (finishNow) {
-        boost::lock_guard<decltype(inflight_lock)> lock_(inflight_lock);
-        wq->finished.push(req);
+        boost::lock_guard<decltype(finished_lock)> lock_(finished_lock);
+        finished.push(req);
         GLOG_DEBUG("Pushed request to finishedqueue. ReqType is "
                    << (int)req->op);
-        xstop_loop(wq);
+        xstop_loop(this);
       }
     }
     XXExit();
