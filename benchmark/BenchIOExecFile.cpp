@@ -46,6 +46,7 @@ but WITHOUT ANY WARRANTY of any kind.
 #include <unistd.h>
 
 #include <atomic>
+#include <random>
 #include <future>
 
 using namespace boost::program_options;

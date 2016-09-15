@@ -22,6 +22,7 @@ but WITHOUT ANY WARRANTY of any kind.
 #include <boost/lockfree/queue.hpp>
 #include <libaio.h>
 #include <string>
+#include <vector>
 
 #include <Executor.h>
 #include <IOExecutor.h>
