@@ -89,7 +89,7 @@ private:
 
   FileTranslatorFunc fileTranslatorFunc_{nullptr};
 
-  bool newInstance_;
+  bool newInstance_{false};
 
   // owned by NetworkXioServer
   IOExecServiceHandle serviceHandle_{nullptr};
@@ -102,7 +102,7 @@ private:
 
   EventFD evfd;
 
-  int queue_depth;
+  int queue_depth{0};
 
   NetworkXioWorkQueuePtr wq_;
 

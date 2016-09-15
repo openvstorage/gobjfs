@@ -89,7 +89,7 @@ struct client_ctx_attr {
 
 struct gbuffer {
   void *buf{nullptr};
-  size_t size;
+  size_t size{0};
 };
 
 struct completion {

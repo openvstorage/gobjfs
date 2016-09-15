@@ -52,7 +52,7 @@ inline void _xio_aio_wake_up_suspended_aiocb(aio_request *request) {
   XXEnter();
   {
     request->_signaled = true;
-    GLOG_DEBUG("waking up the suspended thread");
+    GLOG_DEBUG("waking up the suspended thread for request=" << (void*)request);
     request->_cvp->signal();
   }
   XXExit();
@@ -73,7 +73,7 @@ void ovs_xio_aio_complete_request(void *opaque, ssize_t retval, int errval) {
   if (cptr) {
     cptr->_rv = retval;
     cptr->_failed = (retval == -1 ? true : false);
-    GLOG_DEBUG("signalling completion" << std::endl);
+    GLOG_DEBUG("signalling completion for request=" << (void*)request);
     // first invoke the callback, then signal completion
     // caller must free the completion in main loop - not in callback!
     cptr->complete_cb(cptr, cptr->cb_arg);
@@ -514,10 +514,6 @@ int NetworkXioClient::on_response(xio_session *session __attribute__((unused)),
     return 0;
   }
   xio_msg_s *xio_msg = reinterpret_cast<xio_msg_s *>(imsg.opaque());
-
-  if (imsg.retval() == -1) {
-    GLOG_ERROR("\n Alert !!imsg has error in retval\n");
-  }
 
   update_stats(const_cast<void *>(xio_msg->opaque), (imsg.retval() < 0));
   ovs_xio_aio_complete_request(const_cast<void *>(xio_msg->opaque),

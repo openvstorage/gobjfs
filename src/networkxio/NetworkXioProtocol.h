@@ -36,12 +36,12 @@ public:
 public:
   NetworkXioMsgOpcode opcode_;
   std::string filename_;
-  size_t size_;
-  uint64_t offset_;
-  ssize_t retval_;
-  int errval_;
-  uintptr_t opaque_;
-  int64_t timeout_;
+  size_t size_{0};
+  uint64_t offset_{0};
+  ssize_t retval_{0};
+  int errval_{0};
+  uintptr_t opaque_{0};
+  int64_t timeout_{0};
 
 public:
   const NetworkXioMsgOpcode &opcode() const { return opcode_; }

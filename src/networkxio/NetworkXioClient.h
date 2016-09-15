@@ -144,7 +144,7 @@ private:
 
   xio_session_ops ses_ops;
   bool disconnected{false};
-  bool disconnecting;
+  bool disconnecting{false};
 
   int64_t nr_req_queue{0};
   std::mutex req_queue_lock;
