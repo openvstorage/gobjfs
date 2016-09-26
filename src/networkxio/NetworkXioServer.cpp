@@ -27,13 +27,21 @@ but WITHOUT ANY WARRANTY of any kind.
 #include "NetworkXioServer.h"
 #include "NetworkXioProtocol.h"
 #include "NetworkXioRequest.h"
+#include "gobjfs_getenv.h"
 
-static constexpr int POLLING_TIME_USEC = 20;
+static constexpr int POLLING_TIME_USEC_DEFAULT = 0;
+// From accelio manual
+// polling_timeout_us: Defines how much to do receive-side-polling before yielding the CPU 
+// and entering the wait/sleep mode. When the application requires latency over IOPs and 
+// willing to poll on CPU, setting polling timeout to ~15-~70 us will decrease the latency 
+// substantially, but will increase CPU cycle by consuming more power (watts).
+// http://www.accelio.org/wp-admin/accelio_doc/index.html
 
 using gobjfs::os::DirectIOSize;
 
 namespace gobjfs {
 namespace xio {
+
 
 template <class T>
 static int static_on_request(xio_session *session, xio_msg *req,
@@ -164,8 +172,10 @@ void NetworkXioServer::run(std::promise<void> &promise) {
   xio_set_opt(NULL, XIO_OPTLEVEL_ACCELIO, XIO_OPTNAME_RCV_QUEUE_DEPTH_MSGS,
               &xopt, sizeof(int));
 
+  const int polling_time_usec = getenv_with_default("GOBJFS_POLLING_TIME_USEC", POLLING_TIME_USEC_DEFAULT);
+
   ctx = std::shared_ptr<xio_context>(
-      xio_context_create(NULL, POLLING_TIME_USEC, -1),
+      xio_context_create(NULL, polling_time_usec, -1),
       xio_destroy_ctx_shutdown);
 
   if (ctx == nullptr) {

@@ -4,6 +4,7 @@ ADD_EXECUTABLE(XioTester
   TestMultipleServers.cpp
   TestCompileByC.c
   TestStats.cpp
+  TestGetenv.cpp
   TestMain.cpp
   )
 
