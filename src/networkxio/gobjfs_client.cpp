@@ -497,7 +497,7 @@ int aio_signal_completion(completion *completion) {
   }
   if (not __sync_bool_compare_and_swap(&completion->_on_wait, false, true,
                                        __ATOMIC_RELAXED)) {
-    //std::unique_lock<std::mutex> l_(completion->_mutex);
+    std::unique_lock<std::mutex> l_(completion->_mutex);
     completion->_signaled = true;
     completion->_cond.notify_all();
   }
