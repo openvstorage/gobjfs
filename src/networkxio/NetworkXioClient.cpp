@@ -388,7 +388,7 @@ int NetworkXioClient::on_msg_error(xio_session *session __attribute__((unused)),
       imsg.unpack_msg(static_cast<const char *>(msg->out.header.iov_base),
                       msg->out.header.iov_len);
     } catch (...) {
-      // cnanakos: client logging?
+      GLOG_ERROR("failed to unpack msg");
       return 0;
     }
   } else /* XIO_MSG_DIRECTION_IN */
@@ -398,6 +398,7 @@ int NetworkXioClient::on_msg_error(xio_session *session __attribute__((unused)),
                       msg->in.header.iov_len);
     } catch (...) {
       xio_release_response(msg);
+      GLOG_ERROR("failed to unpack msg");
       return 0;
     }
     msg->in.header.iov_base = NULL;
@@ -519,7 +520,8 @@ int NetworkXioClient::on_response(xio_session *session __attribute__((unused)),
     imsg.unpack_msg(static_cast<const char *>(reply->in.header.iov_base),
                     reply->in.header.iov_len);
   } catch (...) {
-    // cnanakos: logging
+    GLOG_ERROR("failed to unpack msg");
+    xio_release_response(reply);
     return 0;
   }
   xio_msg_s *xio_msg = reinterpret_cast<xio_msg_s *>(imsg.opaque());
@@ -554,6 +556,7 @@ int NetworkXioClient::on_msg_error_control(
                       msg->in.header.iov_len);
     } catch (...) {
       xio_release_response(msg);
+      GLOG_ERROR("failed to unpack msg");
       return 0;
     }
     msg->in.header.iov_base = NULL;
@@ -566,7 +569,7 @@ int NetworkXioClient::on_msg_error_control(
       imsg.unpack_msg(static_cast<const char *>(msg->out.header.iov_base),
                       msg->out.header.iov_len);
     } catch (...) {
-      // cnanakos: client logging?
+      GLOG_ERROR("failed to unpack msg");
       return 0;
     }
   }
@@ -591,7 +594,8 @@ int NetworkXioClient::on_msg_control(xio_session *session ATTRIBUTE_UNUSED,
     imsg.unpack_msg(static_cast<const char *>(reply->in.header.iov_base),
                     reply->in.header.iov_len);
   } catch (...) {
-    // cnanakos: logging
+    GLOG_ERROR("failed to unpack msg");
+    xio_release_response(reply);
     return 0;
   }
   xio_ctl_s *xctl = reinterpret_cast<xio_ctl_s *>(imsg.opaque());
