@@ -55,16 +55,20 @@ using namespace boost::program_options;
 using namespace gobjfs::xio;
 
 struct Config {
-  uint32_t blockSize = 16384;
+  uint32_t blockSize = 4096;
   uint32_t alignSize = 4096;
 
   uint32_t maxFiles = 1000;
   uint32_t maxBlocks = 10000;
   uint64_t perThreadIO = 10000;
+  uint64_t maxOutstandingIO = 1;
   bool doMemCheck = false;
   uint32_t maxThr = 1;
   uint32_t shortenFileSize = 0;
   std::vector<std::string> dirPrefix;
+  std::string ipAddress;
+  std::string transport;
+  int port = 0;
 
   int readConfig(const std::string &configFileName) {
     options_description desc("allowed options");
@@ -73,11 +77,16 @@ struct Config {
         ("align_size", value<uint32_t>(&alignSize)->required(), "size that memory is aligned to ")
         ("num_files", value<uint32_t>(&maxFiles)->required(), "number of files") 
         ("max_file_blocks", value<uint32_t>(&maxBlocks)->required(), "number of [blocksize] blocks in file")
-        ( "per_thread_max_io", value<uint64_t>(&perThreadIO)->required(), "number of ops to execute")
-        ("do_mem_check", value<bool>(&doMemCheck)->required(), "compare read buffer")
+        ("per_thread_max_io", value<uint64_t>(&perThreadIO)->required(), "number of ops to execute")
+        ("max_outstanding_io", value<uint64_t>(&maxOutstandingIO)->required(), "max outstanding io")
         ("max_threads", value<uint32_t>(&maxThr)->required(), "max threads")
         ("shorten_file_size", value<uint32_t>(&shortenFileSize), "shorten the size by this much to test nonaliged reads")
-        ("mountpoint", value<std::vector<std::string>>(&dirPrefix)->required()->multitoken(), "ssd mount point");
+        ("mountpoint", value<std::vector<std::string>>(&dirPrefix)->required()->multitoken(), "ssd mount point")
+        ("ipaddress", value<std::string>(&ipAddress)->required(), "ip address")
+        ("port", value<int>(&port)->required(), "port on which xio server running")
+        ("transport", value<std::string>(&transport)->required(), "tcp or rdma")
+        ("do_mem_check", value<bool>(&doMemCheck)->required(), "compare read buffer")
+          ;
 
     std::ifstream configFile(configFileName);
     variables_map vm;
@@ -96,6 +105,10 @@ struct Config {
       if (auto v = boost::any_cast<uint64_t>(&value))
         s << *v << std::endl;
       else if (auto v = boost::any_cast<uint32_t>(&value))
+        s << *v << std::endl;
+      else if (auto v = boost::any_cast<int>(&value))
+        s << *v << std::endl;
+      else if (auto v = boost::any_cast<std::string>(&value))
         s << *v << std::endl;
       else if (auto v = boost::any_cast<bool>(&value))
         s << *v << std::endl;
@@ -123,18 +136,10 @@ static constexpr size_t FOURMB = (1 << 24);
 struct FixedSizeFileManager {
 
   std::mutex mutex;
-  std::vector<std::string> Directory;
   uint32_t maxFiles_ = 0;
-
-  uint32_t FileSize = FOURMB;
 
   void init(uint32_t MaxFiles) {
     maxFiles_ = MaxFiles;
-  }
-
-  float spaceUsed() {
-    // without mutex
-    return ((float)Directory.size() * 100) / maxFiles_;
   }
 
   std::string buildFileName(uint64_t fileNum) {
@@ -199,7 +204,7 @@ static void doRandomRead(ThreadCtx *ctx) {
   uint64_t totalIO = 0;
 
   ctx->ctx_attr_ptr = ctx_attr_new();
-  ctx_attr_set_transport(ctx->ctx_attr_ptr, "tcp", "127.0.0.1", 21321);
+  ctx_attr_set_transport(ctx->ctx_attr_ptr, config.transport, config.ipAddress, config.port);
 
   ctx->ctx_ptr = ctx_new(ctx->ctx_attr_ptr);
   assert(ctx->ctx_ptr);
@@ -212,26 +217,30 @@ static void doRandomRead(ThreadCtx *ctx) {
   gobjfs::stats::Timer timer(true);
 
   while (totalIO < ctx->perThreadIO) {
-    char* rbuf = (char*) malloc(4096);
+    char* rbuf = (char*) malloc(config.blockSize);
     assert(rbuf);
 
     giocb* iocb = (giocb *)malloc(sizeof(giocb));
     iocb->aio_buf = rbuf;
-    iocb->aio_offset = 0; // TODO randomize
-    iocb->aio_nbytes = 4096;
+    iocb->aio_offset = blockGenerator(seedGen) * config.blockSize; 
+    iocb->aio_nbytes = config.blockSize;
 
-    auto ret = aio_readcb(ctx->ctx_ptr, "abcd", iocb, nullptr);
+    auto filename = fileMgr.getFilename(filenumGen(seedGen));
+
+    auto ret = aio_readcb(ctx->ctx_ptr, filename.c_str(), iocb, nullptr);
 
     if (ret != 0) {
       free(iocb);
       free(rbuf);
+      ctx->benchInfo.failedReads ++;
     } else {
       iocb_vec.push_back(iocb);
     }
 
-    if (totalIO % 100 == 0) {
+    if (totalIO % config.maxOutstandingIO == 0) {
       for (auto& elem : iocb_vec) {
         aio_finish(ctx->ctx_ptr, elem);
+        // TODO check and incr failed reads
         free(elem->aio_buf);
         free(elem);
       }
@@ -249,10 +258,12 @@ static void doRandomRead(ThreadCtx *ctx) {
     << ":iops=" << ctx->benchInfo.iops << std::endl;
 
   ctx->benchInfo.iops = (ctx->perThreadIO * 1000 / timeMilli);
-  globalBenchInfo.iops += (ctx->perThreadIO * 1000 / timeMilli);
+  globalBenchInfo.iops += ctx->benchInfo.iops;
 
   LOG(INFO) << s.str();
 }
+
+static constexpr const char* configFileName = "bench_net_client.conf";
 
 int main(int argc, char *argv[]) {
   // google::InitGoogleLogging(argv[0]); TODO logging
@@ -261,7 +272,15 @@ int main(int argc, char *argv[]) {
   logging::core::get()->set_filter(logging::trivial::severity >=
       logging::trivial::info);
 
-  config.readConfig("./benchioexec.conf");
+  {
+    struct stat statbuf;
+    int err = stat(configFileName, &statbuf);
+    if (err != 0) {
+      LOG(ERROR) << "need a config file " << configFileName << " in current dir";
+      exit(1);
+    }
+  }
+  config.readConfig(configFileName);
 
   fileMgr.init(config.maxFiles);
 
