@@ -112,7 +112,7 @@ struct Config {
 
 Config config;
 
-static constexpr const char* configFileName = "bench_net_client.conf";
+static constexpr const char* configFileName = "bench_net_server.conf";
 
 int main(int argc, char *argv[]) {
 

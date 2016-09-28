@@ -95,7 +95,7 @@ struct Config {
 
     LOG(INFO)
         << "================================================================="
-        << std::endl << "     BenchIOExecFile config" << std::endl
+        << std::endl << "     BenchNetClient config" << std::endl
         << "================================================================="
         << std::endl;
     std::ostringstream s;
@@ -201,8 +201,6 @@ static void doRandomRead(ThreadCtx *ctx) {
   std::uniform_int_distribution<decltype(ctx->maxBlocks)> blockGenerator(
       0, ctx->maxBlocks - 1);
 
-  uint64_t totalIO = 0;
-
   ctx->ctx_attr_ptr = ctx_attr_new();
   ctx_attr_set_transport(ctx->ctx_attr_ptr, config.transport, config.ipAddress, config.port);
 
@@ -216,7 +214,10 @@ static void doRandomRead(ThreadCtx *ctx) {
 
   gobjfs::stats::Timer timer(true);
 
-  while (totalIO < ctx->perThreadIO) {
+  uint64_t doneCount = 0;
+  uint64_t progressCount = 0;
+
+  while (doneCount < ctx->perThreadIO) {
     char* rbuf = (char*) malloc(config.blockSize);
     assert(rbuf);
 
@@ -237,8 +238,9 @@ static void doRandomRead(ThreadCtx *ctx) {
       iocb_vec.push_back(iocb);
     }
 
-    if (totalIO % config.maxOutstandingIO == 0) {
+    if (doneCount % config.maxOutstandingIO == 0) {
       for (auto& elem : iocb_vec) {
+        aio_suspend(ctx->ctx_ptr, elem, nullptr);
         aio_finish(ctx->ctx_ptr, elem);
         // TODO check and incr failed reads
         free(elem->aio_buf);
@@ -246,18 +248,28 @@ static void doRandomRead(ThreadCtx *ctx) {
       }
       iocb_vec.clear();
     }
+
+    doneCount ++;
+    progressCount ++;
+    if (progressCount == ctx->perThreadIO/10) {
+      LOG(INFO) << ((doneCount * 100)/ctx->perThreadIO) << " percent of work done";
+      progressCount = 0;
+    }
   }
 
   int64_t timeMilli = timer.elapsedMilliseconds();
   std::ostringstream s;
 
-  s << "thread=" << gobjfs::os::GetCpuCore() << ":num_io=" << ctx->perThreadIO
-    << ":failed_reads=" << ctx->benchInfo.failedReads
-    << ":time(msec)=" << timeMilli
-    << ":read_latency(usec)=" << ctx->benchInfo.readLatency
-    << ":iops=" << ctx->benchInfo.iops << std::endl;
-
   ctx->benchInfo.iops = (ctx->perThreadIO * 1000 / timeMilli);
+
+  s << "thread=" << gobjfs::os::GetCpuCore() 
+    << ":num_io=" << ctx->perThreadIO
+    << ":time(msec)=" << timeMilli
+    << ":iops=" << ctx->benchInfo.iops 
+    << ":failed_reads=" << ctx->benchInfo.failedReads
+    << ":read_latency(usec)=" << ctx->benchInfo.readLatency
+    << std::endl;
+
   globalBenchInfo.iops += ctx->benchInfo.iops;
 
   LOG(INFO) << s.str();
