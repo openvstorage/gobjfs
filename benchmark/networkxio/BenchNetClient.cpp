@@ -33,6 +33,7 @@ but WITHOUT ANY WARRANTY of any kind.
 
 #include <fstream>
 #include <iostream>
+#include <deque>
 #include <sstream>
 
 #include <sys/stat.h>
@@ -196,7 +197,9 @@ struct ThreadCtx {
 
   uint64_t perThreadIO = 0;
 
+  // used for aio_readcb
   SemaphoreWrapper semaphore;
+  std::deque<completion*> queue;
 
   BenchInfo benchInfo;
 
@@ -322,19 +325,23 @@ static void doRandomRead(ThreadCtx *ctx) {
 
     auto cb_callback_func = [] (completion *comp, void *arg) {
 
-      aio_release_completion(comp);
       CompletionArg* ca = (CompletionArg*)arg;
+
       ssize_t ret = aio_return(ca->ctx->ctx_ptr, ca->iocb);
       if (ret != config.blockSize) {
         ca->ctx->benchInfo.failedReads ++;
         LOG(ERROR) << "failed4";
       }
+
       aio_finish(ca->ctx->ctx_ptr, ca->iocb);
       std::free(ca->iocb->aio_buf);
       std::free(ca->iocb);
 
-      delete ca;
       ca->ctx->semaphore.wakeup();
+
+      //do not release completion here - SEGV!
+      //aio_release_completion(comp);
+      delete ca;
     };
 
     auto use_readcb = [&] () {
@@ -355,7 +362,17 @@ static void doRandomRead(ThreadCtx *ctx) {
         aio_finish(ctx->ctx_ptr, iocb);
         std::free(iocb->aio_buf);
         std::free(iocb);
-      } 
+      } else {
+
+        ctx->queue.push_back(comp);
+
+        while (ctx->queue.size() > config.maxOutstandingIO) {
+          auto free_comp = ctx->queue.front();
+          aio_wait_completion(free_comp, nullptr);
+          aio_release_completion(free_comp);
+          ctx->queue.pop_front();
+        }
+      }
     };
 
     typedef std::function<void(void)> ReadFunc;
