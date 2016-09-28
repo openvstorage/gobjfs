@@ -17,7 +17,7 @@ but WITHOUT ANY WARRANTY of any kind.
 */
 
 #include <util/CpuStats.h>
-#include <util/ShutdownNotifier.h>
+#include <util/SemaphoreWrapper.h>
 #include <util/Stats.h>
 #include <util/Timer.h>
 #include <util/os_utils.h>
@@ -35,11 +35,7 @@ but WITHOUT ANY WARRANTY of any kind.
 #include <iostream>
 #include <sstream>
 
-#include <dirent.h> // readdir
-#include <fcntl.h>
-#include <sys/epoll.h>
 #include <sys/stat.h>
-#include <sys/time.h> // gettimeofday
 #ifndef _GNU_SOURCE
 #define _GNU_SOURCE
 #include <string.h> //basename
@@ -53,6 +49,7 @@ but WITHOUT ANY WARRANTY of any kind.
 
 using namespace boost::program_options;
 using namespace gobjfs::xio;
+using namespace gobjfs::os;
 
 struct Config {
   uint32_t blockSize = 4096;
@@ -70,6 +67,9 @@ struct Config {
   std::string transport;
   int port = 0;
 
+  std::string readStyle;
+  int readStyleAsInt = -1;
+
   int readConfig(const std::string &configFileName) {
     options_description desc("allowed options");
     desc.add_options()
@@ -79,6 +79,7 @@ struct Config {
         ("max_file_blocks", value<uint32_t>(&maxBlocks)->required(), "number of [blocksize] blocks in file")
         ("per_thread_max_io", value<uint64_t>(&perThreadIO)->required(), "number of ops to execute")
         ("max_outstanding_io", value<uint64_t>(&maxOutstandingIO)->required(), "max outstanding io")
+        ("read_style", value<std::string>(&readStyle)->required(), "aio_read or aio_readv or aio_readcb")
         ("max_threads", value<uint32_t>(&maxThr)->required(), "max threads")
         ("shorten_file_size", value<uint32_t>(&shortenFileSize), "shorten the size by this much to test nonaliged reads")
         ("mountpoint", value<std::vector<std::string>>(&dirPrefix)->required()->multitoken(), "ssd mount point")
@@ -92,6 +93,18 @@ struct Config {
     variables_map vm;
     store(parse_config_file(configFile, desc), vm);
     notify(vm);
+
+    if (readStyle == "aio_read") {
+      readStyleAsInt = 0;
+    } else if (readStyle == "aio_readv") {
+      readStyleAsInt = 1;
+    } else if (readStyle == "aio_readcb") {
+      readStyleAsInt = 2;
+    } else {
+      LOG(ERROR) << "read_style is invalid";
+      return -1;
+    }
+
 
     LOG(INFO)
         << "================================================================="
@@ -135,12 +148,7 @@ static constexpr size_t FOURMB = (1 << 24);
 
 struct FixedSizeFileManager {
 
-  std::mutex mutex;
-  uint32_t maxFiles_ = 0;
-
-  void init(uint32_t MaxFiles) {
-    maxFiles_ = MaxFiles;
-  }
+  void init() {}
 
   std::string buildFileName(uint64_t fileNum) {
     return "/bench" + std::to_string(fileNum) + ".data";
@@ -170,8 +178,7 @@ using gobjfs::stats::StatsCounter;
 struct BenchInfo {
   StatsCounter<uint64_t> readLatency;
   uint64_t failedReads{0};
-  uint64_t failedWrites{0};
-  std::atomic<uint64_t> iops{0};
+  uint64_t iops{0};
 };
 
 BenchInfo globalBenchInfo;
@@ -187,17 +194,29 @@ struct ThreadCtx {
   uint32_t maxFiles;
   uint32_t maxBlocks;
 
-  uint64_t perThreadIO{0};
+  uint64_t perThreadIO = 0;
+
+  SemaphoreWrapper semaphore;
 
   BenchInfo benchInfo;
-};
 
+  explicit ThreadCtx(const Config& conf) {
+
+    minFiles = 0;
+    maxFiles = conf.maxFiles;
+    maxBlocks = conf.maxBlocks;
+
+    perThreadIO = conf.perThreadIO;
+
+    semaphore.init(conf.maxOutstandingIO, -1);
+  }
+};
 
 static void doRandomRead(ThreadCtx *ctx) {
 
   std::mt19937 seedGen(getpid() + gobjfs::os::GetCpuCore());
   std::uniform_int_distribution<decltype(ctx->maxFiles)> filenumGen(
-      0, ctx->maxFiles - 1);
+      ctx->minFiles, ctx->maxFiles - 1);
   std::uniform_int_distribution<decltype(ctx->maxBlocks)> blockGenerator(
       0, ctx->maxBlocks - 1);
 
@@ -211,6 +230,7 @@ static void doRandomRead(ThreadCtx *ctx) {
   assert(err == 0);
 
   std::vector<giocb *> iocb_vec;
+  std::vector<std::string> filename_vec;
 
   gobjfs::stats::Timer timer(true);
 
@@ -218,39 +238,134 @@ static void doRandomRead(ThreadCtx *ctx) {
   uint64_t progressCount = 0;
 
   while (doneCount < ctx->perThreadIO) {
+
     char* rbuf = (char*) malloc(config.blockSize);
     assert(rbuf);
+
+    auto filename = fileMgr.getFilename(filenumGen(seedGen));
 
     giocb* iocb = (giocb *)malloc(sizeof(giocb));
     iocb->aio_buf = rbuf;
     iocb->aio_offset = blockGenerator(seedGen) * config.blockSize; 
     iocb->aio_nbytes = config.blockSize;
 
-    auto filename = fileMgr.getFilename(filenumGen(seedGen));
+    auto use_read = [&] () {
+      auto ret = aio_read(ctx->ctx_ptr, filename.c_str(), iocb);
 
-    auto ret = aio_readcb(ctx->ctx_ptr, filename.c_str(), iocb, nullptr);
-
-    if (ret != 0) {
-      free(iocb);
-      free(rbuf);
-      ctx->benchInfo.failedReads ++;
-    } else {
-      iocb_vec.push_back(iocb);
-    }
-
-    if (doneCount % config.maxOutstandingIO == 0) {
-      for (auto& elem : iocb_vec) {
-        aio_suspend(ctx->ctx_ptr, elem, nullptr);
-        aio_finish(ctx->ctx_ptr, elem);
-        // TODO check and incr failed reads
-        free(elem->aio_buf);
-        free(elem);
+      if (ret != 0) {
+        std::free(iocb);
+        std::free(iocb->aio_buf);
+        ctx->benchInfo.failedReads ++;
+        LOG(ERROR) << "failed0";
+      } else {
+        iocb_vec.push_back(iocb);
       }
-      iocb_vec.clear();
-    }
+
+      if (doneCount % config.maxOutstandingIO == 0) {
+
+        for (auto &elem : iocb_vec) {
+          ssize_t ret = aio_suspend(ctx->ctx_ptr, elem, nullptr);
+          if (ret != 0) {
+            LOG(ERROR) << "failed suspend " << ret;
+            ctx->benchInfo.failedReads ++;      
+          } else {
+            ret = aio_return(ctx->ctx_ptr, elem);
+            if (ret != config.blockSize) {
+              LOG(ERROR) << "failed1 " << ret;
+              ctx->benchInfo.failedReads ++;      
+            }
+          }
+          aio_finish(ctx->ctx_ptr, elem);
+          std::free(elem->aio_buf);
+          std::free(elem);
+        }
+        iocb_vec.clear();
+      }
+    };
+
+    auto use_readv = [&] () {
+      iocb_vec.push_back(iocb);
+      filename_vec.emplace_back(filename);
+
+      if (doneCount % config.maxOutstandingIO == 0) {
+        auto ret = aio_readv(ctx->ctx_ptr, filename_vec, iocb_vec);
+        
+        if (ret != 0) {
+          ctx->benchInfo.failedReads += iocb_vec.size();
+          LOG(ERROR) << "failed2";
+        } else {
+          aio_suspendv(ctx->ctx_ptr, iocb_vec, nullptr);
+
+          for (auto &elem : iocb_vec) {
+            ssize_t ret = aio_return(ctx->ctx_ptr, elem);
+            if (ret != config.blockSize) {
+              ctx->benchInfo.failedReads ++;
+              LOG(ERROR) << "failed3";
+            }
+            aio_finish(ctx->ctx_ptr, elem);
+            std::free(elem->aio_buf);
+            std::free(elem);
+          }
+        }
+        iocb_vec.clear();
+        filename_vec.clear();
+      }
+    };
+
+    struct CompletionArg {
+      ThreadCtx *ctx;
+      giocb *iocb;
+
+      explicit CompletionArg(ThreadCtx* in_ctx, giocb* in_iocb)
+        : ctx(in_ctx), iocb(in_iocb) {}
+    };
+
+    auto cb_callback_func = [] (completion *comp, void *arg) {
+
+      aio_release_completion(comp);
+      CompletionArg* ca = (CompletionArg*)arg;
+      ssize_t ret = aio_return(ca->ctx->ctx_ptr, ca->iocb);
+      if (ret != config.blockSize) {
+        ca->ctx->benchInfo.failedReads ++;
+        LOG(ERROR) << "failed4";
+      }
+      aio_finish(ca->ctx->ctx_ptr, ca->iocb);
+      std::free(ca->iocb->aio_buf);
+      std::free(ca->iocb);
+
+      delete ca;
+      ca->ctx->semaphore.wakeup();
+    };
+
+    auto use_readcb = [&] () {
+
+      // use counting semaphore to limit outstanding IO
+      ctx->semaphore.pause();
+
+      auto ca = new CompletionArg(ctx, iocb);
+
+      completion* comp = aio_create_completion(cb_callback_func, ca);
+
+      auto ret = aio_readcb(ctx->ctx_ptr, filename, iocb, comp);
+
+      if (ret != 0) {
+        ctx->benchInfo.failedReads ++;
+        LOG(ERROR) << "failed5";
+        aio_release_completion(comp);
+        aio_finish(ctx->ctx_ptr, iocb);
+        std::free(iocb->aio_buf);
+        std::free(iocb);
+      } 
+    };
+
+    typedef std::function<void(void)> ReadFunc;
+    ReadFunc funcs[] = { use_read, use_readv, use_readcb };
+
+    funcs[config.readStyleAsInt]();
 
     doneCount ++;
     progressCount ++;
+
     if (progressCount == ctx->perThreadIO/10) {
       LOG(INFO) << ((doneCount * 100)/ctx->perThreadIO) << " percent of work done";
       progressCount = 0;
@@ -260,6 +375,7 @@ static void doRandomRead(ThreadCtx *ctx) {
   int64_t timeMilli = timer.elapsedMilliseconds();
   std::ostringstream s;
 
+  // calc throughput
   ctx->benchInfo.iops = (ctx->perThreadIO * 1000 / timeMilli);
 
   s << "thread=" << gobjfs::os::GetCpuCore() 
@@ -269,8 +385,6 @@ static void doRandomRead(ThreadCtx *ctx) {
     << ":failed_reads=" << ctx->benchInfo.failedReads
     << ":read_latency(usec)=" << ctx->benchInfo.readLatency
     << std::endl;
-
-  globalBenchInfo.iops += ctx->benchInfo.iops;
 
   LOG(INFO) << s.str();
 }
@@ -292,9 +406,12 @@ int main(int argc, char *argv[]) {
       exit(1);
     }
   }
-  config.readConfig(configFileName);
+  int err = config.readConfig(configFileName);
+  if (err != 0) {
+    exit(1);
+  }
 
-  fileMgr.init(config.maxFiles);
+  fileMgr.init();
 
   gobjfs::os::CpuStats startCpuStats;
   startCpuStats.getProcessStats();
@@ -304,12 +421,7 @@ int main(int argc, char *argv[]) {
   std::vector<std::future<void>> futVec;
 
   for (decltype(config.maxThr) thr = 0; thr < config.maxThr; thr++) {
-    ThreadCtx *ctx = new ThreadCtx;
-    ctx->maxBlocks = config.maxBlocks;
-    ctx->perThreadIO = config.perThreadIO;
-
-    ctx->minFiles = 0;
-    ctx->maxFiles = config.maxFiles;
+    ThreadCtx *ctx = new ThreadCtx(config);
     auto f = std::async(std::launch::async, doRandomRead, ctx);
 
     futVec.emplace_back(std::move(f));
@@ -323,6 +435,7 @@ int main(int argc, char *argv[]) {
   for (auto elem : ctxVec) {
     globalBenchInfo.readLatency += elem->benchInfo.readLatency;
     globalBenchInfo.failedReads += elem->benchInfo.failedReads;
+    globalBenchInfo.iops += elem->benchInfo.iops;
   }
 
   gobjfs::os::CpuStats endCpuStats;
@@ -333,8 +446,7 @@ int main(int argc, char *argv[]) {
   {
     std::ostringstream s;
 
-    s << "num_ioexec=" << 1 // TODO
-      << ":num_threads=" << config.maxThr
+    s << ":num_threads=" << config.maxThr
       << ":iops=" << globalBenchInfo.iops
       << ":read_latency(usec)=" << globalBenchInfo.readLatency
       << ":cpu_perc=" << endCpuStats.getCpuUtilization();
