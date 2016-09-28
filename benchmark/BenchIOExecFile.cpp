@@ -29,6 +29,10 @@ but WITHOUT ANY WARRANTY of any kind.
 #include <gtest/gtest.h>
 
 #include <boost/program_options.hpp>
+#include <boost/log/trivial.hpp>
+#include <boost/log/core.hpp>
+#include <boost/log/expressions.hpp>
+
 #include <fstream>
 #include <iostream>
 #include <sstream>
@@ -716,6 +720,10 @@ static void doRandomReadWrite(ThreadCtx *ctx) {
 
 int main(int argc, char *argv[]) {
   // google::InitGoogleLogging(argv[0]); TODO logging
+  //
+  namespace logging = boost::log;
+  logging::core::get()->set_filter(logging::trivial::severity >=
+      logging::trivial::info);
 
   config.readConfig("./benchioexec.conf");
 
