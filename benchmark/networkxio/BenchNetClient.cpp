@@ -51,6 +51,8 @@ but WITHOUT ANY WARRANTY of any kind.
 using namespace boost::program_options;
 using namespace gobjfs::xio;
 using namespace gobjfs::os;
+using gobjfs::stats::StatsCounter;
+using gobjfs::stats::Timer;
 
 struct Config {
   uint32_t blockSize = 4096;
@@ -106,6 +108,12 @@ struct Config {
       return -1;
     }
 
+    if (perThreadIO % maxOutstandingIO != 0) {
+      // truncate it so that aio_read and readv do not terminate with outstanding IO
+      perThreadIO -= (perThreadIO % maxOutstandingIO);
+      LOG(INFO) << "reduced perThreadIO to " << perThreadIO << " to keep it multiple of " << maxOutstandingIO;
+    }
+
 
     LOG(INFO)
         << "================================================================="
@@ -145,25 +153,12 @@ struct Config {
 
 static Config config;
 
-static constexpr size_t FOURMB = (1 << 24);
-
 struct FixedSizeFileManager {
 
   void init() {}
 
   std::string buildFileName(uint64_t fileNum) {
     return "/bench" + std::to_string(fileNum) + ".data";
-  }
-
-  int32_t parseFileName(std::string fileName, uint64_t &fileNum) {
-    auto startPos = strlen("bench");
-    auto endPos = fileName.find(".data");
-    std::string aNumber = fileName.substr(startPos, endPos - startPos);
-    std::istringstream s(aNumber);
-    if (!(s >> fileNum)) {
-      return -EINVAL;
-    }
-    return 0;
   }
 
   std::string getFilename(uint64_t fileNum) {
@@ -174,7 +169,6 @@ struct FixedSizeFileManager {
 
 FixedSizeFileManager fileMgr;
 
-using gobjfs::stats::StatsCounter;
 
 struct BenchInfo {
   StatsCounter<uint64_t> readLatency;
@@ -188,18 +182,27 @@ class StatusExt;
 
 struct ThreadCtx {
 
-  client_ctx_attr_ptr ctx_attr_ptr;
-  client_ctx_ptr ctx_ptr;
-
   uint32_t minFiles;
   uint32_t maxFiles;
   uint32_t maxBlocks;
 
+  client_ctx_attr_ptr ctx_attr_ptr;
+  client_ctx_ptr ctx_ptr;
+
   uint64_t perThreadIO = 0;
+  uint64_t doneCount = 0;
+  uint64_t progressCount = 0;
 
   // used for aio_readcb
   SemaphoreWrapper semaphore;
   std::deque<completion*> queue;
+
+  std::vector<giocb *> iocb_vec;
+
+  Timer throughputTimer;
+
+  // used for aio_readv
+  std::vector<std::string> filename_vec; 
 
   BenchInfo benchInfo;
 
@@ -212,6 +215,25 @@ struct ThreadCtx {
     perThreadIO = conf.perThreadIO;
 
     semaphore.init(conf.maxOutstandingIO, -1);
+  }
+
+  void waitForOutstandingCompletions(size_t maxAllowed) {
+
+    while (queue.size() > maxAllowed) {
+      auto free_comp = queue.front();
+      aio_wait_completion(free_comp, nullptr);
+      aio_release_completion(free_comp);
+      queue.pop_front();
+    }
+  }
+
+  void checkTermination() {
+    waitForOutstandingCompletions(0);
+    // check if all submitted IO is acked
+    assert(iocb_vec.empty());
+    assert(filename_vec.empty());
+    assert(queue.empty());
+    assert(doneCount == perThreadIO);
   }
 };
 
@@ -232,15 +254,9 @@ static void doRandomRead(ThreadCtx *ctx) {
   int err = ctx_init(ctx->ctx_ptr);
   assert(err == 0);
 
-  std::vector<giocb *> iocb_vec;
-  std::vector<std::string> filename_vec;
+  ctx->throughputTimer.reset();
 
-  gobjfs::stats::Timer timer(true);
-
-  uint64_t doneCount = 0;
-  uint64_t progressCount = 0;
-
-  while (doneCount < ctx->perThreadIO) {
+  while (ctx->doneCount < ctx->perThreadIO) {
 
     char* rbuf = (char*) malloc(config.blockSize);
     assert(rbuf);
@@ -253,6 +269,9 @@ static void doRandomRead(ThreadCtx *ctx) {
     iocb->aio_nbytes = config.blockSize;
 
     auto use_read = [&] () {
+
+      Timer latencyTimer(true);
+
       auto ret = aio_read(ctx->ctx_ptr, filename.c_str(), iocb);
 
       if (ret != 0) {
@@ -261,13 +280,17 @@ static void doRandomRead(ThreadCtx *ctx) {
         ctx->benchInfo.failedReads ++;
         LOG(ERROR) << "failed0";
       } else {
-        iocb_vec.push_back(iocb);
+        ctx->iocb_vec.push_back(iocb);
       }
 
-      if (doneCount % config.maxOutstandingIO == 0) {
+      if (ctx->doneCount % config.maxOutstandingIO == 0) {
 
-        for (auto &elem : iocb_vec) {
+        for (auto &elem : ctx->iocb_vec) {
+
           ssize_t ret = aio_suspend(ctx->ctx_ptr, elem, nullptr);
+
+          ctx->benchInfo.readLatency = latencyTimer.elapsedMicroseconds();
+
           if (ret != 0) {
             LOG(ERROR) << "failed suspend " << ret;
             ctx->benchInfo.failedReads ++;      
@@ -282,24 +305,31 @@ static void doRandomRead(ThreadCtx *ctx) {
           std::free(elem->aio_buf);
           std::free(elem);
         }
-        iocb_vec.clear();
+        ctx->iocb_vec.clear();
       }
     };
 
     auto use_readv = [&] () {
-      iocb_vec.push_back(iocb);
-      filename_vec.emplace_back(filename);
 
-      if (doneCount % config.maxOutstandingIO == 0) {
-        auto ret = aio_readv(ctx->ctx_ptr, filename_vec, iocb_vec);
+      ctx->iocb_vec.push_back(iocb);
+      ctx->filename_vec.emplace_back(filename);
+
+      if (ctx->doneCount % config.maxOutstandingIO == 0) {
+
+        Timer latencyTimer(true);
+
+        auto ret = aio_readv(ctx->ctx_ptr, ctx->filename_vec, ctx->iocb_vec);
         
         if (ret != 0) {
-          ctx->benchInfo.failedReads += iocb_vec.size();
+          ctx->benchInfo.failedReads += ctx->iocb_vec.size();
           LOG(ERROR) << "failed2";
         } else {
-          aio_suspendv(ctx->ctx_ptr, iocb_vec, nullptr);
 
-          for (auto &elem : iocb_vec) {
+          aio_suspendv(ctx->ctx_ptr, ctx->iocb_vec, nullptr);
+
+          ctx->benchInfo.readLatency = latencyTimer.elapsedMicroseconds();
+
+          for (auto &elem : ctx->iocb_vec) {
             ssize_t ret = aio_return(ctx->ctx_ptr, elem);
             if (ret != config.blockSize) {
               ctx->benchInfo.failedReads ++;
@@ -310,17 +340,18 @@ static void doRandomRead(ThreadCtx *ctx) {
             std::free(elem);
           }
         }
-        iocb_vec.clear();
-        filename_vec.clear();
+        ctx->iocb_vec.clear();
+        ctx->filename_vec.clear();
       }
     };
 
     struct CompletionArg {
       ThreadCtx *ctx;
       giocb *iocb;
+      Timer latencyTimer;
 
       explicit CompletionArg(ThreadCtx* in_ctx, giocb* in_iocb)
-        : ctx(in_ctx), iocb(in_iocb) {}
+        : ctx(in_ctx), iocb(in_iocb), latencyTimer() {}
     };
 
     auto cb_callback_func = [] (completion *comp, void *arg) {
@@ -332,6 +363,8 @@ static void doRandomRead(ThreadCtx *ctx) {
         ca->ctx->benchInfo.failedReads ++;
         LOG(ERROR) << "failed4";
       }
+
+      ca->ctx->benchInfo.readLatency = ca->latencyTimer.elapsedMicroseconds();
 
       aio_finish(ca->ctx->ctx_ptr, ca->iocb);
       std::free(ca->iocb->aio_buf);
@@ -353,6 +386,8 @@ static void doRandomRead(ThreadCtx *ctx) {
 
       completion* comp = aio_create_completion(cb_callback_func, ca);
 
+      ca->latencyTimer.reset();
+
       auto ret = aio_readcb(ctx->ctx_ptr, filename, iocb, comp);
 
       if (ret != 0) {
@@ -366,35 +401,36 @@ static void doRandomRead(ThreadCtx *ctx) {
 
         ctx->queue.push_back(comp);
 
-        while (ctx->queue.size() > config.maxOutstandingIO) {
-          auto free_comp = ctx->queue.front();
-          aio_wait_completion(free_comp, nullptr);
-          aio_release_completion(free_comp);
-          ctx->queue.pop_front();
-        }
+        ctx->waitForOutstandingCompletions(config.maxOutstandingIO);
       }
     };
 
+    // variety of ways to call async read are encoded as lambda func
     typedef std::function<void(void)> ReadFunc;
     ReadFunc funcs[] = { use_read, use_readv, use_readcb };
 
+    // increment doneCount before ReadFunc call because it does batch 
+    // ops internally when doneCount is multiple of maxOutstandingIO
+    ctx->doneCount ++;
+
     funcs[config.readStyleAsInt]();
 
-    doneCount ++;
-    progressCount ++;
+    ctx->progressCount ++;
 
-    if (progressCount == ctx->perThreadIO/10) {
-      LOG(INFO) << ((doneCount * 100)/ctx->perThreadIO) << " percent of work done";
-      progressCount = 0;
+    if (ctx->progressCount == ctx->perThreadIO/10) {
+      LOG(INFO) << ((ctx->doneCount * 100)/ctx->perThreadIO) << " percent of work done";
+      ctx->progressCount = 0;
     }
   }
 
-  int64_t timeMilli = timer.elapsedMilliseconds();
-  std::ostringstream s;
+  ctx->checkTermination();
+
+  int64_t timeMilli = ctx->throughputTimer.elapsedMilliseconds();
 
   // calc throughput
   ctx->benchInfo.iops = (ctx->perThreadIO * 1000 / timeMilli);
 
+  std::ostringstream s;
   s << "thread=" << gobjfs::os::GetCpuCore() 
     << ":num_io=" << ctx->perThreadIO
     << ":time(msec)=" << timeMilli
@@ -453,6 +489,8 @@ int main(int argc, char *argv[]) {
     globalBenchInfo.readLatency += elem->benchInfo.readLatency;
     globalBenchInfo.failedReads += elem->benchInfo.failedReads;
     globalBenchInfo.iops += elem->benchInfo.iops;
+
+    delete elem;
   }
 
   gobjfs::os::CpuStats endCpuStats;
@@ -478,7 +516,8 @@ int main(int argc, char *argv[]) {
   {
     std::ostringstream s;
     // Print in csv format for easier input to excel
-    s << config.maxThr << ","
+    s << "csv," 
+      << config.maxThr << ","
       << globalBenchInfo.iops << "," 
       << globalBenchInfo.readLatency.mean() << "," 
       << endCpuStats.getCpuUtilization();
