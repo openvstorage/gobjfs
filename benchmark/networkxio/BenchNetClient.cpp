@@ -30,6 +30,7 @@ but WITHOUT ANY WARRANTY of any kind.
 #include <boost/log/trivial.hpp>
 #include <boost/log/core.hpp>
 #include <boost/log/expressions.hpp>
+#include <boost/log/utility/setup/file.hpp>
 
 #include <fstream>
 #include <iostream>
@@ -96,6 +97,7 @@ struct Config {
     variables_map vm;
     store(parse_config_file(configFile, desc), vm);
     notify(vm);
+
 
     if (readStyle == "aio_read") {
       readStyleAsInt = 0;
@@ -461,6 +463,11 @@ int main(int argc, char *argv[]) {
   logging::core::get()->set_filter(logging::trivial::severity >=
       logging::trivial::info);
 
+  std::string logFileName(argv[0]);
+  logFileName += std::string("_") + std::to_string(getpid()) + ".log";
+  logging::add_file_log(logFileName);
+  std::cout << "logs in " << logFileName << std::endl;
+
   {
     struct stat statbuf;
     int err = stat(configFileName, &statbuf);
@@ -473,6 +480,7 @@ int main(int argc, char *argv[]) {
   if (err != 0) {
     exit(1);
   }
+
 
   fileMgr.init();
 
@@ -532,6 +540,6 @@ int main(int argc, char *argv[]) {
       << globalBenchInfo.readLatency.mean() << "," 
       << endCpuStats.getCpuUtilization();
 
-    std::cout << s.str() << std::endl;
+    LOG(INFO) << s.str() << std::endl;
   }
 }

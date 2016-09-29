@@ -43,6 +43,7 @@ but WITHOUT ANY WARRANTY of any kind.
 #include <boost/log/trivial.hpp>
 #include <boost/log/core.hpp>
 #include <boost/log/expressions.hpp>
+#include <boost/log/utility/setup/file.hpp>
 
 using namespace boost::program_options;
 using namespace gobjfs::xio;
@@ -116,6 +117,19 @@ static constexpr const char* configFileName = "bench_net_server.conf";
 
 int main(int argc, char *argv[]) {
 
+  // google::InitGoogleLogging(argv[0]); TODO logging
+  namespace logging = boost::log;
+  logging::core::get()->set_filter(logging::trivial::severity >=
+      logging::trivial::info);
+
+  /**
+   * enable this when u figure out how to flush boost log periodically
+   * std::string logFileName(argv[0]);
+   * logFileName += std::string("_") + std::to_string(getpid()) + ".log";
+   * auto boost_log_sink = logging::add_file_log(logFileName);
+   * std::cout << "logs in " << logFileName << std::endl;
+   */
+
   {
     struct stat statbuf;
     int err = stat(configFileName, &statbuf);
@@ -125,11 +139,6 @@ int main(int argc, char *argv[]) {
     }
   }
   config.readConfig(configFileName);
-
-  // google::InitGoogleLogging(argv[0]); TODO logging
-  namespace logging = boost::log;
-  logging::core::get()->set_filter(logging::trivial::severity >=
-      logging::trivial::info);
 
   FileTranslatorFunc fileTranslatorFunc{nullptr};
 
