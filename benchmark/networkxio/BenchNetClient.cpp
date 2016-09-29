@@ -280,8 +280,8 @@ static void doRandomRead(ThreadCtx *ctx) {
       auto ret = aio_read(ctx->ctx_ptr, filename.c_str(), iocb);
 
       if (ret != 0) {
-        std::free(iocb);
         std::free(iocb->aio_buf);
+        std::free(iocb);
         ctx->benchInfo.failedReads ++;
         LOG(ERROR) << "failed0";
       } else {
@@ -328,6 +328,11 @@ static void doRandomRead(ThreadCtx *ctx) {
         if (ret != 0) {
           ctx->benchInfo.failedReads += ctx->iocb_vec.size();
           LOG(ERROR) << "failed2";
+          for (auto &elem : ctx->iocb_vec) {
+            aio_finish(ctx->ctx_ptr, elem);
+            std::free(elem->aio_buf);
+            std::free(elem);
+          }
         } else {
 
           aio_suspendv(ctx->ctx_ptr, ctx->iocb_vec, nullptr);
