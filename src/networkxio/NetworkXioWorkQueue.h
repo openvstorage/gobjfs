@@ -70,7 +70,7 @@ public:
     queued_work_inc();
     std::unique_lock<std::mutex> lock_(inflight_lock);
     if (need_to_grow()) {
-      GLOG_DEBUG("nr_threads_ are " << nr_threads_);
+      GLOG_INFO("nr_threads_ are " << nr_threads_);
       create_workqueue_threads(nr_threads_ * 2);
     }
     inflight_queue.push(req);
@@ -174,7 +174,7 @@ private:
 
     while (nr_threads_ < requested_threads) {
       try {
-        GLOG_DEBUG(" creating worker thread .. " << name_);
+        GLOG_INFO(" creating worker thread .. " << name_);
         std::thread thr([&]() {
           auto fp = std::bind(&NetworkXioWorkQueue::worker_routine, this);
           pthread_setname_np(pthread_self(), name_.c_str());
@@ -188,7 +188,7 @@ private:
         return -1;
       }
     }
-    GLOG_DEBUG("Requested=" << requested_threads << " workqueue threads. Created " << nr_threads_ << " threads ");
+    GLOG_INFO("Requested=" << requested_threads << " workqueue threads. Created " << nr_threads_ << " threads ");
     XXExit();
     return 0;
   }
@@ -201,7 +201,7 @@ private:
       std::unique_lock<std::mutex> lock_(inflight_lock);
       if (need_to_shrink()) {
         nr_threads_--;
-        GLOG_DEBUG("Number of threads shrunk to " << nr_threads_);
+        GLOG_INFO("Number of threads shrunk to " << nr_threads_);
         lock_.unlock();
         break;
       }
