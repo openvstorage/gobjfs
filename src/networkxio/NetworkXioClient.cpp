@@ -215,14 +215,18 @@ NetworkXioClient::NetworkXioClient(const std::string &uri, const uint64_t qd)
 void NetworkXioClient::run(std::promise<bool> &promise) {
   int xopt = 0;
   xio_set_opt(NULL, XIO_OPTLEVEL_ACCELIO, XIO_OPTNAME_ENABLE_FLOW_CONTROL,
-              &xopt, sizeof(int));
+              &xopt, sizeof(xopt));
 
   xopt = 2 * nr_req_queue;
   xio_set_opt(NULL, XIO_OPTLEVEL_ACCELIO, XIO_OPTNAME_SND_QUEUE_DEPTH_MSGS,
-              &xopt, sizeof(int));
+              &xopt, sizeof(xopt));
 
   xio_set_opt(NULL, XIO_OPTLEVEL_ACCELIO, XIO_OPTNAME_RCV_QUEUE_DEPTH_MSGS,
-              &xopt, sizeof(int));
+              &xopt, sizeof(xopt));
+
+  xopt = 1;
+  xio_set_opt(NULL, XIO_OPTLEVEL_TCP, XIO_OPTNAME_TCP_NO_DELAY,
+              &xopt, sizeof(xopt));
 
   try {
     const int polling_time_usec = getenv_with_default("GOBJFS_POLLING_TIME_USEC", POLLING_TIME_USEC_DEFAULT);

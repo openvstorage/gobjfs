@@ -156,21 +156,25 @@ void NetworkXioServer::run(std::promise<void> &promise) {
   xio_init();
 
   xio_set_opt(NULL, XIO_OPTLEVEL_ACCELIO, XIO_OPTNAME_MAX_IN_IOVLEN, &xopt,
-              sizeof(int));
+              sizeof(xopt));
 
   xio_set_opt(NULL, XIO_OPTLEVEL_ACCELIO, XIO_OPTNAME_MAX_OUT_IOVLEN, &xopt,
-              sizeof(int));
+              sizeof(xopt));
 
   xopt = 0;
   xio_set_opt(NULL, XIO_OPTLEVEL_ACCELIO, XIO_OPTNAME_ENABLE_FLOW_CONTROL,
-              &xopt, sizeof(int));
+              &xopt, sizeof(xopt));
 
   xopt = queue_depth;
   xio_set_opt(NULL, XIO_OPTLEVEL_ACCELIO, XIO_OPTNAME_SND_QUEUE_DEPTH_MSGS,
-              &xopt, sizeof(int));
+              &xopt, sizeof(xopt));
 
   xio_set_opt(NULL, XIO_OPTLEVEL_ACCELIO, XIO_OPTNAME_RCV_QUEUE_DEPTH_MSGS,
-              &xopt, sizeof(int));
+              &xopt, sizeof(xopt));
+
+  xopt = 1;
+  xio_set_opt(NULL, XIO_OPTLEVEL_TCP, XIO_OPTNAME_TCP_NO_DELAY,
+              &xopt, sizeof(xopt));
 
   const int polling_time_usec = getenv_with_default("GOBJFS_POLLING_TIME_USEC", POLLING_TIME_USEC_DEFAULT);
 
