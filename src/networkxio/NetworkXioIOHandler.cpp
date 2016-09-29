@@ -226,13 +226,20 @@ int NetworkXioIOHandler::handle_read(NetworkXioRequest *req,
   int ret = 0;
   req->op = NetworkXioMsgOpcode::ReadRsp;
   req->req_wq = (void *)this->wq_.get();
-  GLOG_DEBUG("Received read request for object "
-             << filename << " at offset " << offset << " for size " << size);
+#ifdef BYPASS_READ
+  { 
+    req->retval = size;
+    req->errval = 0;
+    pack_msg(req);
+    return 0;
+  } 
+#endif
   if (!serviceHandle_) {
+    GLOG_ERROR("no service handle");
     req->retval = -1;
     req->errval = EIO;
     pack_msg(req);
-    return ret;
+    return -1;
   }
 
   ret = xio_mempool_alloc(req->pClientData->ncd_mpool, size, &req->reg_mem);
@@ -251,6 +258,12 @@ int NetworkXioIOHandler::handle_read(NetworkXioRequest *req,
     req->from_pool = true;
   }
 
+  GLOG_DEBUG("Received read request for object "
+     << " wq_ptr=" << req->req_wq 
+     << " file=" << filename 
+     << " at offset=" << offset 
+     << " for size=" << size);
+
   req->data = req->reg_mem.addr;
   req->data_len = size;
   req->size = size;
@@ -258,15 +271,6 @@ int NetworkXioIOHandler::handle_read(NetworkXioRequest *req,
   try {
 
     memset(static_cast<char *>(req->data), 0, req->size);
-
-    if (ret != 0) {
-      GLOG_ERROR("GetReadObjectInfo failed with error " << ret);
-      req->retval = -1;
-      req->errval = EIO;
-      pack_msg(req);
-      return ret;
-    }
-    GLOG_DEBUG("----- The WQ pointer is " << req->req_wq);
 
     gIOBatch *batch = gIOBatchAlloc(1);
     batch->opaque = req;
@@ -345,10 +349,12 @@ bool NetworkXioIOHandler::process_request(NetworkXioRequest *req) {
     case NetworkXioMsgOpcode::ReadReq: {
       GLOG_DEBUG(" Command ReadReq");
       auto ret = handle_read(req, i_msg.filename_, i_msg.size(), i_msg.offset());
-
       if (ret == 0) {
         finishNow = false;
       }
+#ifdef BYPASS_READ
+      finishNow = true;
+#endif
       break;
     }
     default:
