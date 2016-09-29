@@ -532,7 +532,7 @@ int32_t IOExecFileRead(IOExecServiceHandle serviceHandle, const char *fileName,
                        IOExecEventFdHandle eventFdHandle) {
 
   auto fileHandle =
-      IOExecFileOpen(serviceHandle, fileName, fileNameLength, O_RDONLY);
+      IOExecFileOpen(serviceHandle, fileName, fileNameLength, O_DIRECT | O_RDONLY);
   if (fileHandle == nullptr) {
     return -EIO;
   }
