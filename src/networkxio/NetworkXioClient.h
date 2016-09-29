@@ -29,6 +29,7 @@ but WITHOUT ANY WARRANTY of any kind.
 #include <exception>
 #include <util/Spinlock.h>
 #include <util/Stats.h>
+#include "SemaphoreWrapper.h"
 #include "NetworkXioProtocol.h"
 
 namespace gobjfs {
@@ -146,9 +147,10 @@ private:
   bool disconnected{false};
   bool disconnecting{false};
 
+  gobjfs::xio::SemaphoreWrapper semaphore;
   int64_t nr_req_queue{0};
-  std::mutex req_queue_lock;
-  std::condition_variable req_queue_cond;
+  //std::mutex req_queue_lock;
+  //std::condition_variable req_queue_cond;
 
   EventFD evfd;
 

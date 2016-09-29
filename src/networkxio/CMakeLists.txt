@@ -7,6 +7,7 @@ include_directories(${PROJECT_SOURCE_DIR}/thirdparty/msgpack/include)
 set(CLIENT_SOURCES 
   gobjfs_client.cpp
   NetworkXioClient.cpp
+  SemaphoreWrapper.cpp
   )
 
 set(LIBRARY_LIST

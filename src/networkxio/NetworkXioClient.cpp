@@ -156,6 +156,8 @@ NetworkXioClient::NetworkXioClient(const std::string &uri, const uint64_t qd)
       disconnecting(false), nr_req_queue(qd), evfd() {
   XXEnter();
 
+  semaphore.init(qd, -1);
+
   ses_ops.on_session_event = static_on_session_event<NetworkXioClient>;
   ses_ops.on_session_established = NULL;
   ses_ops.on_msg = static_on_response<NetworkXioClient>;
@@ -442,6 +444,8 @@ int NetworkXioClient::on_session_event(xio_session *session
 }
 
 void NetworkXioClient::req_queue_wait_until(xio_msg_s *xmsg) {
+  semaphore.pause();
+  /*
   std::unique_lock<std::mutex> l_(req_queue_lock);
   if (--nr_req_queue <= 0) {
     // TODO("export cv timeout")
@@ -451,13 +455,15 @@ void NetworkXioClient::req_queue_wait_until(xio_msg_s *xmsg) {
       throw XioClientQueueIsBusyException("request queue is busy");
     }
   }
+  */
 }
 
 void NetworkXioClient::req_queue_release() {
   XXEnter();
-  std::unique_lock<std::mutex> l_(req_queue_lock);
-  nr_req_queue++;
-  req_queue_cond.notify_one();
+  //std::unique_lock<std::mutex> l_(req_queue_lock);
+  //nr_req_queue++;
+  semaphore.wakeup();
+  //req_queue_cond.notify_one();
   XXExit();
 }
 
