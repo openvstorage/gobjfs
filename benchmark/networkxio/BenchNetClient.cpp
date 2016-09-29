@@ -256,6 +256,9 @@ static void doRandomRead(ThreadCtx *ctx) {
 
   ctx->throughputTimer.reset();
 
+  gobjfs::os::CpuStats startCpuStats;
+  startCpuStats.getThreadStats();
+
   while (ctx->doneCount < ctx->perThreadIO) {
 
     char* rbuf = (char*) malloc(config.blockSize);
@@ -427,6 +430,11 @@ static void doRandomRead(ThreadCtx *ctx) {
 
   int64_t timeMilli = ctx->throughputTimer.elapsedMilliseconds();
 
+  gobjfs::os::CpuStats endCpuStats;
+  endCpuStats.getThreadStats();
+
+  endCpuStats -= startCpuStats;
+
   // calc throughput
   ctx->benchInfo.iops = (ctx->perThreadIO * 1000 / timeMilli);
 
@@ -437,6 +445,8 @@ static void doRandomRead(ThreadCtx *ctx) {
     << ":iops=" << ctx->benchInfo.iops 
     << ":failed_reads=" << ctx->benchInfo.failedReads
     << ":read_latency(usec)=" << ctx->benchInfo.readLatency
+    << ":xio stats=" << ctx_get_stats(ctx->ctx_ptr)
+    << ":thread_stats=" << endCpuStats.ToString()
     << std::endl;
 
   LOG(INFO) << s.str();
@@ -504,7 +514,7 @@ int main(int argc, char *argv[]) {
     s << ":num_threads=" << config.maxThr
       << ":iops=" << globalBenchInfo.iops
       << ":read_latency(usec)=" << globalBenchInfo.readLatency
-      << ":cpu_perc=" << endCpuStats.getCpuUtilization();
+      << ":process_stats=" << endCpuStats.ToString();
 
     LOG(INFO) << s.str();
 

@@ -146,7 +146,7 @@ std::string NetworkXioClient::statistics::ToString() const {
 
   s << " num_queued=" << num_queued << ",num_failed=" << num_failed
     << ",num_completed(incl. failed)=" << num_completed
-    << ",rtt_hist=" << rtt_hist << ",rtt_stats=" << rtt_stats << std::endl;
+    << ",rtt_hist=" << rtt_hist << ",rtt_stats=" << rtt_stats;
 
   return s.str();
 }
