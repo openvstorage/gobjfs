@@ -77,8 +77,6 @@ enum class NetworkXioMsgOpcode {
   Noop,
   OpenReq,
   OpenRsp,
-  CloseReq,
-  CloseRsp,
   ReadReq,
   ReadRsp,
   ErrorRsp,

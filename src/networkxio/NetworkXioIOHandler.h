@@ -54,8 +54,6 @@ public:
 private:
   void handle_open(NetworkXioRequest *req);
 
-  void handle_close(NetworkXioRequest *req);
-
   int handle_read(NetworkXioRequest *req, const std::string &filename,
                   size_t size, off_t offset);
 

@@ -207,19 +207,6 @@ int NetworkXioIOHandler::gxio_completion_handler(int epollfd, int efd) {
   return 0;
 }
 
-void NetworkXioIOHandler::handle_close(NetworkXioRequest *req) {
-  req->op = NetworkXioMsgOpcode::CloseRsp;
-  if (!serviceHandle_) {
-    GLOG_ERROR("Device handle null for device ");
-    req->retval = -1;
-    req->errval = EIO;
-  } else {
-    req->retval = 0;
-    req->errval = 0;
-  }
-  pack_msg(req);
-}
-
 int NetworkXioIOHandler::handle_read(NetworkXioRequest *req,
                                      const std::string &filename, size_t size,
                                      off_t offset) {
@@ -339,11 +326,6 @@ bool NetworkXioIOHandler::process_request(NetworkXioRequest *req) {
     case NetworkXioMsgOpcode::OpenReq: {
       GLOG_DEBUG(" Command OpenReq");
       handle_open(req);
-      break;
-    }
-    case NetworkXioMsgOpcode::CloseReq: {
-      GLOG_DEBUG(" Command CloseReq");
-      handle_close(req);
       break;
     }
     case NetworkXioMsgOpcode::ReadReq: {
