@@ -290,12 +290,6 @@ void NetworkXioClient::shutdown() {
 
 NetworkXioClient::~NetworkXioClient() { shutdown(); }
 
-int NetworkXioClient::allocate(xio_reg_mem *mem, const uint64_t size) {
-  return xio_mempool_alloc(mpool.get(), size, mem);
-}
-
-void NetworkXioClient::deallocate(xio_reg_mem *mem) { xio_mempool_free(mem); }
-
 void NetworkXioClient::xio_destroy_ctx_shutdown(xio_context *ctx) {
   xio_context_destroy(ctx);
   xrefcnt_shutdown();
