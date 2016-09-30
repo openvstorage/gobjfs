@@ -222,6 +222,13 @@ void NetworkXioClient::run() {
   xio_set_opt(NULL, XIO_OPTLEVEL_TCP, XIO_OPTNAME_TCP_NO_DELAY,
               &xopt, sizeof(xopt));
 
+  /** 
+   * set env var XIO_TRACE = 4 (XIO_LOG_LEVEL_DEBUG)
+   * xopt = XIO_LOG_LEVEL_DEBUG;
+   * xio_set_opt(NULL, XIO_OPTLEVEL_ACCELIO, XIO_OPTNAME_LOG_LEVEL,
+   *            &xopt, sizeof(xopt));
+   */
+
   try {
     const int polling_time_usec = getenv_with_default("GOBJFS_POLLING_TIME_USEC", POLLING_TIME_USEC_DEFAULT);
 
@@ -555,6 +562,7 @@ int NetworkXioClient::on_response(xio_session *session __attribute__((unused)),
   vmsg_sglist_set_nents(&reply->in, 0);
   xio_release_response(reply);
   req_queue_release();
+  xio_context_stop_loop(ctx.get());
   delete xio_msg;
   XXExit();
   return 0;
