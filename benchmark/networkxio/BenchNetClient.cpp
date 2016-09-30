@@ -62,6 +62,7 @@ struct Config {
   uint32_t maxFiles = 1000;
   uint32_t maxBlocks = 10000;
   uint64_t perThreadIO = 10000;
+  bool sharedCtxBetweenThreads = false;
   uint64_t maxOutstandingIO = 1;
   bool doMemCheck = false;
   uint32_t maxThr = 1;
@@ -83,6 +84,7 @@ struct Config {
         ("max_file_blocks", value<uint32_t>(&maxBlocks)->required(), "number of [blocksize] blocks in file")
         ("per_thread_max_io", value<uint64_t>(&perThreadIO)->required(), "number of ops to execute")
         ("max_outstanding_io", value<uint64_t>(&maxOutstandingIO)->required(), "max outstanding io")
+        ("shared_ctx_between_threads", value<bool>(&sharedCtxBetweenThreads)->required(), "should all threads share same accelio ctx")
         ("read_style", value<std::string>(&readStyle)->required(), "aio_read or aio_readv or aio_readcb")
         ("max_threads", value<uint32_t>(&maxThr)->required(), "max threads")
         ("shorten_file_size", value<uint32_t>(&shortenFileSize), "shorten the size by this much to test nonaliged reads")
@@ -171,7 +173,7 @@ struct FixedSizeFileManager {
 
 FixedSizeFileManager fileMgr;
 
-
+// benchmark info which being recorded and printed
 struct BenchInfo {
   StatsCounter<uint64_t> readLatency;
   uint64_t failedReads{0};
@@ -180,11 +182,9 @@ struct BenchInfo {
 
 BenchInfo globalBenchInfo;
 
-class StatusExt;
-
 struct ThreadCtx {
 
-  uint32_t minFiles;
+  uint32_t minFiles; 
   uint32_t maxFiles;
   uint32_t maxBlocks;
 
@@ -208,8 +208,11 @@ struct ThreadCtx {
 
   BenchInfo benchInfo;
 
-  explicit ThreadCtx(const Config& conf) {
-
+  explicit ThreadCtx(const Config& conf,
+    client_ctx_attr_ptr in_ctx_attr_ptr,
+    client_ctx_ptr in_ctx_ptr) 
+    : ctx_attr_ptr(in_ctx_attr_ptr)
+    , ctx_ptr(in_ctx_ptr) {
     minFiles = 0;
     maxFiles = conf.maxFiles;
     maxBlocks = conf.maxBlocks;
@@ -247,14 +250,21 @@ static void doRandomRead(ThreadCtx *ctx) {
   std::uniform_int_distribution<decltype(ctx->maxBlocks)> blockGenerator(
       0, ctx->maxBlocks - 1);
 
-  ctx->ctx_attr_ptr = ctx_attr_new();
-  ctx_attr_set_transport(ctx->ctx_attr_ptr, config.transport, config.ipAddress, config.port);
+  if (config.sharedCtxBetweenThreads) {
+    assert(ctx->ctx_attr_ptr.use_count());
+    assert(ctx->ctx_ptr.use_count());
+  } else {
+    assert(ctx->ctx_attr_ptr.use_count() == 0);
 
-  ctx->ctx_ptr = ctx_new(ctx->ctx_attr_ptr);
-  assert(ctx->ctx_ptr);
+    ctx->ctx_attr_ptr = ctx_attr_new();
+    ctx_attr_set_transport(ctx->ctx_attr_ptr, config.transport, config.ipAddress, config.port);
+  
+    ctx->ctx_ptr = ctx_new(ctx->ctx_attr_ptr);
+    assert(ctx->ctx_ptr);
 
-  int err = ctx_init(ctx->ctx_ptr);
-  assert(err == 0);
+    int err = ctx_init(ctx->ctx_ptr);
+    assert(err == 0);
+  }
 
   ctx->throughputTimer.reset();
 
@@ -486,6 +496,19 @@ int main(int argc, char *argv[]) {
     exit(1);
   }
 
+  client_ctx_attr_ptr ctx_attr_ptr; 
+  client_ctx_ptr ctx_ptr; 
+
+  if (config.sharedCtxBetweenThreads) {
+    ctx_attr_ptr = ctx_attr_new();
+    ctx_attr_set_transport(ctx_attr_ptr, config.transport, config.ipAddress, config.port);
+  
+    ctx_ptr = ctx_new(ctx_attr_ptr);
+    assert(ctx_ptr);
+
+    int err = ctx_init(ctx_ptr);
+    assert(err == 0);
+  }
 
   fileMgr.init();
 
@@ -497,7 +520,7 @@ int main(int argc, char *argv[]) {
   std::vector<std::future<void>> futVec;
 
   for (decltype(config.maxThr) thr = 0; thr < config.maxThr; thr++) {
-    ThreadCtx *ctx = new ThreadCtx(config);
+    ThreadCtx *ctx = new ThreadCtx(config, ctx_attr_ptr, ctx_ptr);
     auto f = std::async(std::launch::async, doRandomRead, ctx);
 
     futVec.emplace_back(std::move(f));
