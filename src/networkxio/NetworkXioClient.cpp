@@ -550,35 +550,6 @@ int NetworkXioClient::on_msg_error_control(
   return 0;
 }
 
-int NetworkXioClient::on_msg_control(xio_session *session ATTRIBUTE_UNUSED,
-                                     xio_msg *reply,
-                                     int last_in_rxq ATTRIBUTE_UNUSED,
-                                     void *cb_user_context) {
-  XXEnter();
-  session_data *sdata = static_cast<session_data *>(cb_user_context);
-  xio_context *ctx = sdata->ctx;
-  NetworkXioMsg imsg;
-  try {
-    imsg.unpack_msg(static_cast<const char *>(reply->in.header.iov_base),
-                    reply->in.header.iov_len);
-  } catch (...) {
-    GLOG_ERROR("failed to unpack msg");
-    xio_release_response(reply);
-    return 0;
-  }
-  xio_ctl_s *xctl = reinterpret_cast<xio_ctl_s *>(imsg.opaque());
-  ovs_xio_complete_request_control(const_cast<void *>(xctl->xmsg.opaque),
-                                   imsg.retval(), imsg.errval());
-
-  reply->in.header.iov_base = NULL;
-  reply->in.header.iov_len = 0;
-  vmsg_sglist_set_nents(&reply->in, 0);
-  xio_release_response(reply);
-  xio_context_stop_loop(ctx);
-  XXExit();
-  return 0;
-}
-
 int
 NetworkXioClient::on_session_event_control(xio_session *session,
                                            xio_session_event_data *event_data,
@@ -605,43 +576,6 @@ NetworkXioClient::on_session_event_control(xio_session *session,
   }
   XXExit();
   return 0;
-}
-
-xio_connection *
-NetworkXioClient::create_connection_control(session_data *sdata,
-                                            const std::string &uri) {
-  XXEnter();
-  xio_connection *conn;
-  xio_session *session;
-  xio_session_params params;
-  xio_connection_params cparams;
-
-  xio_session_ops s_ops;
-  s_ops.on_session_event = on_session_event_control;
-  s_ops.on_session_established = NULL;
-  s_ops.on_msg = on_msg_control;
-  s_ops.on_msg_error = on_msg_error_control;
-  s_ops.assign_data_in_buf = NULL;
-
-  memset(&params, 0, sizeof(params));
-  params.type = XIO_SESSION_CLIENT;
-  params.ses_ops = &s_ops;
-  params.uri = uri.c_str();
-  params.user_context = sdata;
-
-  session = xio_session_create(&params);
-  if (not session) {
-    XXExit();
-    return nullptr;
-  }
-  memset(&cparams, 0, sizeof(cparams));
-  cparams.session = session;
-  cparams.ctx = sdata->ctx;
-  cparams.conn_user_context = sdata;
-
-  conn = xio_connect(&cparams);
-  XXExit();
-  return conn;
 }
 
 void NetworkXioClient::xio_msg_prepare(xio_msg_s *xmsg) {

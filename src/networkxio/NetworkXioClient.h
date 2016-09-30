@@ -164,12 +164,6 @@ private:
 
   template <class E> void set_exception_ptr(E e);
 
-  static xio_connection *create_connection_control(session_data *sdata,
-                                                   const std::string &uri);
-
-  static int on_msg_control(xio_session *session, xio_msg *reply,
-                            int last_in_rqx, void *cb_user_context);
-
   static int on_msg_error_control(xio_session *session, xio_status error,
                                   xio_msg_direction direction, xio_msg *msg,
                                   void *cb_user_context);
