@@ -92,7 +92,7 @@ public:
 
   void evfd_stop_loop(int fd, int events, void *data);
 
-  void run(std::promise<bool> &promise);
+  void run();
 
   bool is_queue_empty();
 
@@ -121,6 +121,10 @@ public:
   void update_stats(void *req, bool req_failed);
 
   const bool &is_disconnected() { return disconnected; }
+
+  void send_msg(xio_msg_s *xmsg);
+
+  void run_loop();
 
 private:
   std::shared_ptr<xio_context> ctx;

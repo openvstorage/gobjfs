@@ -75,7 +75,7 @@ void ovs_xio_aio_complete_request(void *opaque, ssize_t retval, int errval) {
   request->_failed = (retval < 0 ? true : false);
   request->_completed = true;
 
-  _xio_aio_wake_up_suspended_aiocb(request);
+  //_xio_aio_wake_up_suspended_aiocb(request); 
 
   if (cptr) {
     cptr->_rv = retval;
@@ -175,9 +175,13 @@ NetworkXioClient::NetworkXioClient(const std::string &uri, const uint64_t qd)
 
   xrefcnt_init();
 
-  std::promise<bool> promise;
-  std::future<bool> future(promise.get_future());
+  //std::promise<bool> promise;
+  //std::future<bool> future(promise.get_future());
 
+  run();
+  //future.wait();
+
+  /*
   try {
     xio_thread_ = std::thread([&]() {
       try {
@@ -199,20 +203,10 @@ NetworkXioClient::NetworkXioClient(const std::string &uri, const uint64_t qd)
     xio_thread_.join();
     throw XioClientCreateException("failed to create XIO worker thread");
   }
-
-  mpool = std::shared_ptr<xio_mempool>(
-      xio_mempool_create(-1, XIO_MEMPOOL_FLAG_REGULAR_PAGES_ALLOC),
-      xio_mempool_destroy);
-  if (mpool == nullptr) {
-    shutdown();
-    throw XioClientCreateException("failed to create XIO memory pool");
-  }
-  (void)xio_mempool_add_slab(mpool.get(), 4096, 0, queue_depth, 32, 0);
-  (void)xio_mempool_add_slab(mpool.get(), 32768, 0, 32, 32, 0);
-  (void)xio_mempool_add_slab(mpool.get(), 131072, 0, 8, 32, 0);
+  */
 }
 
-void NetworkXioClient::run(std::promise<bool> &promise) {
+void NetworkXioClient::run() {
   int xopt = 0;
   xio_set_opt(NULL, XIO_OPTLEVEL_ACCELIO, XIO_OPTNAME_ENABLE_FLOW_CONTROL,
               &xopt, sizeof(xopt));
@@ -243,11 +237,13 @@ void NetworkXioClient::run(std::promise<bool> &promise) {
     throw XioClientCreateException("failed to create XIO context");
   }
 
+  /*
   if (xio_context_add_ev_handler(ctx.get(), evfd, XIO_POLLIN,
                                  static_evfd_stop_loop<NetworkXioClient>,
                                  this)) {
     throw FailedRegisterEventHandler("failed to register event handler");
   }
+  */
 
   session = std::shared_ptr<xio_session>(xio_session_create(&params),
                                          xio_session_destroy);
@@ -266,18 +262,18 @@ void NetworkXioClient::run(std::promise<bool> &promise) {
     throw XioClientCreateException("failed to connect");
   }
 
-  auto fp = std::bind(&NetworkXioClient::xio_run_loop_worker, this,
-                      std::placeholders::_1);
-  pthread_setname_np(pthread_self(), "xio_run_loop_worker");
-  promise.set_value(true);
-  fp(this);
+  //auto fp = std::bind(&NetworkXioClient::xio_run_loop_worker, this,
+                      //std::placeholders::_1);
+  //pthread_setname_np(pthread_self(), "xio_run_loop_worker");
+  //promise.set_value(true);
+  //fp(this);
 }
 
 void NetworkXioClient::shutdown() {
   XXEnter();
   if (not stopped) {
     stopping = true;
-    xio_context_del_ev_handler(ctx.get(), evfd);
+    //xio_context_del_ev_handler(ctx.get(), evfd);
     xio_context_stop_loop(ctx.get());
     xio_thread_.join();
     while (not is_queue_empty()) {
@@ -435,6 +431,29 @@ int NetworkXioClient::on_session_event(xio_session *session
   return 0;
 }
 
+void NetworkXioClient::run_loop() {
+  int ret = xio_context_run_loop(ctx.get(), XIO_INFINITE);
+  assert(ret == 0);
+}
+
+void NetworkXioClient::send_msg(xio_msg_s *xmsg) {
+  int ret = 0;
+  do {
+    ret = xio_send_request(conn, &xmsg->xreq);
+    // TODO resend on approp xio_errno
+    // update_stats(const_cast<void *>(req->opaque), true);
+    // ovs_xio_aio_complete_request(const_cast<void *>(req->opaque), -1, EIO)
+    // delete req;
+    if (ret < 0) { 
+      update_stats(const_cast<void *>(xmsg->opaque), true);
+      ovs_xio_aio_complete_request(const_cast<void *>(xmsg->opaque), -1, EIO);
+      delete xmsg;
+    } else {
+      --nr_req_queue;
+    }
+  } while (ret < 0);
+}
+
 void NetworkXioClient::req_queue_wait_until(xio_msg_s *xmsg) {
   std::unique_lock<std::mutex> l_(req_queue_lock);
   if (--nr_req_queue <= 0) {
@@ -449,9 +468,9 @@ void NetworkXioClient::req_queue_wait_until(xio_msg_s *xmsg) {
 
 void NetworkXioClient::req_queue_release() {
   XXEnter();
-  std::unique_lock<std::mutex> l_(req_queue_lock);
+  //std::unique_lock<std::mutex> l_(req_queue_lock);
   nr_req_queue++;
-  req_queue_cond.notify_one();
+  //req_queue_cond.notify_one();
   XXExit();
 }
 
@@ -465,9 +484,10 @@ void NetworkXioClient::xio_send_open_request(const void *opaque) {
   // xmsg->msg.volume_name(volname);
 
   xio_msg_prepare(xmsg);
-  req_queue_wait_until(xmsg);
-  push_request(xmsg);
-  xstop_loop();
+  //req_queue_wait_until(xmsg);
+  //push_request(xmsg);
+  //xstop_loop();
+  send_msg(xmsg);
   XXExit();
 }
 
@@ -490,9 +510,10 @@ void NetworkXioClient::xio_send_read_request(const std::string &filename,
   vmsg_sglist_set_nents(&xmsg->xreq.in, 1);
   xmsg->xreq.in.data_iov.sglist[0].iov_base = buf;
   xmsg->xreq.in.data_iov.sglist[0].iov_len = size_in_bytes;
-  req_queue_wait_until(xmsg);
-  push_request(xmsg);
-  xstop_loop();
+  //req_queue_wait_until(xmsg);
+  //push_request(xmsg);
+  //xstop_loop();
+  send_msg(xmsg);
 }
 
 void NetworkXioClient::xio_send_close_request(const void *opaque) {
@@ -503,9 +524,10 @@ void NetworkXioClient::xio_send_close_request(const void *opaque) {
   xmsg->msg.opaque((uintptr_t)xmsg);
 
   xio_msg_prepare(xmsg);
-  req_queue_wait_until(xmsg);
-  push_request(xmsg);
-  xstop_loop();
+  //req_queue_wait_until(xmsg);
+  //push_request(xmsg);
+  //xstop_loop();
+  send_msg(xmsg);
   XXExit();
 }
 

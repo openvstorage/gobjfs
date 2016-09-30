@@ -226,7 +226,7 @@ struct ThreadCtx {
 
     while (queue.size() > maxAllowed) {
       auto free_comp = queue.front();
-      aio_wait_completion(free_comp, nullptr);
+      aio_wait_completion(ctx_ptr, free_comp, nullptr);
       aio_release_completion(free_comp);
       queue.pop_front();
     }

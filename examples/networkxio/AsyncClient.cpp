@@ -81,7 +81,7 @@ void NetworkServerWriteReadTest(bool use_completion) {
 
   // if completions are in use, wait for them
   for (auto &elem : cvec) {
-    aio_wait_completion(elem, nullptr);
+    aio_wait_completion(ctx, elem, nullptr);
     aio_release_completion(elem);
   }
 

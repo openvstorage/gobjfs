@@ -300,7 +300,6 @@ int aio_finish(client_ctx_ptr ctx, giocb *giocbp) {
 
 int aio_suspendv(client_ctx_ptr ctx, const std::vector<giocb *> &giocbp_vec,
                  const timespec *timeout) {
-  XXEnter();
   int r = 0;
   if (ctx == nullptr || giocbp_vec.size() == 0) {
     errno = EINVAL;
@@ -308,6 +307,7 @@ int aio_suspendv(client_ctx_ptr ctx, const std::vector<giocb *> &giocbp_vec,
     return (r = -1);
   }
 
+  /*
   auto cvp = giocbp_vec[0]->request_->_cvp;
 
   {
@@ -326,28 +326,37 @@ int aio_suspendv(client_ctx_ptr ctx, const std::vector<giocb *> &giocbp_vec,
     errno = EAGAIN;
     GLOG_DEBUG("TimeOut");
   }
+  */
 
-  for (auto& elem : giocbp_vec) {
-    if (elem->request_->_failed) {
-      // break out on first error
-      // let caller check individual error codes using aio_return
-      errno = elem->request_->_errno;
-      r = -1;
-      break;
+  bool more_work = false;
+  do {
+
+    more_work = false;
+    ctx->net_client_->run_loop();
+
+    for (auto& elem : giocbp_vec) {
+      if (not elem->request_->_completed) {
+        more_work = true;
+      } else if (elem->request_->_failed) {
+        // break out on first error
+        // let caller check individual error codes using aio_return
+        errno = elem->request_->_errno;
+        r = -1;
+        break;
+      }
     }
-  }
-  XXExit();
+  } while (more_work);
+
   return r;
 }
 
 int aio_suspend(client_ctx_ptr ctx, giocb *giocbp, const timespec *timeout) {
-  XXEnter();
   int r = 0;
   if (ctx == nullptr || giocbp == nullptr) {
     errno = EINVAL;
-    XXExit();
     return (r = -1);
   }
+  /*
   {
     if (timeout) {
       auto func = [&]() { return giocbp->request_->_signaled; };
@@ -367,7 +376,24 @@ int aio_suspend(client_ctx_ptr ctx, giocb *giocbp, const timespec *timeout) {
     errno = giocbp->request_->_errno;
     r = -1;
   }
-  XXExit();
+  */
+  bool more_work = false;
+  do {
+
+    more_work = false;
+    ctx->net_client_->run_loop();
+
+    if (not giocbp->request_->_completed) {
+      more_work = true;
+    } else if (giocbp->request_->_failed) {
+      // break out on first error
+      // let caller check individual error codes using aio_return
+      errno = giocbp->request_->_errno;
+      r = -1;
+      break;
+    }
+  } while (more_work);
+
   return r;
 }
 
@@ -437,6 +463,7 @@ ssize_t aio_return_completion(completion *completion) {
     return -1;
   }
 
+  assert(completion->_signaled == true);
   if (not completion->_calling) {
     return -1;
   } else {
@@ -449,7 +476,7 @@ ssize_t aio_return_completion(completion *completion) {
   }
 }
 
-int aio_wait_completion(completion *completion, const timespec *timeout) {
+int aio_wait_completion(client_ctx_ptr& ctx, completion *completion, const timespec *timeout) {
   int r = 0;
 
   if (completion == nullptr) {
@@ -457,7 +484,12 @@ int aio_wait_completion(completion *completion, const timespec *timeout) {
     return (r = -1);
   }
 
+  do {
+    // TODO pass timespec here
+    ctx->net_client_->run_loop();
+  } while (not completion->_signaled);
 
+  /*
   if (__sync_bool_compare_and_swap(&completion->_on_wait, false, true,
                                    __ATOMIC_RELAXED)) {
     std::unique_lock<std::mutex> l_(completion->_mutex);
@@ -486,6 +518,7 @@ int aio_wait_completion(completion *completion, const timespec *timeout) {
     r = -1;
     errno = EAGAIN;
   }
+  */
   return r;
 }
 
@@ -495,12 +528,15 @@ int aio_signal_completion(completion *completion) {
     errno = EINVAL;
     return -1;
   }
+  completion->_signaled = true;
+  /*
   if (not __sync_bool_compare_and_swap(&completion->_on_wait, false, true,
                                        __ATOMIC_RELAXED)) {
     std::unique_lock<std::mutex> l_(completion->_mutex);
     completion->_signaled = true;
     completion->_cond.notify_all();
   }
+  */
   return 0;
 }
 

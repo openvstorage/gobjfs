@@ -240,7 +240,7 @@ ssize_t aio_return_completion(completion *completion);
  * param timeout: Pointer to a timespec structure
  * return: 0 on success, -1 on fail
  */
-int aio_wait_completion(completion *completion, const timespec *timeout);
+int aio_wait_completion(client_ctx_ptr& ctx, completion *completion, const timespec *timeout);
 
 /*
  * Signal a suspended completion
