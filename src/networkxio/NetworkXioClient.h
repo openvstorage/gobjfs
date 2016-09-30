@@ -75,8 +75,6 @@ public:
 
   void xio_send_open_request(const void *opaque);
 
-  void xio_send_close_request(const void *opaque);
-
   void xio_send_read_request(const std::string &filename, void *buf,
                              const uint64_t size_in_bytes,
                              const uint64_t offset_in_bytes,
@@ -90,17 +88,7 @@ public:
   int on_msg_error(xio_session *session, xio_status error,
                    xio_msg_direction direction, xio_msg *msg);
 
-  void evfd_stop_loop(int fd, int events, void *data);
-
   void run();
-
-  bool is_queue_empty();
-
-  xio_msg_s *pop_request();
-
-  void push_request(xio_msg_s *req);
-
-  void xstop_loop();
 
   static void xio_destroy_ctx_shutdown(xio_context *ctx);
 
@@ -138,31 +126,15 @@ private:
   bool stopped{false};
   std::thread xio_thread_;
 
-  gobjfs::os::Spinlock inflight_lock;
-
-  std::queue<xio_msg_s *> inflight_reqs;
-
   xio_session_ops ses_ops;
   bool disconnected{false};
   bool disconnecting{false};
 
   int64_t nr_req_queue{0};
-  std::mutex req_queue_lock;
-  std::condition_variable req_queue_cond;
-
-  EventFD evfd;
-
-  std::shared_ptr<xio_mempool> mpool;
 
   void xio_run_loop_worker(void *arg);
 
-  void req_queue_wait_until(xio_msg_s *xmsg);
-
-  void req_queue_release();
-
   void shutdown();
-
-  template <class E> void set_exception_ptr(E e);
 
   static int on_msg_error_control(xio_session *session, xio_status error,
                                   xio_msg_direction direction, xio_msg *msg,

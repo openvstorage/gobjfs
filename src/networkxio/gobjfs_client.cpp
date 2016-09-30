@@ -454,36 +454,6 @@ int aio_wait_completion(client_ctx_ptr& ctx, completion *completion, const times
     ctx->net_client_->run_loop();
   } while (not completion->_signaled);
 
-  /*
-  if (__sync_bool_compare_and_swap(&completion->_on_wait, false, true,
-                                   __ATOMIC_RELAXED)) {
-    std::unique_lock<std::mutex> l_(completion->_mutex);
-
-    auto func = [&]() { return completion->_signaled; };
-
-    {
-      if (timeout) {
-        auto cv_stat = completion->_cond.wait_for(
-            l_,
-            std::chrono::nanoseconds(((uint64_t)timeout->tv_sec * 1000000000) +
-                                     timeout->tv_nsec),
-            func);
-
-        if (not cv_stat) {
-          r = ETIMEDOUT;
-        }
-      } else {
-        if (completion->_signaled == false) {
-          completion->_cond.wait(l_);
-        }
-      }
-    }
-  }
-  if (r == ETIMEDOUT) {
-    r = -1;
-    errno = EAGAIN;
-  }
-  */
   return r;
 }
 
@@ -494,14 +464,6 @@ int aio_signal_completion(completion *completion) {
     return -1;
   }
   completion->_signaled = true;
-  /*
-  if (not __sync_bool_compare_and_swap(&completion->_on_wait, false, true,
-                                       __ATOMIC_RELAXED)) {
-    std::unique_lock<std::mutex> l_(completion->_mutex);
-    completion->_signaled = true;
-    completion->_cond.notify_all();
-  }
-  */
   return 0;
 }
 
