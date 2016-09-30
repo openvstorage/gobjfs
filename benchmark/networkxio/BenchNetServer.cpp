@@ -44,10 +44,19 @@ but WITHOUT ANY WARRANTY of any kind.
 #include <boost/log/core.hpp>
 #include <boost/log/expressions.hpp>
 #include <boost/log/utility/setup/file.hpp>
+#include <boost/log/sinks/text_file_backend.hpp>
+#include <boost/log/utility/setup/common_attributes.hpp>
+#include <boost/log/sources/severity_logger.hpp>
+#include <boost/log/sources/record_ostream.hpp>
 
 using namespace boost::program_options;
 using namespace gobjfs::xio;
 using namespace std;
+
+namespace logging = boost::log;
+namespace src = boost::log::sources;
+namespace sinks = boost::log::sinks;
+namespace keywords = boost::log::keywords;
 
 struct Config {
 
@@ -122,13 +131,18 @@ int main(int argc, char *argv[]) {
   logging::core::get()->set_filter(logging::trivial::severity >=
       logging::trivial::info);
 
-  /**
-   * enable this when u figure out how to flush boost log periodically
-   * std::string logFileName(argv[0]);
-   * logFileName += std::string("_") + std::to_string(getpid()) + ".log";
-   * auto boost_log_sink = logging::add_file_log(logFileName);
-   * std::cout << "logs in " << logFileName << std::endl;
-   */
+  std::string logFileName(argv[0]);
+  logFileName += std::string("_") + std::to_string(getpid()) + ".log";
+	logging::add_file_log
+	(
+    keywords::file_name = logFileName,
+    keywords::rotation_size = 100 * 1024,
+    keywords::time_based_rotation = sinks::file::rotation_at_time_point(0, 0, 0), 
+    keywords::auto_flush = true,
+    keywords::format = "[%TimeStamp%]: %Message%"
+  );
+
+  std::cout << "logs in " << logFileName << std::endl;
 
   {
     struct stat statbuf;
