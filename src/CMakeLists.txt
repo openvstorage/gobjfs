@@ -16,7 +16,7 @@ set(SOURCES
 set(LIBRARY_LIST
   aio
 	boost_thread boost_system boost_program_options
-  boost_log 
+  boost_log  boost_log_setup
 	bz2 pthread rt z)
 
 add_library(gobjfs OBJECT ${SOURCES})
