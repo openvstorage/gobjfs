@@ -307,32 +307,10 @@ int aio_suspendv(client_ctx_ptr ctx, const std::vector<giocb *> &giocbp_vec,
     return (r = -1);
   }
 
-  /*
-  auto cvp = giocbp_vec[0]->request_->_cvp;
-
-  {
-    if (timeout) {
-      // TODO add func
-      if (cvp->wait_for(timeout) == std::cv_status::timeout) {
-        r = ETIMEDOUT;
-      }
-    } else {
-      cvp->wait();
-    }
-  }
-
-  if (r == ETIMEDOUT) {
-    r = -1;
-    errno = EAGAIN;
-    GLOG_DEBUG("TimeOut");
-  }
-  */
-
   bool more_work = false;
   do {
 
     more_work = false;
-    ctx->net_client_->run_loop();
 
     for (auto& elem : giocbp_vec) {
       if (not elem->request_->_completed) {
@@ -345,6 +323,11 @@ int aio_suspendv(client_ctx_ptr ctx, const std::vector<giocb *> &giocbp_vec,
         break;
       }
     }
+
+    if (more_work) {
+      ctx->net_client_->run_loop();
+    }
+
   } while (more_work);
 
   return r;
@@ -356,32 +339,10 @@ int aio_suspend(client_ctx_ptr ctx, giocb *giocbp, const timespec *timeout) {
     errno = EINVAL;
     return (r = -1);
   }
-  /*
-  {
-    if (timeout) {
-      auto func = [&]() { return giocbp->request_->_signaled; };
-      // TODO add func
-      if (giocbp->request_->_cvp->wait_for(timeout) == std::cv_status::timeout) {
-        r = ETIMEDOUT;
-      }
-    } else {
-      giocbp->request_->_cvp->wait();
-    }
-  }
-  if (r == ETIMEDOUT) {
-    r = -1;
-    errno = EAGAIN;
-    GLOG_DEBUG("TimeOut");
-  } else if (giocbp->request_->_failed) {
-    errno = giocbp->request_->_errno;
-    r = -1;
-  }
-  */
   bool more_work = false;
   do {
 
     more_work = false;
-    ctx->net_client_->run_loop();
 
     if (not giocbp->request_->_completed) {
       more_work = true;
@@ -391,6 +352,10 @@ int aio_suspend(client_ctx_ptr ctx, giocb *giocbp, const timespec *timeout) {
       errno = giocbp->request_->_errno;
       r = -1;
       break;
+    }
+
+    if (more_work) {
+      ctx->net_client_->run_loop();
     }
   } while (more_work);
 

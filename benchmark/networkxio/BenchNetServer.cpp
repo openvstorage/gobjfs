@@ -120,7 +120,7 @@ int main(int argc, char *argv[]) {
   // google::InitGoogleLogging(argv[0]); TODO logging
   namespace logging = boost::log;
   logging::core::get()->set_filter(logging::trivial::severity >=
-      logging::trivial::debug);
+      logging::trivial::info);
 
   /**
    * enable this when u figure out how to flush boost log periodically
