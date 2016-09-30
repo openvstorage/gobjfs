@@ -680,50 +680,6 @@ NetworkXioClient::create_connection_control(session_data *sdata,
   return conn;
 }
 
-void NetworkXioClient::xio_submit_request(const std::string &uri,
-                                          xio_ctl_s *xctl, void *opaque) {
-
-  XXEnter();
-  xrefcnt_init();
-
-  auto ctx = std::shared_ptr<xio_context>(xio_context_create(NULL, 0, -1),
-                                          xio_destroy_ctx_shutdown);
-  xctl->sdata.ctx = ctx.get();
-  xctl->sdata.disconnecting = false;
-  xctl->sdata.disconnected = false;
-  xio_connection *conn = create_connection_control(&xctl->sdata, uri);
-  if (conn == nullptr) {
-    ovs_xio_complete_request_control(opaque, -1, EIO);
-    XXExit();
-    return;
-  }
-
-  int ret = xio_send_request(conn, &xctl->xmsg.xreq);
-  if (ret < 0) {
-    ovs_xio_complete_request_control(opaque, -1, EIO);
-    goto exit;
-  }
-  xio_context_run_loop(ctx.get(), XIO_INFINITE);
-exit:
-  xio_disconnect(conn);
-  if (not xctl->sdata.disconnected) {
-    xctl->sdata.disconnecting = true;
-    xio_context_run_loop(ctx.get(), XIO_INFINITE);
-  } else {
-    xio_connection_destroy(conn);
-  }
-  XXExit();
-}
-
-void NetworkXioClient::create_vec_from_buf(xio_ctl_s *xctl,
-                                           xio_iovec_ex *sglist, int vec_size) {
-  uint64_t idx = 0;
-  for (int i = 0; i < vec_size; i++) {
-    assert(sglist);
-    xctl->vec->push_back(static_cast<char *>(sglist[0].iov_base) + idx);
-    idx += strlen(static_cast<char *>(sglist[0].iov_base)) + 1;
-  }
-}
 void NetworkXioClient::xio_msg_prepare(xio_msg_s *xmsg) {
   XXEnter();
   xmsg->s_msg = xmsg->msg.pack_msg();

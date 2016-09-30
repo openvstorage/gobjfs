@@ -178,13 +178,8 @@ private:
                                       xio_session_event_data *event_data,
                                       void *cb_user_context);
 
-  static void xio_submit_request(const std::string &uri, xio_ctl_s *xctl,
-                                 void *opaque);
-
   static void xio_msg_prepare(xio_msg_s *xmsg);
 
-  static void create_vec_from_buf(xio_ctl_s *xctl, xio_iovec_ex *sglist,
-                                  int vec_size);
 };
 
 typedef std::shared_ptr<NetworkXioClient> NetworkXioClientPtr;
