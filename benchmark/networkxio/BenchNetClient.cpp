@@ -488,7 +488,7 @@ int main(int argc, char *argv[]) {
       logging::trivial::info);
 
   std::string logFileName(argv[0]);
-  logFileName += std::string("_") + std::to_string(getpid()) + ".log";
+  logFileName += std::to_string(getpid()) + std::string("_%N.log");
   logging::add_file_log
   (
     keywords::file_name = logFileName,
