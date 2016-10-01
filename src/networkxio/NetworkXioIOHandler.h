@@ -35,8 +35,9 @@ namespace xio {
 
 class NetworkXioIOHandler {
 public:
-  NetworkXioIOHandler(IOExecServiceHandle serviceHandle,
-                      NetworkXioWorkQueuePtr wq);
+  NetworkXioIOHandler(IOExecServiceHandle serviceHandle, 
+      IOExecEventFdHandle eventHandle,
+      NetworkXioWorkQueuePtr wq);
 
   ~NetworkXioIOHandler();
 
@@ -49,8 +50,6 @@ public:
 
   void handle_request(NetworkXioRequest *req);
 
-  int gxio_completion_handler(int epollfd, int efd);
-
 private:
   void handle_open(NetworkXioRequest *req);
 
@@ -62,18 +61,12 @@ private:
 private:
   std::string configFileName_;
 
-  // owned by NetworkXioServer; do not delete
   IOExecServiceHandle serviceHandle_{nullptr};
 
   IOExecEventFdHandle eventHandle_{nullptr};
 
   NetworkXioWorkQueuePtr wq_;
 
-  int epollfd = -1;
-
-  std::thread ioCompletionThread;
-
-  gobjfs::os::ShutdownNotifier ioCompletionThreadShutdown;
 };
 
 typedef std::unique_ptr<NetworkXioIOHandler> NetworkXioIOHandlerPtr;
