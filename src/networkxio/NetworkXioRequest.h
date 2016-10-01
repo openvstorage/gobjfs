@@ -26,6 +26,8 @@ namespace gobjfs {
 namespace xio {
 
 struct Work;
+class NetworkXioServer;
+class NetworkXioIOHandler;
 
 typedef std::function<bool(Work *)> workitem_func_t;
 
@@ -62,20 +64,40 @@ struct NetworkXioRequest {
   void *private_data{nullptr};
 
   std::string s_msg;
+
+  explicit NetworkXioRequest(xio_msg* req,
+      NetworkXioClientData* clientData,
+      NetworkXioServer* server)
+    : xio_req(req)
+    , pClientData(clientData)
+  {
+    work.obj = server;
+  }
 };
 
-class NetworkXioServer;
-class NetworkXioIOHandler;
 
 struct NetworkXioClientData {
+
+  NetworkXioServer *ncd_server{nullptr};
+
   xio_session *ncd_session{nullptr};
   xio_connection *ncd_conn{nullptr};
   xio_mempool *ncd_mpool{nullptr};
+
   std::atomic<bool> ncd_disconnected{false};
   std::atomic<uint64_t> ncd_refcnt{0};
-  NetworkXioServer *ncd_server{nullptr};
+
   NetworkXioIOHandler *ncd_ioh{nullptr};
+
   std::list<NetworkXioRequest *> ncd_done_reqs;
+
+  explicit NetworkXioClientData(NetworkXioServer* server,
+      xio_session* session,
+      xio_connection* conn) 
+    : ncd_server(server)
+    , ncd_session(session)
+    , ncd_conn(conn)
+  {}
 };
 }
 } // namespace

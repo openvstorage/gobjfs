@@ -259,62 +259,49 @@ void NetworkXioServer::run(std::promise<void> &promise) {
   XXExit();
 }
 
-NetworkXioClientData *NetworkXioServer::allocate_client_data() {
-  try {
-    NetworkXioClientData *cd = new NetworkXioClientData();
-    cd->ncd_disconnected = false;
-    cd->ncd_refcnt = 0;
-    cd->ncd_mpool = xio_mpool.get();
-    cd->ncd_server = this;
-    return cd;
-  } catch (const std::bad_alloc &) {
-    return NULL;
-  }
-}
-
 int
 NetworkXioServer::create_session_connection(xio_session *session,
                                             xio_session_event_data *evdata) {
-  XXEnter();
 
-  NetworkXioClientData *cd = allocate_client_data();
+  NetworkXioClientData *cd = nullptr;
 
-  if (cd) {
-    try {
-      NetworkXioIOHandler *ioh_ptr =
-          new NetworkXioIOHandler(this->serviceHandle_, wq_);
-      cd->ncd_ioh = ioh_ptr;
-      cd->ncd_session = session;
-      cd->ncd_conn = evdata->conn;
-    } catch (...) {
-      GLOG_ERROR("cannot create IO handler");
+  try {
+    
+    cd = new NetworkXioClientData(this, session, evdata->conn);
+    cd->ncd_mpool = xio_mpool.get();
+
+    cd->ncd_ioh = new NetworkXioIOHandler(this->serviceHandle_, wq_);
+
+  } catch (...) {
+
+    GLOG_ERROR("cannot create client data or IO handler");
+    if (cd) { 
       delete cd;
-      return -1;
     }
-    xio_connection_attr xconattr;
-    xconattr.user_context = cd;
-    (void)xio_modify_connection(evdata->conn, &xconattr,
-                                XIO_CONNECTION_ATTR_USER_CTX);
-    XXExit();
-    return 0;
+    return -1;
+
   }
 
-  GLOG_ERROR("cannot allocate client data");
-  XXExit();
-  return -1;
+  xio_connection_attr xconattr;
+  xconattr.user_context = cd;
+  (void)xio_modify_connection(evdata->conn, &xconattr,
+                              XIO_CONNECTION_ATTR_USER_CTX);
+  return 0;
 }
 
-void NetworkXioServer::destroy_session_connection(
-    xio_session *session ATTRIBUTE_UNUSED, xio_session_event_data *evdata) {
-  XXEnter();
-  auto cd = static_cast<NetworkXioClientData *>(evdata->conn_user_context);
-  cd->ncd_disconnected = true;
-  if (!cd->ncd_refcnt) {
+void NetworkXioServer::destroy_client_data(NetworkXioClientData* cd) {
+  if (cd->ncd_disconnected && !cd->ncd_refcnt) {
     xio_connection_destroy(cd->ncd_conn);
     delete cd->ncd_ioh;
     delete cd;
   }
-  XXExit();
+}
+
+void NetworkXioServer::destroy_session_connection(
+    xio_session *session ATTRIBUTE_UNUSED, xio_session_event_data *evdata) {
+  auto cd = static_cast<NetworkXioClientData *>(evdata->conn_user_context);
+  cd->ncd_disconnected = true;
+  destroy_client_data(cd);
 }
 
 int NetworkXioServer::on_new_session(xio_session *session,
@@ -352,24 +339,8 @@ int NetworkXioServer::on_session_event(xio_session *session,
   return 0;
 }
 
-NetworkXioRequest *
-NetworkXioServer::allocate_request(NetworkXioClientData *pClientData,
-                                   xio_msg *xio_req) {
-  try {
-    NetworkXioRequest *req = new NetworkXioRequest;
-    req->xio_req = xio_req;
-    req->pClientData = pClientData;
-    req->work.obj = this;
-    req->from_pool = true;
-    req->pClientData->ncd_refcnt ++;
-    return req;
-  } catch (const std::bad_alloc &) {
-    return NULL;
-  }
-}
-
 void NetworkXioServer::deallocate_request(NetworkXioRequest *req) {
-  XXEnter();
+
   if ((req->op == NetworkXioMsgOpcode::ReadRsp) && req->data) {
     if (req->from_pool) {
       xio_mempool_free(&req->reg_mem);
@@ -377,21 +348,12 @@ void NetworkXioServer::deallocate_request(NetworkXioRequest *req) {
       xio_mem_free(&req->reg_mem);
     }
   }
-  free_request(req);
-  XXExit();
-}
 
-void NetworkXioServer::free_request(NetworkXioRequest *req) {
-  XXEnter();
-  NetworkXioClientData *clientData = req->pClientData;
-  clientData->ncd_refcnt--;
-  if (clientData->ncd_disconnected && !clientData->ncd_refcnt) {
-    xio_connection_destroy(clientData->ncd_conn);
-    delete clientData->ncd_ioh;
-    delete clientData;
-  }
+  NetworkXioClientData *cd = req->pClientData;
+  cd->ncd_refcnt--;
+  destroy_client_data(cd);
+
   delete req;
-  XXExit();
 }
 
 int NetworkXioServer::on_msg_send_complete(xio_session *session
@@ -446,16 +408,17 @@ int NetworkXioServer::on_request(xio_session *session ATTRIBUTE_UNUSED,
                                  xio_msg *xio_req,
                                  int last_in_rxq ATTRIBUTE_UNUSED,
                                  void *cb_user_ctx) {
-  XXEnter();
-  auto clientData = static_cast<NetworkXioClientData *>(cb_user_ctx);
-  NetworkXioRequest *req = allocate_request(clientData, xio_req);
-  if (req) {
+
+  try {
+    auto clientData = static_cast<NetworkXioClientData *>(cb_user_ctx);
+    NetworkXioRequest *req = new NetworkXioRequest(xio_req, clientData, this);
+    req->from_pool = true;
+    req->pClientData->ncd_refcnt ++;
     clientData->ncd_ioh->handle_request(req);
-  } else {
+  } catch (const std::bad_alloc &) {
     int ret = xio_cancel(xio_req, XIO_E_MSG_CANCELED);
     GLOG_ERROR("failed to allocate request, cancelling XIO request: " << ret);
   }
-  XXExit();
   return 0;
 }
 

@@ -116,14 +116,10 @@ private:
   void destroy_session_connection(xio_session *session,
                                   xio_session_event_data *event_data);
 
-  NetworkXioRequest *allocate_request(NetworkXioClientData *cd,
-                                      xio_msg *xio_req);
-
   void deallocate_request(NetworkXioRequest *req);
 
-  void free_request(NetworkXioRequest *req);
+  void destroy_client_data(NetworkXioClientData* cd);
 
-  NetworkXioClientData *allocate_client_data();
 };
 }
 } // namespace
