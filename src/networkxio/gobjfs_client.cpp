@@ -316,11 +316,10 @@ int aio_suspendv(client_ctx_ptr ctx, const std::vector<giocb *> &giocbp_vec,
       if (not elem->request_->_completed) {
         more_work = true;
       } else if (elem->request_->_failed) {
-        // break out on first error
-        // let caller check individual error codes using aio_return
+        // wait until all requests are complete
+        // otherwise proper error codes are not propagated
         errno = elem->request_->_errno;
         r = -1;
-        break;
       }
     }
 

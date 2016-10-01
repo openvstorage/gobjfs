@@ -341,6 +341,7 @@ void NetworkXioClient::send_msg(xio_msg_s *xmsg) {
       delete xmsg;
     } else {
       --nr_req_queue;
+      stats.num_queued ++;
     }
   } while (ret < 0);
 }
