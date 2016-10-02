@@ -69,12 +69,21 @@ template <class T>
 static int static_on_session_event(xio_session *session,
                                    xio_session_event_data *event_data,
                                    void *cb_user_context) {
-  XXEnter();
+  PortalData* portal_data = nullptr;
+
+  // this is how you disambiguate between global and portal event
+  if (event_data->conn_user_context == cb_user_context) {
+    // this is a global server event
+  } else {
+    // this is a portal event 
+    portal_data = (PortalData*)event_data->conn_user_context;
+  }
+
+  // TODO
   T *obj = reinterpret_cast<T *>(cb_user_context);
   if (obj == NULL) {
     return -1;
   }
-  XXExit();
   return obj->on_session_event(session, event_data);
 }
 
@@ -128,16 +137,54 @@ static void static_evfd_stop_loop(int fd, int events, void *data) {
   XXExit();
 }
 
-NetworkXioServer::NetworkXioServer(const std::string &uri,
+static struct xio_session_ops server_ops = {
+  .on_session_event = static_on_session_event<NetworkXioServer>,
+  .on_new_session = static_on_new_session<NetworkXioServer>,
+  .on_msg_send_complete = NULL,
+  .on_msg = NULL,
+  .assign_data_in_buf = NULL,
+  .on_msg_error = NULL
+};
+
+static struct xio_session_ops portal_ops = {
+  .on_session_event = NULL,
+  .on_new_session = NULL,
+  .on_msg_send_complete = static_on_msg_send_complete<NetworkXioClientData>,
+  .on_msg = static_on_request<NetworkXioClientData>,
+};
+
+
+void portal_func(void* data) {
+  PortalData* portal = (PortalData*)data;
+  
+  portal->ctx = xio_context_create(NULL, 0, -1);
+
+  xio_server* server = xio_bind(portal->ctx, &portal_ops, portal->uri_,
+      NULL, 0, portal);
+
+  xio_context_run_loop(portal->ctx, XIO_INFINITE);
+
+  xio_unbind(server);
+
+  xio_context_destroy(portal->ctx);
+}
+
+NetworkXioServer::NetworkXioServer(const std::string &transport,
+                                    const std::string &ipaddr,
+                                    int port,
                                    int32_t numCoresForIO,
                                    int32_t queueDepthForIO,
                                    FileTranslatorFunc fileTranslatorFunc,
                                    bool newInstance, size_t snd_rcv_queue_depth)
-    : uri_(uri), numCoresForIO_(numCoresForIO),
+    : transport_(transport),
+      ipaddr_(ipaddr),
+      port_(port), 
+      numCoresForIO_(numCoresForIO),
       queueDepthForIO_(queueDepthForIO),
       fileTranslatorFunc_(fileTranslatorFunc), newInstance_(newInstance),
       stopping(false), stopped(false), evfd(),
       queue_depth(snd_rcv_queue_depth) {}
+
 
 void NetworkXioServer::xio_destroy_ctx_shutdown(xio_context *ctx) {
   xio_context_destroy(ctx);
@@ -354,18 +401,11 @@ void NetworkXioServer::run(std::promise<void> &promise) {
     throw FailedCreateXioContext("failed to create XIO context");
   }
 
-  xio_session_ops xio_s_ops;
-  xio_s_ops.on_session_event = static_on_session_event<NetworkXioServer>;
-  xio_s_ops.on_new_session = static_on_new_session<NetworkXioServer>;
-  xio_s_ops.on_msg_send_complete =
-      static_on_msg_send_complete<NetworkXioClientData>;
-  xio_s_ops.on_msg = static_on_request<NetworkXioClientData>;
-  xio_s_ops.assign_data_in_buf = NULL;
-  xio_s_ops.on_msg_error = NULL;
+  std::string uri = transport_ + "://" + ipaddr_ + ":" + std::to_string(port_);
 
-  GLOG_INFO("bind XIO server to '" << uri_ << "'");
+  GLOG_INFO("bind XIO server to '" << uri << "'");
   server = std::shared_ptr<xio_server>(
-      xio_bind(ctx.get(), &xio_s_ops, uri_.c_str(), NULL, 0, this), xio_unbind);
+      xio_bind(ctx.get(), &server_ops, uri.c_str(), NULL, 0, this), xio_unbind);
   if (server == nullptr) {
     throw FailedBindXioServer("failed to bind XIO server");
   }
@@ -403,15 +443,33 @@ void NetworkXioServer::run(std::promise<void> &promise) {
                              DirectIOSize);
   (void)xio_mempool_add_slab(xio_mpool.get(), 131072, 0, 256, 32, DirectIOSize);
   (void)xio_mempool_add_slab(xio_mpool.get(), 1048576, 0, 32, 4, DirectIOSize);
+
+
+  // create multiple ports for load-balancing
+  // tie a thread to each port
+  // then xio_accept() will decide which port+thread to use for a new connection
+  for (int i = 0; i < MAX_PORTAL_THREADS; i++) {
+    std::string uri = transport_ + "://" + ipaddr_ + ":" + std::to_string(port_ + i + 1);
+    portals_[i].uri_ = uri;
+    portals_[i].thread_ = std::thread(portal_func, &portals_[i]);
+  }
+
   promise.set_value();
+
   while (not stopping) {
     int ret = xio_context_run_loop(ctx.get(), XIO_INFINITE);
     // VERIFY(ret == 0);
     assert(ret == 0);
+    // TODO : move reply work to portals
     while (not wq_->is_finished_empty()) {
       xio_send_reply(wq_->get_finished());
     }
   }
+
+  for (int i = 0; i < MAX_PORTAL_THREADS; i++) {
+    portals_[i].thread_.join();
+  }
+
   server.reset();
   ctx.reset();
   xio_mpool.reset();
@@ -477,31 +535,51 @@ void NetworkXioServer::destroy_session_connection(
 
 int NetworkXioServer::on_new_session(xio_session *session,
                                      xio_new_session_req * /*req*/) {
-  XXEnter();
-  if (xio_accept(session, NULL, 0, NULL, 0) < 0) {
+
+  const char* portal_array[MAX_PORTAL_THREADS];
+
+  for (int i = 0; i < MAX_PORTAL_THREADS; i++) {
+    portal_array[i] = portals_[i].uri_.c_str();
+  }
+
+  if (xio_accept(session, portal_array, MAX_PORTAL_THREADS, NULL, 0) < 0) {
     GLOG_ERROR(
         "cannot accept new session, error: " << xio_strerror(xio_errno()));
   }
+
   GLOG_DEBUG("Got a new connection request");
-  XXExit();
   return 0;
 }
 
 int NetworkXioServer::on_session_event(xio_session *session,
                                        xio_session_event_data *event_data) {
-  XXEnter();
+
   switch (event_data->event) {
   case XIO_SESSION_NEW_CONNECTION_EVENT:
+    // signals a new connection for existing session 
     GLOG_DEBUG("Received XIO_SESSION_NEW_CONNECTION_EVENT ");
     create_session_connection(session, event_data);
+    if (portal_data) {
+      // TODO 
+      portal_data->connection = event_data->conn;
+    }
     break;
   case XIO_SESSION_CONNECTION_TEARDOWN_EVENT:
+    // signals loss of a connection within existing session
     GLOG_DEBUG("Received XIO_SESSION_CONNECTION_TEARDOWN_EVENT ");
     destroy_session_connection(session, event_data);
+    if (portal_data) {
+      portal_data->connection = NULL;
+    }
     break;
   case XIO_SESSION_TEARDOWN_EVENT:
+    // signals loss of session
     GLOG_DEBUG("Received XIO_SESSION_TEARDOWN_EVENT ");
     xio_session_destroy(session);
+    for (int i = 0; i < MAX_PORTAL_THREADS; i++) {
+      xio_context_stop_loop(portal_data[i].ctx);
+    }
+    xio_context_stop_loop(ctx.get());
     break;
   default:
     break;
@@ -531,13 +609,11 @@ int NetworkXioServer::on_msg_send_complete(xio_session *session
                                                ATTRIBUTE_UNUSED,
                                            xio_msg *msg ATTRIBUTE_UNUSED,
                                            void *cb_user_ctx) {
-  XXEnter();
   NetworkXioClientData *clientData =
       static_cast<NetworkXioClientData *>(cb_user_ctx);
   NetworkXioRequest *req = clientData->ncd_done_reqs.front();
   clientData->ncd_done_reqs.pop_front();
   deallocate_request(req);
-  XXExit();
   return 0;
 }
 

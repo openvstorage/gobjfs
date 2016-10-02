@@ -39,12 +39,26 @@ MAKE_EXCEPTION(FailedCreateXioMempool);
 
 class NetworkXioClientData;
 
+#define MAX_PORTAL_THREADS 4
+/**
+ * Each thread is bound to a portal (port)
+ */
+struct PortalData {
+  std::string uri_;
+  xio_context *ctx_;
+  xio_connection *connection_;
+}
+
 class NetworkXioServer {
 public:
-  NetworkXioServer(const std::string &uri, int32_t numCoresForIO,
-                   int32_t queueDepthForIO,
-                   FileTranslatorFunc fileTranslatorFunc, bool newInstance,
-                   size_t snd_rcv_queue_depth = 256);
+  NetworkXioServer(const std::string &transport, 
+      const std::string &ipaddr,
+      int port,
+      int32_t numCoresForIO,
+      int32_t queueDepthForIO,
+      FileTranslatorFunc fileTranslatorFunc, 
+      bool newInstance,
+      size_t snd_rcv_queue_depth = 256);
 
   ~NetworkXioServer();
 
@@ -81,7 +95,12 @@ public:
 private:
   //    DECLARE_LOGGER("NetworkXioServer");
 
-  std::string uri_;
+  std::string transport_;
+  std::string ipaddr_;
+  int port_{-1};
+
+  PortalData portals_[MAX_PORTAL_THREADS];
+
   std::string configFileName_;
 
   int32_t numCoresForIO_{0};
