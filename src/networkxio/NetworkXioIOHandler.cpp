@@ -24,7 +24,7 @@ but WITHOUT ANY WARRANTY of any kind.
 #include "NetworkXioIOHandler.h"
 #include <networkxio/NetworkXioCommon.h>
 #include "NetworkXioProtocol.h"
-#include "NetworkXioWorkQueue.h"
+#include "NetworkXioServer.h"
 
 using namespace std;
 namespace gobjfs {
@@ -40,11 +40,9 @@ static inline void pack_msg(NetworkXioRequest *req) {
 }
 
 NetworkXioIOHandler::NetworkXioIOHandler(IOExecServiceHandle serviceHandle, 
-    IOExecEventFdHandle eventHandle,
-    NetworkXioWorkQueuePtr wq)
+    IOExecEventFdHandle eventHandle)
     : serviceHandle_(serviceHandle)
-    , eventHandle_(eventHandle)
-    , wq_(wq) {}
+    , eventHandle_(eventHandle) {}
 
 NetworkXioIOHandler::~NetworkXioIOHandler() {
 }
@@ -65,7 +63,6 @@ int NetworkXioIOHandler::handle_read(NetworkXioRequest *req,
                                      off_t offset) {
   int ret = 0;
   req->op = NetworkXioMsgOpcode::ReadRsp;
-  req->req_wq = (void *)this->wq_.get();
 #ifdef BYPASS_READ
   { 
     req->retval = size;
@@ -99,7 +96,6 @@ int NetworkXioIOHandler::handle_read(NetworkXioRequest *req,
   }
 
   GLOG_DEBUG("Received read request for object "
-     << " wq_ptr=" << req->req_wq 
      << " file=" << filename 
      << " at offset=" << offset 
      << " for size=" << size);
@@ -159,7 +155,6 @@ void NetworkXioIOHandler::handle_error(NetworkXioRequest *req, int errval) {
  */
 bool NetworkXioIOHandler::process_request(NetworkXioRequest *req) {
   bool finishNow = true;
-  NetworkXioWorkQueue *pWorkQueue = NULL;
   xio_msg *xio_req = req->xio_req;
   xio_iovec_ex *isglist = vmsg_sglist(&xio_req->in);
   int inents = vmsg_sglist_nents(&xio_req->in);
@@ -200,8 +195,12 @@ bool NetworkXioIOHandler::process_request(NetworkXioRequest *req) {
 }
 
 void NetworkXioIOHandler::handle_request(NetworkXioRequest *req) {
-  req->work.func = std::bind(&NetworkXioIOHandler::process_request, this, req);
-  wq_->work_schedule(req);
+  auto ret =  process_request(req);
+  if (ret == true) {
+    // this means request has error and can be immediately
+    // sent back to client
+    req->pClientData->ncd_server->worker_bottom_half(req); 
+  }
 }
 }
 } // namespace gobjfs

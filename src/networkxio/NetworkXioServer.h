@@ -24,10 +24,12 @@ but WITHOUT ANY WARRANTY of any kind.
 #include <memory>
 #include <libxio.h>
 #include <iostream>
+#include <queue>
 #include <atomic>
 #include <networkxio/NetworkXioIOHandler.h>
-#include <networkxio/NetworkXioWorkQueue.h>
 #include <networkxio/NetworkXioRequest.h>
+#include <networkxio/gobjfs_client_common.h>
+#include <util/Spinlock.h>
 
 namespace gobjfs {
 namespace xio {
@@ -78,6 +80,8 @@ public:
 
   static void xio_destroy_ctx_shutdown(xio_context *ctx);
 
+  void worker_bottom_half(NetworkXioRequest *req);
+
 private:
   //    DECLARE_LOGGER("NetworkXioServer");
 
@@ -100,11 +104,10 @@ private:
   std::mutex mutex_;
   std::condition_variable cv_;
 
-  EventFD evfd;
+  gobjfs::os::Spinlock finished_lock;
+  std::queue<NetworkXioRequest *> finished;
 
   int queue_depth{0};
-
-  NetworkXioWorkQueuePtr wq_;
 
   std::shared_ptr<xio_context> ctx;
   std::shared_ptr<xio_server> server;
@@ -119,6 +122,7 @@ private:
   void deallocate_request(NetworkXioRequest *req);
 
   void destroy_client_data(NetworkXioClientData* cd);
+
 
   // Disk IO related structures
   struct Disk {

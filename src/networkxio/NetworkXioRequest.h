@@ -19,9 +19,10 @@ but WITHOUT ANY WARRANTY of any kind.
 
 #include <libxio.h>
 #include <functional>
+#include <atomic>
+#include <list>
 #include <networkxio/NetworkXioCommon.h>
 
-#include <list>
 namespace gobjfs {
 namespace xio {
 
@@ -40,8 +41,6 @@ struct NetworkXioClientData;
 
 struct NetworkXioRequest {
   NetworkXioMsgOpcode op{NetworkXioMsgOpcode::Noop};
-
-  void *req_wq{nullptr};
 
   void *data{nullptr};
   unsigned int data_len{0}; // DataLen of buffer pointed by data

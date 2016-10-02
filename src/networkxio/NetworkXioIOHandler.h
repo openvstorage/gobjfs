@@ -17,7 +17,6 @@ but WITHOUT ANY WARRANTY of any kind.
 */
 #pragma once
 
-#include "NetworkXioWorkQueue.h"
 #include "NetworkXioRequest.h"
 
 #include <util/ShutdownNotifier.h>
@@ -36,8 +35,7 @@ namespace xio {
 class NetworkXioIOHandler {
 public:
   NetworkXioIOHandler(IOExecServiceHandle serviceHandle, 
-      IOExecEventFdHandle eventHandle,
-      NetworkXioWorkQueuePtr wq);
+      IOExecEventFdHandle eventHandle);
 
   ~NetworkXioIOHandler();
 
@@ -64,8 +62,6 @@ private:
   IOExecServiceHandle serviceHandle_{nullptr};
 
   IOExecEventFdHandle eventHandle_{nullptr};
-
-  NetworkXioWorkQueuePtr wq_;
 
 };
 
