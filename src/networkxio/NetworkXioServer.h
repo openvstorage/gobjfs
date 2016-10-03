@@ -77,7 +77,7 @@ public:
 
   void shutdown();
 
-  void xio_send_reply(NetworkXioRequest *req);
+  void send_reply(NetworkXioRequest *req);
 
   void evfd_stop_loop(int fd, int events, void *data);
 
@@ -104,8 +104,10 @@ private:
   // owned by NetworkXioServer
   IOExecServiceHandle serviceHandle_{nullptr};
 
+public: // TODO
   bool stopping{false};
   bool stopped{false};
+private:
 
   std::mutex mutex_;
   std::condition_variable cv_;

@@ -142,14 +142,18 @@ static void static_evfd_stop_loop(int fd, int events, void *data) {
   XXExit();
 }
 
-
-
+// TODO make it a member func of ClientData
 void portal_func(void* data) {
   NetworkXioClientData* cd = (NetworkXioClientData*)data;
   
   // add cpu affinity later
   cd->ncd_ctx = xio_context_create(NULL, 0, -1);
 
+  if (xio_context_add_ev_handler(cd->ncd_ctx, cd->evfd, XIO_POLLIN,
+                                 static_evfd_stop_loop<NetworkXioClientData>,
+                                 cd)) {
+    throw FailedRegisterEventHandler("failed to register event handler");
+  }
 
   xio_session_ops portal_ops;
   portal_ops.on_session_event = NULL;
@@ -162,7 +166,14 @@ void portal_func(void* data) {
 
   GLOG_INFO("started portal func at " << gettid());
 
-  xio_context_run_loop(cd->ncd_ctx, XIO_INFINITE);
+  while (not cd->ncd_server->stopping) {
+    xio_context_run_loop(cd->ncd_ctx, XIO_INFINITE);
+    while (not cd->is_finished_empty()) {
+      cd->ncd_server->send_reply(cd->get_finished());
+    }
+  }
+
+  // TODO drop_ev_handler
 
   xio_unbind(cd->ncd_xio_server);
 
@@ -182,7 +193,7 @@ NetworkXioServer::NetworkXioServer(const std::string &transport,
       numCoresForIO_(numCoresForIO),
       queueDepthForIO_(queueDepthForIO),
       fileTranslatorFunc_(fileTranslatorFunc), newInstance_(newInstance),
-      stopping(false), stopped(false), evfd(),
+      stopping(false), stopped(false), 
       queue_depth(snd_rcv_queue_depth) {}
 
 
@@ -314,9 +325,9 @@ int NetworkXioServer::Disk::runEventHandler(int efd) {
 
         pack_msg(pXioReq);
 
-        NetworkXioWorkQueue *pWorkQueue =
-            reinterpret_cast<NetworkXioWorkQueue *>(pXioReq->req_wq);
-        pWorkQueue->worker_bottom_half(pWorkQueue, pXioReq);
+        NetworkXioClientData *cd =
+            reinterpret_cast<NetworkXioClientData *>(pXioReq->pClientData);
+        cd->worker_bottom_half(pXioReq);
       } break;
 
       default: {
@@ -419,21 +430,13 @@ void NetworkXioServer::run(std::promise<void> &promise) {
     throw FailedBindXioServer("failed to bind XIO server");
   }
 
-  if (xio_context_add_ev_handler(ctx.get(), evfd, XIO_POLLIN,
-                                 static_evfd_stop_loop<NetworkXioServer>,
-                                 this)) {
-    throw FailedRegisterEventHandler("failed to register event handler");
-  }
-
   try {
-    wq_ = std::make_shared<NetworkXioWorkQueue>("ovs_xio_wq", evfd, numCoresForIO_);
+    wq_ = std::make_shared<NetworkXioWorkQueue>("ovs_xio_wq", numCoresForIO_);
   } catch (const WorkQueueThreadsException &) {
     GLOG_FATAL("failed to create workqueue thread pool");
-    xio_context_del_ev_handler(ctx.get(), evfd);
     throw;
   } catch (const std::bad_alloc &) {
     GLOG_FATAL("failed to allocate requested storage space for workqueue");
-    xio_context_del_ev_handler(ctx.get(), evfd);
     throw;
   }
 
@@ -441,7 +444,6 @@ void NetworkXioServer::run(std::promise<void> &promise) {
       xio_mempool_create(-1, XIO_MEMPOOL_FLAG_REG_MR), xio_mempool_destroy);
   if (xio_mpool == nullptr) {
     GLOG_FATAL("failed to create XIO memory pool");
-    xio_context_del_ev_handler(ctx.get(), evfd);
     throw FailedCreateXioMempool("failed to create XIO memory pool");
   }
   (void)xio_mempool_add_slab(xio_mpool.get(), 4096, 0, queue_depth, 32,
@@ -460,6 +462,7 @@ void NetworkXioServer::run(std::promise<void> &promise) {
   for (int i = 0; i < MAX_PORTAL_THREADS; i++) {
     std::string uri = transport_ + "://" + ipaddr_ + ":" + std::to_string(port_ + i + 1);
     cd_[i].ncd_uri = uri;
+    cd_[i].ncd_server = this;
     cd_[i].ncd_thread = std::thread(portal_func, &cd_[i]);
   }
 
@@ -469,10 +472,6 @@ void NetworkXioServer::run(std::promise<void> &promise) {
     int ret = xio_context_run_loop(ctx.get(), XIO_INFINITE);
     // VERIFY(ret == 0);
     assert(ret == 0);
-    // TODO : move reply work to portals and also stop_loop
-    while (not wq_->is_finished_empty()) {
-      xio_send_reply(wq_->get_finished());
-    }
   }
 
   for (int i = 0; i < MAX_PORTAL_THREADS; i++) {
@@ -633,7 +632,7 @@ int NetworkXioServer::on_msg_send_complete(xio_session *session
   return 0;
 }
 
-void NetworkXioServer::xio_send_reply(NetworkXioRequest *req) {
+void NetworkXioServer::send_reply(NetworkXioRequest *req) {
   XXEnter();
   xio_msg *xio_req = req->xio_req;
 
@@ -672,8 +671,6 @@ int NetworkXioServer::on_request(xio_session *session ATTRIBUTE_UNUSED,
                                  int last_in_rxq ATTRIBUTE_UNUSED,
                                  void *cb_user_ctx) {
 
-  GLOG_INFO("got request at " << gettid());
-
   try {
     auto clientData = static_cast<NetworkXioClientData *>(cb_user_ctx);
     NetworkXioRequest *req = new NetworkXioRequest(xio_req, clientData, this);
@@ -692,7 +689,7 @@ void NetworkXioServer::shutdown() {
   if (not stopped) {
     wq_->shutdown();
     stopping = true;
-    xio_context_del_ev_handler(ctx.get(), evfd);
+    // TODO STOP all portal loops ?
     xio_context_stop_loop(ctx.get());
     {
       std::unique_lock<std::mutex> lock_(mutex_);

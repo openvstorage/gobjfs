@@ -30,6 +30,8 @@ but WITHOUT ANY WARRANTY of any kind.
 #include "NetworkXioClient.h"
 #include "gobjfs_getenv.h"
 
+static constexpr int MAX_PORTAL_THREADS = 4;
+
 static constexpr int POLLING_TIME_USEC_DEFAULT = 0;
 // From accelio manual
 // polling_timeout_us: Defines how much to do receive-side-polling before yielding the CPU 
@@ -216,6 +218,7 @@ void NetworkXioClient::run() {
   cparams.session = session.get();
   cparams.ctx = ctx.get();
   cparams.conn_user_context = this;
+  cparams.conn_idx = gettid() % MAX_PORTAL_THREADS; // TODO configurable
 
   conn = xio_connect(&cparams);
   if (conn == nullptr) {

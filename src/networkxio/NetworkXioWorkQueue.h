@@ -27,11 +27,9 @@ but WITHOUT ANY WARRANTY of any kind.
 #include <chrono>
 #include <string>
 #include <queue>
-#include <boost/thread/lock_guard.hpp>
 
 #include <networkxio/gobjfs_client_common.h>
 #include <networkxio/NetworkXioRequest.h>
-#include <util/Spinlock.h>
 
 namespace gobjfs {
 namespace xio {
@@ -40,9 +38,9 @@ MAKE_EXCEPTION(WorkQueueThreadsException);
 
 class NetworkXioWorkQueue {
 public:
-  NetworkXioWorkQueue(const std::string &name, EventFD &evfd_, int32_t numCoresForIO)
+  NetworkXioWorkQueue(const std::string &name, int32_t numCoresForIO)
       : name_(name), nr_threads_(0), nr_queued_work(0),
-        protection_period_(5000), stopping(false), stopped(false), evfd(evfd_) {
+        protection_period_(5000), stopping(false), stopped(false) {
     XXEnter();
     using namespace std;
     int ret = create_workqueue_threads(numCoresForIO);
@@ -82,28 +80,6 @@ public:
 
   void queued_work_dec() { nr_queued_work--; }
 
-  void worker_bottom_half(NetworkXioWorkQueue *wq, NetworkXioRequest *req) {
-    XXEnter();
-    boost::lock_guard<decltype(finished_lock)> lock_(finished_lock);
-    wq->finished.push(req);
-    wq->xstop_loop(wq);
-    GLOG_DEBUG("Pushed request to finishedqueue");
-    XXExit();
-  }
-  NetworkXioRequest *get_finished() {
-    XXEnter();
-    boost::lock_guard<decltype(finished_lock)> lock_(finished_lock);
-    NetworkXioRequest *req = finished.front();
-    finished.pop();
-    XXExit();
-    return req;
-  }
-
-  bool is_finished_empty() {
-    boost::lock_guard<decltype(finished_lock)> lock_(finished_lock);
-    return finished.empty();
-  }
-
 private:
   std::string name_;
   std::atomic<size_t> nr_threads_;
@@ -112,9 +88,6 @@ private:
   std::mutex inflight_lock;
   std::queue<NetworkXioRequest *> inflight_queue;
 
-  gobjfs::os::Spinlock finished_lock;
-
-  std::queue<NetworkXioRequest *> finished;
 
   std::atomic<size_t> nr_queued_work;
 
@@ -123,13 +96,6 @@ private:
 
   bool stopping{false};
   bool stopped{false};
-  EventFD &evfd;
-
-  void xstop_loop(NetworkXioWorkQueue *wq) {
-    XXEnter();
-    wq->evfd.writefd();
-    XXExit();
-  }
 
   std::chrono::steady_clock::time_point get_time_point() {
     return std::chrono::steady_clock::now();
@@ -226,11 +192,7 @@ private:
       // push in finished queue right here
       // response is sent and request gets freed
       if (finishNow) {
-        boost::lock_guard<decltype(finished_lock)> lock_(finished_lock);
-        finished.push(req);
-        GLOG_DEBUG("Pushed request to finishedqueue. ReqType is "
-                   << (int)req->op);
-        xstop_loop(this);
+        req->pClientData->worker_bottom_half(req);
       }
     }
     XXExit();

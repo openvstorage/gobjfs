@@ -17,11 +17,13 @@ but WITHOUT ANY WARRANTY of any kind.
 */
 #pragma once
 
-#include <libxio.h>
-#include <functional>
-#include <networkxio/NetworkXioCommon.h>
-
 #include <list>
+#include <functional>
+#include <boost/thread/lock_guard.hpp>
+#include <libxio.h>
+#include <networkxio/NetworkXioCommon.h>
+#include <util/Spinlock.h>
+
 namespace gobjfs {
 namespace xio {
 
@@ -65,6 +67,8 @@ struct NetworkXioRequest {
 
   std::string s_msg;
 
+  inline void stop_loop();
+
   explicit NetworkXioRequest(xio_msg* req,
       NetworkXioClientData* clientData,
       NetworkXioServer* server)
@@ -97,7 +101,39 @@ struct NetworkXioClientData {
 
   std::list<NetworkXioRequest *> ncd_done_reqs;
 
+  EventFD evfd;
+
+  gobjfs::os::Spinlock finished_lock;
+  std::queue<NetworkXioRequest *> finished;
+
   explicit NetworkXioClientData() {}
+
+  void evfd_stop_loop(int /*fd*/, int /*events*/, void * /*data*/) {
+    evfd.readfd();
+    xio_context_stop_loop(ncd_ctx);
+  }
+
+  void worker_bottom_half(NetworkXioRequest *req) {
+    boost::lock_guard<decltype(finished_lock)> lock_(finished_lock);
+    finished.push(req);
+    req->stop_loop();
+    //lock_.unlock();
+    GLOG_DEBUG("Pushed request to finishedqueue. ReqType is "
+                   << (int)req->op);
+  }
+
+  NetworkXioRequest *get_finished() {
+    boost::lock_guard<decltype(finished_lock)> lock_(finished_lock);
+    NetworkXioRequest *req = finished.front();
+    finished.pop();
+    return req;
+  }
+
+  bool is_finished_empty() {
+    boost::lock_guard<decltype(finished_lock)> lock_(finished_lock);
+    return finished.empty();
+  }
+
 
   /*
   explicit NetworkXioClientData(NetworkXioServer* server,
@@ -109,5 +145,11 @@ struct NetworkXioClientData {
   {}
   */
 };
+
+inline void NetworkXioRequest::stop_loop()
+{
+  pClientData->evfd.writefd();
+} 
+
 }
 } // namespace
