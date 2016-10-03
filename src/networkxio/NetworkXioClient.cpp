@@ -70,8 +70,8 @@ static inline std::shared_ptr<xio_session> getSession(const std::string& uri,
     // session does not exist, create one
     auto session = std::shared_ptr<xio_session>(xio_session_create(&session_params),
                                          dbg_xio_session_destroy);
-    auto insertIter = sessionMap.insert(std::make_pair(uri, session));
-    assert(insertIter.second == true); // insert succeded
+    //auto insertIter = sessionMap.insert(std::make_pair(uri, session));
+    //assert(insertIter.second == true); // insert succeded
     GLOG_INFO("session=" << (void*)session.get() << " created for " << uri);
     retptr = session;
   } else {
