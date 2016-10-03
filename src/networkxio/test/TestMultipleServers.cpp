@@ -58,7 +58,8 @@ public:
 
   MultiServerTest() {
     for (size_t idx = 0; idx < NUM_SERVERS; idx++) {
-      portNumber[idx] = FIRST_PORT + idx;
+      // need to space ports apart because portals take up consecutive ports
+      portNumber[idx] = FIRST_PORT + (100 * idx);
     }
   }
 

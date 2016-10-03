@@ -26,7 +26,6 @@ but WITHOUT ANY WARRANTY of any kind.
 #include <iostream>
 #include <atomic>
 #include <networkxio/NetworkXioIOHandler.h>
-#include <networkxio/NetworkXioWorkQueue.h>
 #include <networkxio/NetworkXioRequest.h>
 #include <networkxio/gobjfs_config.h>
 
@@ -114,8 +113,6 @@ private:
   EventFD evfd;
 
   int queue_depth{0};
-
-  NetworkXioWorkQueuePtr wq_;
 
   std::shared_ptr<xio_context> ctx;
   std::shared_ptr<xio_server> server;

@@ -19,6 +19,11 @@ but WITHOUT ANY WARRANTY of any kind.
 
 #include <list>
 #include <functional>
+#include <atomic>
+#include <queue>
+#include <gobjfs_log.h>
+#include <thread>
+#include <networkxio/gobjfs_client_common.h>
 #include <boost/thread/lock_guard.hpp>
 #include <libxio.h>
 #include <networkxio/NetworkXioCommon.h>
@@ -42,8 +47,6 @@ struct NetworkXioClientData;
 
 struct NetworkXioRequest {
   NetworkXioMsgOpcode op{NetworkXioMsgOpcode::Noop};
-
-  void *req_wq{nullptr};
 
   void *data{nullptr};
   unsigned int data_len{0}; // DataLen of buffer pointed by data
@@ -134,6 +137,9 @@ struct NetworkXioClientData {
     return finished.empty();
   }
 
+  void stop_loop() {
+    evfd.writefd();
+  }
 
   /*
   explicit NetworkXioClientData(NetworkXioServer* server,
@@ -148,7 +154,7 @@ struct NetworkXioClientData {
 
 inline void NetworkXioRequest::stop_loop()
 {
-  pClientData->evfd.writefd();
+  pClientData->stop_loop();
 } 
 
 }

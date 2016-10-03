@@ -20,6 +20,7 @@ but WITHOUT ANY WARRANTY of any kind.
 #include <future>
 #include <mutex>
 #include <sys/epoll.h> // epoll_create1
+#include <boost/thread/lock_guard.hpp>
 
 #include <networkxio/gobjfs_client_common.h>
 #include <networkxio/gobjfs_config.h>
@@ -432,16 +433,6 @@ void NetworkXioServer::run(std::promise<void> &promise) {
     throw FailedBindXioServer("failed to bind XIO server");
   }
 
-  try {
-    wq_ = std::make_shared<NetworkXioWorkQueue>("ovs_xio_wq", numCoresForIO_);
-  } catch (const WorkQueueThreadsException &) {
-    GLOG_FATAL("failed to create workqueue thread pool");
-    throw;
-  } catch (const std::bad_alloc &) {
-    GLOG_FATAL("failed to allocate requested storage space for workqueue");
-    throw;
-  }
-
   xio_mpool = std::shared_ptr<xio_mempool>(
       xio_mempool_create(-1, XIO_MEMPOOL_FLAG_REG_MR), xio_mempool_destroy);
   if (xio_mpool == nullptr) {
@@ -511,7 +502,7 @@ NetworkXioServer::create_session_connection(xio_session *session,
     cd->ncd_mpool = xio_mpool.get();
     cd->ncd_server = this;
 
-    cd->ncd_ioh = new NetworkXioIOHandler(serviceHandle_, disk_.eventHandle_, wq_);
+    cd->ncd_ioh = new NetworkXioIOHandler(serviceHandle_, disk_.eventHandle_);
 
   } catch (...) {
 
@@ -534,7 +525,9 @@ NetworkXioServer::create_session_connection(xio_session *session,
 void NetworkXioServer::destroy_client_data(NetworkXioClientData* cd) {
   if (cd->ncd_disconnected && !cd->ncd_refcnt) {
     xio_connection_destroy(cd->ncd_conn);
+    cd->ncd_conn = nullptr;
     delete cd->ncd_ioh;
+    cd->ncd_ioh = nullptr;
   }
 }
 
@@ -545,7 +538,6 @@ void NetworkXioServer::destroy_session_connection(
   //auto cd = static_cast<NetworkXioClientData *>(evdata->conn_user_context);
   if (cd) {
     cd->ncd_disconnected = true;
-    cd->ncd_conn = nullptr;
     destroy_client_data(cd);
   }
 }
@@ -685,9 +677,11 @@ int NetworkXioServer::on_request(xio_session *session ATTRIBUTE_UNUSED,
 void NetworkXioServer::shutdown() {
   XXEnter();
   if (not stopped) {
-    wq_->shutdown();
     stopping = true;
     // TODO STOP all portal loops ?
+    for (int i = 0; i < MAX_PORTAL_THREADS; i++) {
+      cd_[i].stop_loop();
+    }
     xio_context_stop_loop(ctx.get());
     {
       std::unique_lock<std::mutex> lock_(mutex_);
