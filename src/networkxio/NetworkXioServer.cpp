@@ -38,6 +38,13 @@ namespace xio {
 
 static constexpr int XIO_COMPLETION_DEFAULT_MAX_EVENTS = 100;
 
+static std::string geturi(xio_session *s) {
+	xio_session_attr attr;
+	int ret = xio_query_session(s, &attr, XIO_SESSION_ATTR_URI);
+	if (ret == 0) return attr.uri;
+	return "";
+}
+
 // TODO cleanup duplicate of function existing in NetworkXioIOHandler
 static inline void pack_msg(NetworkXioRequest *req) {
   NetworkXioMsg o_msg(req->op);
@@ -89,12 +96,15 @@ static int static_on_session_event(xio_session *session,
   // this is how you disambiguate between global and portal event
   if (event_data->conn_user_context == cb_user_context) {
     // this is a global server event
-    GLOG_INFO("got global session event " << gettid());
   } else {
     // this is a portal event 
     cd = (NetworkXioClientData*)event_data->conn_user_context;
-    GLOG_INFO("got portal session event " << gettid());
   }
+
+  GLOG_INFO("got session event=" << xio_session_event_str(event_data->event)
+      << ",portal=" << (cd != nullptr)
+      << ",tid=" << gettid() 
+      << ",uri=" << geturi(session));
 
   // TODO
   T *obj = reinterpret_cast<T *>(cb_user_context);
@@ -138,7 +148,7 @@ static void static_evfd_stop_loop(int fd, int events, void *data) {
 void portal_func(void* data) {
   NetworkXioClientData* cd = (NetworkXioClientData*)data;
   
-  // add cpu affinity later
+  // TODO add cpu affinity later
   cd->ncd_ctx = xio_context_create(NULL, 0, -1);
 
   if (xio_context_add_ev_handler(cd->ncd_ctx, cd->evfd, XIO_POLLIN,
@@ -156,7 +166,7 @@ void portal_func(void* data) {
   cd->ncd_xio_server = xio_bind(cd->ncd_ctx, &portal_ops, cd->ncd_uri.c_str(),
       NULL, 0, cd);
 
-  GLOG_INFO("started portal func at " << gettid());
+  GLOG_INFO("started portal uri=" << cd->ncd_uri << ",thread=" << gettid());
 
   while (not cd->ncd_server->stopping) {
     xio_context_run_loop(cd->ncd_ctx, XIO_INFINITE);
@@ -566,21 +576,18 @@ int NetworkXioServer::on_session_event(xio_session *session,
   switch (event_data->event) {
   case XIO_SESSION_NEW_CONNECTION_EVENT:
     // signals a new connection for existing session 
-    GLOG_INFO("Received XIO_SESSION_NEW_CONNECTION_EVENT " << gettid());
     if (cd) {
       create_session_connection(session, event_data, cd);
     }
     break;
   case XIO_SESSION_CONNECTION_TEARDOWN_EVENT:
     // signals loss of a connection within existing session
-    GLOG_INFO("Received XIO_SESSION_CONNECTION_TEARDOWN_EVENT " << gettid());
     if (cd) {
       destroy_session_connection(session, event_data, cd);
     }
     break;
   case XIO_SESSION_TEARDOWN_EVENT:
     // signals loss of session
-    GLOG_INFO("Received XIO_SESSION_TEARDOWN_EVENT " << gettid());
     xio_session_destroy(session);
     for (int i = 0; i < MAX_PORTAL_THREADS; i++) {
       xio_context_stop_loop(cd_[i].ncd_ctx);
@@ -588,7 +595,6 @@ int NetworkXioServer::on_session_event(xio_session *session,
     xio_context_stop_loop(ctx.get());
     break;
   default:
-    GLOG_INFO("Received unknown event ");
     break;
   };
   XXExit();

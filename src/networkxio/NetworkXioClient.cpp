@@ -31,7 +31,6 @@ but WITHOUT ANY WARRANTY of any kind.
 #include "NetworkXioClient.h"
 #include "gobjfs_getenv.h"
 
-
 namespace gobjfs {
 namespace xio {
 
@@ -44,6 +43,22 @@ typedef std::map<std::string, std::shared_ptr<xio_session>> SessionMap;
 static SessionMap sessionMap;
 static std::mutex mutex;
 
+static std::string geturi(xio_session* s)
+{
+	xio_session_attr attr;
+	int ret = xio_query_session(s, &attr, XIO_SESSION_ATTR_URI);
+	if (ret == 0) {
+		return attr.uri;
+	}
+	return "";
+}
+
+static int dbg_xio_session_destroy(xio_session* s)
+{
+    GLOG_INFO("destroying session=" << (void*)s << " for uri="  << geturi(s));
+    return xio_session_destroy(s);
+}
+
 static inline std::shared_ptr<xio_session> getSession(const std::string& uri, 
     xio_session_params& session_params) {
 
@@ -54,14 +69,14 @@ static inline std::shared_ptr<xio_session> getSession(const std::string& uri,
   if (iter == sessionMap.end()) {
     // session does not exist, create one
     auto session = std::shared_ptr<xio_session>(xio_session_create(&session_params),
-                                         xio_session_destroy);
+                                         dbg_xio_session_destroy);
     auto insertIter = sessionMap.insert(std::make_pair(uri, session));
     assert(insertIter.second == true); // insert succeded
-    GLOG_INFO("session created for " << uri);
+    GLOG_INFO("session=" << (void*)session.get() << " created for " << uri);
     retptr = session;
   } else {
-    GLOG_INFO("session found for " << uri);
     retptr = iter->second;
+    GLOG_INFO("session=" << (void*)retptr.get() << " found for " << uri);
   }
   return retptr;
 }
@@ -137,6 +152,11 @@ static int static_on_session_event(xio_session *session,
   if (obj == NULL) {
     return -1;
   }
+
+  GLOG_INFO("got session event=" << xio_session_event_str(event_data->event)
+      << ",tid=" << gettid() 
+      << ",uri=" << geturi(session));
+
   return obj->on_session_event(session, event_data);
 }
 
