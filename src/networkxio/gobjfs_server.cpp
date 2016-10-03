@@ -46,11 +46,9 @@ gobjfs_xio_server_start(const char *transport, const char *host, int port,
                         int32_t number_cores, int32_t queue_depth,
                         FileTranslatorFunc file_translator_func,
                         bool is_new_instance) {
-  const std::string uri = transport + std::string("://") + host +
-                          std::string(":") + std::to_string(port);
 
   auto xs = gobjfs::make_unique<NetworkXioServer>(
-      uri, number_cores, queue_depth, file_translator_func, is_new_instance);
+      transport, host, port, number_cores, queue_depth, file_translator_func, is_new_instance);
 
   std::promise<void> pr;
   auto init_future = pr.get_future();

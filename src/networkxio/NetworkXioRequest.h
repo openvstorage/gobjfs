@@ -80,17 +80,26 @@ struct NetworkXioClientData {
 
   NetworkXioServer *ncd_server{nullptr};
 
+  // TODO make them shared_ptr like NetworkXioServer
+  xio_context *ncd_ctx{nullptr}; // portal
+  std::thread ncd_thread; // portal
+  std::string ncd_uri; // portal
+  xio_server* ncd_xio_server{nullptr}; // portal
+
   xio_session *ncd_session{nullptr};
   xio_connection *ncd_conn{nullptr};
   xio_mempool *ncd_mpool{nullptr};
 
-  std::atomic<bool> ncd_disconnected{false};
+  std::atomic<bool> ncd_disconnected{true};
   std::atomic<uint64_t> ncd_refcnt{0};
 
   NetworkXioIOHandler *ncd_ioh{nullptr};
 
   std::list<NetworkXioRequest *> ncd_done_reqs;
 
+  explicit NetworkXioClientData() {}
+
+  /*
   explicit NetworkXioClientData(NetworkXioServer* server,
       xio_session* session,
       xio_connection* conn) 
@@ -98,6 +107,7 @@ struct NetworkXioClientData {
     , ncd_session(session)
     , ncd_conn(conn)
   {}
+  */
 };
 }
 } // namespace

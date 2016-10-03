@@ -37,17 +37,7 @@ MAKE_EXCEPTION(FailedCreateXioContext);
 MAKE_EXCEPTION(FailedRegisterEventHandler);
 MAKE_EXCEPTION(FailedCreateXioMempool);
 
-class NetworkXioClientData;
-
-#define MAX_PORTAL_THREADS 4
-/**
- * Each thread is bound to a portal (port)
- */
-struct PortalData {
-  std::string uri_;
-  xio_context *ctx_;
-  xio_connection *connection_;
-}
+static constexpr int MAX_PORTAL_THREADS = 4;
 
 class NetworkXioServer {
 public:
@@ -70,7 +60,8 @@ public:
                  void *cb_user_context);
 
   int on_session_event(xio_session *session,
-                       xio_session_event_data *event_data);
+                       xio_session_event_data *event_data,
+                       NetworkXioClientData* cd);
 
   int on_new_session(xio_session *session, xio_new_session_req *req);
 
@@ -99,7 +90,7 @@ private:
   std::string ipaddr_;
   int port_{-1};
 
-  PortalData portals_[MAX_PORTAL_THREADS];
+  NetworkXioClientData cd_[MAX_PORTAL_THREADS]; // portals
 
   std::string configFileName_;
 
@@ -130,10 +121,13 @@ private:
   std::shared_ptr<xio_mempool> xio_mpool;
 
   int create_session_connection(xio_session *session,
-                                xio_session_event_data *event_data);
+                                xio_session_event_data *event_data,
+                                NetworkXioClientData* cd);
 
-  void destroy_session_connection(xio_session *session,
-                                  xio_session_event_data *event_data);
+  void destroy_session_connection(
+    xio_session *session ATTRIBUTE_UNUSED, 
+    xio_session_event_data *evdata,
+    NetworkXioClientData* cd);
 
   void deallocate_request(NetworkXioRequest *req);
 

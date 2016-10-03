@@ -44,8 +44,6 @@ using namespace std;
 
 int main(int argc, char *argv[]) {
 
-  string Url = "tcp://127.0.0.1:21321";
-
   // log files are in /tmp
   // google::InitGoogleLogging(argv[0]); TODO logging
 
@@ -61,7 +59,7 @@ int main(int argc, char *argv[]) {
   FileTranslatorFunc fileTranslatorFunc{nullptr};
 
   NetworkXioServer *xs =
-      new NetworkXioServer(Url, 2, 200, fileTranslatorFunc, newInstance);
+      new NetworkXioServer("tcp", "127.0.0.1", 21321, 2, 200, fileTranslatorFunc, newInstance);
 
   xs->run(_pr);
 }

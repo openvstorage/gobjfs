@@ -157,10 +157,10 @@ int main(int argc, char *argv[]) {
   FileTranslatorFunc fileTranslatorFunc{nullptr};
 
   std::promise<void> pr;
-  std::string Url = config.transport + "://" + config.ipAddress + ":" + std::to_string(config.port);
 
   NetworkXioServer *xs =
-      new NetworkXioServer(Url, config.numCores, config.queueDepth, fileTranslatorFunc, config.newInstance);
+      new NetworkXioServer(config.transport, config.ipAddress, config.port, 
+          config.numCores, config.queueDepth, fileTranslatorFunc, config.newInstance);
 
   xs->run(pr);
 }
