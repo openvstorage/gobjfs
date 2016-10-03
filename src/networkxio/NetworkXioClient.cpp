@@ -32,6 +32,43 @@ but WITHOUT ANY WARRANTY of any kind.
 #include "gobjfs_getenv.h"
 
 
+namespace gobjfs {
+namespace xio {
+
+/**
+ * keep one session per uri for portals
+ */
+
+typedef std::map<std::string, std::shared_ptr<xio_session>> SessionMap;
+
+static SessionMap sessionMap;
+static std::mutex mutex;
+
+static inline std::shared_ptr<xio_session> getSession(const std::string& uri, 
+    xio_session_params& session_params) {
+
+  std::shared_ptr<xio_session> retptr;
+  std::unique_lock<std::mutex> l(mutex);
+
+  auto iter = sessionMap.find(uri);
+  if (iter == sessionMap.end()) {
+    // session does not exist, create one
+    auto session = std::shared_ptr<xio_session>(xio_session_create(&session_params),
+                                         xio_session_destroy);
+    auto insertIter = sessionMap.insert(std::make_pair(uri, session));
+    assert(insertIter.second == true); // insert succeded
+    GLOG_INFO("session created for " << uri);
+    retptr = session;
+  } else {
+    GLOG_INFO("session found for " << uri);
+    retptr = iter->second;
+  }
+  return retptr;
+}
+
+/**
+ * initialize xio once
+ */
 std::atomic<int> xio_init_refcnt = ATOMIC_VAR_INIT(0);
 
 static inline void xrefcnt_init() {
@@ -40,14 +77,12 @@ static inline void xrefcnt_init() {
   }
 }
 
+// TODO if one starts shutdown and other thread starts init ??
 static inline void xrefcnt_shutdown() {
   if (xio_init_refcnt.fetch_sub(1, std::memory_order_relaxed) == 1) {
     xio_shutdown();
   }
 }
-
-namespace gobjfs {
-namespace xio {
 
 inline void _xio_aio_wake_up_suspended_aiocb(aio_request *request) {
   XXEnter();
@@ -201,8 +236,9 @@ void NetworkXioClient::run() {
     throw XioClientCreateException("failed to create XIO context");
   }
 
-  session = std::shared_ptr<xio_session>(xio_session_create(&params),
-                                         xio_session_destroy);
+  //session = std::shared_ptr<xio_session>(xio_session_create(&params),
+                                         //xio_session_destroy);
+  session = getSession(uri_, params);
   if (session == nullptr) {
     throw XioClientCreateException("failed to create XIO client");
   }
