@@ -26,19 +26,11 @@ but WITHOUT ANY WARRANTY of any kind.
 #include <sstream>
 
 #include <networkxio/gobjfs_client_common.h>
+#include <networkxio/gobjfs_config.h>
 #include <gobjfs_client.h>
 #include "NetworkXioClient.h"
 #include "gobjfs_getenv.h"
 
-static constexpr int MAX_PORTAL_THREADS = 4;
-
-static constexpr int POLLING_TIME_USEC_DEFAULT = 0;
-// From accelio manual
-// polling_timeout_us: Defines how much to do receive-side-polling before yielding the CPU 
-// and entering the wait/sleep mode. When the application requires latency over IOPs and 
-// willing to poll on CPU, setting polling timeout to ~15-~70 us will decrease the latency 
-// substantially, but will increase CPU cycle by consuming more power (watts).
-// http://www.accelio.org/wp-admin/accelio_doc/index.html
 
 std::atomic<int> xio_init_refcnt = ATOMIC_VAR_INIT(0);
 

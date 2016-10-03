@@ -28,6 +28,7 @@ but WITHOUT ANY WARRANTY of any kind.
 #include <networkxio/NetworkXioIOHandler.h>
 #include <networkxio/NetworkXioWorkQueue.h>
 #include <networkxio/NetworkXioRequest.h>
+#include <networkxio/gobjfs_config.h>
 
 namespace gobjfs {
 namespace xio {
@@ -36,8 +37,6 @@ MAKE_EXCEPTION(FailedBindXioServer);
 MAKE_EXCEPTION(FailedCreateXioContext);
 MAKE_EXCEPTION(FailedRegisterEventHandler);
 MAKE_EXCEPTION(FailedCreateXioMempool);
-
-static constexpr int MAX_PORTAL_THREADS = 4;
 
 class NetworkXioServer {
 public:

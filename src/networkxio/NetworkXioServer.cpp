@@ -22,6 +22,7 @@ but WITHOUT ANY WARRANTY of any kind.
 #include <sys/epoll.h> // epoll_create1
 
 #include <networkxio/gobjfs_client_common.h>
+#include <networkxio/gobjfs_config.h>
 #include <gobjfs_client.h>
 #include <util/os_utils.h>
 
@@ -29,15 +30,6 @@ but WITHOUT ANY WARRANTY of any kind.
 #include "NetworkXioProtocol.h"
 #include "NetworkXioRequest.h"
 #include "gobjfs_getenv.h"
-
-static constexpr int POLLING_TIME_USEC_DEFAULT = 0;
-// From accelio manual
-// polling_timeout_us: Defines how much to do receive-side-polling before yielding the CPU 
-// and entering the wait/sleep mode. When the application requires latency over IOPs and 
-// willing to poll on CPU, setting polling timeout to ~15-~70 us will decrease the latency 
-// substantially, but will increase CPU cycle by consuming more power (watts).
-// http://www.accelio.org/wp-admin/accelio_doc/index.html
-
 
 using gobjfs::os::DirectIOSize;
 
