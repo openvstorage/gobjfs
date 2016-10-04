@@ -39,10 +39,8 @@ static inline void pack_msg(NetworkXioRequest *req) {
   req->s_msg = o_msg.pack_msg();
 }
 
-NetworkXioIOHandler::NetworkXioIOHandler(IOExecServiceHandle serviceHandle, 
-    IOExecEventFdHandle eventHandle)
-    : serviceHandle_(serviceHandle)
-    , eventHandle_(eventHandle) {}
+NetworkXioIOHandler::NetworkXioIOHandler(NetworkXioServer* server)
+    : server_(server) {}
 
 NetworkXioIOHandler::~NetworkXioIOHandler() {
 }
@@ -71,7 +69,7 @@ int NetworkXioIOHandler::handle_read(NetworkXioRequest *req,
     return 0;
   } 
 #endif
-  if (!serviceHandle_) {
+  if (!server_->serviceHandle_) {
     GLOG_ERROR("no service handle");
     req->retval = -1;
     req->errval = EIO;
@@ -117,8 +115,8 @@ int NetworkXioIOHandler::handle_read(NetworkXioRequest *req,
     frag.size = size;
     frag.completionId = reinterpret_cast<uint64_t>(batch);
 
-    ret = IOExecFileRead(serviceHandle_, filename.c_str(), filename.size(),
-                         batch, eventHandle_);
+    ret = IOExecFileRead(server_->serviceHandle_, filename.c_str(), filename.size(),
+                         batch, server_->disk_.eventHandle_);
 
     if (ret != 0) {
       GLOG_ERROR("IOExecFileRead failed with error " << ret);

@@ -107,6 +107,8 @@ public: // TODO
   bool stopped{false};
 private:
 
+  friend class NetworkXioIOHandler; // access serviceHandle_
+
   std::mutex mutex_;
   std::condition_variable cv_;
 

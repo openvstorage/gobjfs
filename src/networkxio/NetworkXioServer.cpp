@@ -502,7 +502,7 @@ NetworkXioServer::create_session_connection(xio_session *session,
     cd->ncd_mpool = xio_mpool.get();
     cd->ncd_server = this;
 
-    cd->ncd_ioh = new NetworkXioIOHandler(serviceHandle_, disk_.eventHandle_);
+    cd->ncd_ioh = new NetworkXioIOHandler(this);
 
   } catch (...) {
 
