@@ -461,21 +461,16 @@ int32_t IOExecFileTruncate(IOExecFileHandle fileHandle, size_t newSize) {
 static int32_t IOExecFileOp(const char *name, FileOp optype,
                             IOExecFileHandle fileHandle, bool closeFileHandle,
                             const gIOBatch *batch,
-                            IOExecEventFdHandle eventFdHandle) {
+                            int notification_fd) {
 
   int retcode = 0;
-
-  if (!eventFdHandle || (eventFdHandle->fd[1] == gobjfs::os::FD_INVALID)) {
-    LOG(ERROR) << "Rejecting " << name << " with invalid eventfd";
-    return -EINVAL;
-  }
 
   if (!fileHandle) {
     LOG(ERROR) << "Rejecting " << name << " with invalid file handle";
     return -EINVAL;
   }
 
-  int jobFd = eventFdHandle->fd[1];
+  int jobFd = notification_fd;
 
   gobjfs::IOExecutorSPtr ioexecPtr;
   try {
@@ -511,6 +506,20 @@ static int32_t IOExecFileOp(const char *name, FileOp optype,
   return retcode;
 }
 
+static int32_t IOExecFileOp(const char *name, FileOp optype,
+                            IOExecFileHandle fileHandle, bool closeFileHandle,
+                            const gIOBatch *batch,
+                            IOExecEventFdHandle eventFdHandle) {
+
+  if (!eventFdHandle || (eventFdHandle->fd[1] == gobjfs::os::FD_INVALID)) {
+    LOG(ERROR) << "Rejecting " << name << " with invalid eventfd";
+    return -EINVAL;
+  }
+
+  return IOExecFileOp(name, optype, fileHandle, closeFileHandle, batch, eventFdHandle->fd[1]);
+}
+
+
 int32_t IOExecFileWrite(IOExecFileHandle fileHandle, const gIOBatch *batch,
                         IOExecEventFdHandle eventFdHandle) {
 
@@ -540,6 +549,27 @@ int32_t IOExecFileRead(IOExecServiceHandle serviceHandle, const char *fileName,
   bool closeFileHandle = true;
   auto ret = IOExecFileOp("read", FileOp::Read, fileHandle, closeFileHandle,
                           batch, eventFdHandle);
+
+  // close fileHandle but do not close fd which is still in use
+  // because the fd will be closed after FilerJob::reset
+  fileHandle->fd = gobjfs::os::FD_INVALID;
+  IOExecFileClose(fileHandle);
+  return ret;
+}
+
+int32_t IOExecFileRead(IOExecServiceHandle serviceHandle, const char *fileName,
+                       size_t fileNameLength, const gIOBatch *batch,
+                       int notification_fd) {
+
+  auto fileHandle =
+      IOExecFileOpen(serviceHandle, fileName, fileNameLength, O_DIRECT | O_RDONLY);
+  if (fileHandle == nullptr) {
+    return -EIO;
+  }
+
+  bool closeFileHandle = true;
+  auto ret = IOExecFileOp("read", FileOp::Read, fileHandle, closeFileHandle,
+                          batch, notification_fd);
 
   // close fileHandle but do not close fd which is still in use
   // because the fd will be closed after FilerJob::reset

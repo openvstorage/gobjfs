@@ -137,12 +137,25 @@ int32_t IOExecFileRead(IOExecFileHandle fileHandle, const gIOBatch *pIOBatch,
  * @param fileNameLength length of the file (since it may contain null
  *   characters)
  * @param pIOBatch batch containing offset, size and buffer to read
- * @param fd the pipe on which callback notification should be sent
+ * @param eventFdHandle the fd on which callback notification should be written
  *           when job is completed
  */
 int32_t IOExecFileRead(IOExecServiceHandle serviceHandle, const char *fileName,
                        size_t fileNameLength, const gIOBatch *pIOBatch,
                        IOExecEventFdHandle eventFdHandle);
+
+/**
+ * @param serviceHandle returned from ServiceInit
+ * @param fileName name of file to read
+ * @param fileNameLength length of the file (since it may contain null
+ *   characters)
+ * @param pIOBatch batch containing offset, size and buffer to read
+ * @param fd the fd on which callback notification should be written
+ *           when job is completed
+ */
+int32_t IOExecFileRead(IOExecServiceHandle serviceHandle, const char *fileName,
+                       size_t fileNameLength, const gIOBatch *batch,
+                       int notification_fd);
 
 /**
  *
