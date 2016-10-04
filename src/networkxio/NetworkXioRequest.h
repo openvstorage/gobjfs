@@ -21,13 +21,17 @@ but WITHOUT ANY WARRANTY of any kind.
 #include <functional>
 #include <atomic>
 #include <queue>
-#include <gobjfs_log.h>
 #include <thread>
-#include <networkxio/gobjfs_client_common.h>
 #include <boost/thread/lock_guard.hpp>
 #include <libxio.h>
+#include <gobjfs_log.h>
+
+#include <networkxio/gobjfs_client_common.h>
 #include <networkxio/NetworkXioCommon.h>
 #include <util/Spinlock.h>
+#include <util/EventFD.h>
+
+using gobjfs::os::EventFD;
 
 namespace gobjfs {
 namespace xio {
@@ -91,9 +95,9 @@ struct NetworkXioClientData {
 
   std::list<NetworkXioRequest *> ncd_done_reqs;
 
-  EventFD evfd;
-
   int coreId_{-1};
+
+  EventFD evfd;
 
   void evfd_stop_loop(int /*fd*/, int /*events*/, void * /*data*/) {
     evfd.readfd();

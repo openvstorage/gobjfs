@@ -28,6 +28,9 @@ but WITHOUT ANY WARRANTY of any kind.
 #include <networkxio/NetworkXioIOHandler.h>
 #include <networkxio/NetworkXioRequest.h>
 #include <networkxio/gobjfs_config.h>
+#include <util/EventFD.h>
+
+using gobjfs::os::EventFD;
 
 namespace gobjfs {
 namespace xio {

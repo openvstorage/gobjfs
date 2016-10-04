@@ -18,60 +18,9 @@ but WITHOUT ANY WARRANTY of any kind.
 #pragma once
 
 #include <iostream>
-#include <sys/eventfd.h>
 
 namespace gobjfs {
 namespace xio {
-
-struct EventFD {
-  EventFD() {
-    evfd_ = eventfd(0, EFD_NONBLOCK);
-    if (evfd_ < 0) {
-      throw std::runtime_error("failed to create eventfd");
-    }
-  }
-
-  ~EventFD() {
-    if (evfd_ != -1) {
-      close(evfd_);
-    }
-  }
-
-  EventFD(const EventFD &) = delete;
-
-  EventFD &operator=(const EventFD &) = delete;
-
-  operator int() const { return evfd_; }
-
-  int readfd() {
-    int ret;
-    eventfd_t value = 0;
-    do {
-      ret = eventfd_read(evfd_, &value);
-    } while (ret < 0 && errno == EINTR);
-    if (ret == 0) {
-      ret = value;
-    } else if (errno != EAGAIN) {
-      abort();
-    }
-    return ret;
-  }
-
-  int writefd() {
-    uint64_t u = 1;
-    int ret;
-    do {
-      ret = eventfd_write(evfd_, static_cast<eventfd_t>(u));
-    } while (ret < 0 && (errno == EINTR || errno == EAGAIN));
-    if (ret < 0) {
-      abort();
-    }
-    return ret;
-  }
-
-private:
-  int evfd_;
-};
 
 enum class NetworkXioMsgOpcode {
   Noop,
