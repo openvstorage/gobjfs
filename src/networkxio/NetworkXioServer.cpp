@@ -148,8 +148,9 @@ static void static_evfd_stop_loop(int fd, int events, void *data) {
 // TODO make it a member func of ClientData
 void portal_func(void* data) {
   NetworkXioClientData* cd = (NetworkXioClientData*)data;
+
+  gobjfs::os::BindThreadToCore(cd->coreId_);
   
-  // TODO add cpu affinity later
   cd->ncd_ctx = xio_context_create(NULL, 0, -1);
 
   if (xio_context_add_ev_handler(cd->ncd_ctx, cd->evfd, XIO_POLLIN,
@@ -291,11 +292,11 @@ void NetworkXioServer::run(std::promise<void> &promise) {
   // create multiple ports for load-balancing
   // tie a thread to each port
   // then xio_accept() will decide which port+thread to use for a new connection
-  for (int i = 0; i < MAX_PORTAL_THREADS; i++) {
+  for (int i = 0; i < numCoresForIO_; i++) {
     std::string uri = transport_ + "://" + ipaddr_ + ":" + std::to_string(port_ + i + 1);
-    cd_[i].ncd_uri = uri;
-    cd_[i].ncd_server = this;
-    cd_[i].ncd_thread = std::thread(portal_func, &cd_[i]);
+    auto newcd = new NetworkXioClientData(this, uri, i);
+    newcd->ncd_thread = std::thread(portal_func, newcd);
+    cdVec_.push_back(newcd);
   }
 
   promise.set_value();
@@ -306,8 +307,8 @@ void NetworkXioServer::run(std::promise<void> &promise) {
     assert(ret == 0);
   }
 
-  for (int i = 0; i < MAX_PORTAL_THREADS; i++) {
-    cd_[i].ncd_thread.join();
+  for (auto elem : cdVec_) {
+    elem->ncd_thread.join();
   }
 
   server.reset();
@@ -382,14 +383,14 @@ void NetworkXioServer::destroy_session_connection(
 int NetworkXioServer::on_new_session(xio_session *session,
                                      xio_new_session_req * /*req*/) {
 
-  const char* portal_array[MAX_PORTAL_THREADS];
+  const char* portal_array[cdVec_.size()];
 
   // tell xio_accept which portals are available
-  for (int i = 0; i < MAX_PORTAL_THREADS; i++) {
-    portal_array[i] = cd_[i].ncd_uri.c_str();
+  for (int i = 0; i < cdVec_.size(); i++) {
+    portal_array[i] = cdVec_[i]->ncd_uri.c_str();
   }
 
-  if (xio_accept(session, portal_array, MAX_PORTAL_THREADS, NULL, 0) < 0) {
+  if (xio_accept(session, portal_array, cdVec_.size(), NULL, 0) < 0) {
     GLOG_ERROR(
         "cannot accept new session, error: " << xio_strerror(xio_errno()));
   }
@@ -418,8 +419,8 @@ int NetworkXioServer::on_session_event(xio_session *session,
   case XIO_SESSION_TEARDOWN_EVENT:
     // signals loss of session
     xio_session_destroy(session);
-    for (int i = 0; i < MAX_PORTAL_THREADS; i++) {
-      xio_context_stop_loop(cd_[i].ncd_ctx);
+    for (auto elem : cdVec_) {
+      xio_context_stop_loop(elem->ncd_ctx);
     }
     xio_context_stop_loop(ctx.get());
     break;
@@ -516,8 +517,8 @@ void NetworkXioServer::shutdown() {
   if (not stopped) {
     stopping = true;
     // TODO STOP all portal loops ?
-    for (int i = 0; i < MAX_PORTAL_THREADS; i++) {
-      cd_[i].stop_loop();
+    for (auto elem : cdVec_) {
+      elem->stop_loop();
     }
     xio_context_stop_loop(ctx.get());
     {

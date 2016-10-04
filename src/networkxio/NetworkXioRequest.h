@@ -60,8 +60,6 @@ struct NetworkXioRequest {
 
   std::string s_msg;
 
-  inline void stop_loop();
-
   explicit NetworkXioRequest(xio_msg* req,
       NetworkXioClientData* clientData,
       NetworkXioServer* server)
@@ -93,9 +91,9 @@ struct NetworkXioClientData {
 
   std::list<NetworkXioRequest *> ncd_done_reqs;
 
-  explicit NetworkXioClientData() {}
-
   EventFD evfd;
+
+  int coreId_{-1};
 
   void evfd_stop_loop(int /*fd*/, int /*events*/, void * /*data*/) {
     evfd.readfd();
@@ -106,21 +104,13 @@ struct NetworkXioClientData {
     evfd.writefd();
   }
 
-  /*
   explicit NetworkXioClientData(NetworkXioServer* server,
-      xio_session* session,
-      xio_connection* conn) 
+      const std::string& uri,
+      int coreId)
     : ncd_server(server)
-    , ncd_session(session)
-    , ncd_conn(conn)
-  {}
-  */
+    , ncd_uri(uri) 
+    , coreId_(coreId) {}
 };
-
-inline void NetworkXioRequest::stop_loop()
-{
-  pClientData->stop_loop();
-} 
 
 }
 } // namespace

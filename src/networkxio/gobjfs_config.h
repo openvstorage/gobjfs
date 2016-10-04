@@ -3,8 +3,6 @@
 namespace gobjfs {
 namespace xio {
 
-static constexpr int MAX_PORTAL_THREADS = 16;
-
 static constexpr int POLLING_TIME_USEC_DEFAULT = 0;
 // From accelio manual
 // polling_timeout_us: Defines how much to do receive-side-polling before yielding the CPU 

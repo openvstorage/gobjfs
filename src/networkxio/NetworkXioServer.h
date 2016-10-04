@@ -88,7 +88,9 @@ private:
   std::string ipaddr_;
   int port_{-1};
 
-  NetworkXioClientData cd_[MAX_PORTAL_THREADS]; // portals
+  // one for each portal
+  // not using smart ptrs because it will interfere with accelio shutdown logic
+  std::vector<NetworkXioClientData*> cdVec_;
 
   std::string configFileName_;
 

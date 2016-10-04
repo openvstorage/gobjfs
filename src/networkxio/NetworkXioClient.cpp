@@ -266,7 +266,7 @@ void NetworkXioClient::run() {
   cparams.session = session.get();
   cparams.ctx = ctx.get();
   cparams.conn_user_context = this;
-  cparams.conn_idx = gettid() % MAX_PORTAL_THREADS; // TODO configurable
+  cparams.conn_idx = 0;
 
   conn = xio_connect(&cparams);
   if (conn == nullptr) {
