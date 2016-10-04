@@ -145,9 +145,7 @@ static void static_evfd_stop_loop(int fd, int events, void *data) {
   XXExit();
 }
 
-// TODO make it a member func of ClientData
-void portal_func(void* data) {
-  NetworkXioClientData* cd = (NetworkXioClientData*)data;
+void NetworkXioServer::portal_func(NetworkXioClientData* cd) {
 
   gobjfs::os::BindThreadToCore(cd->coreId_);
   
@@ -295,7 +293,7 @@ void NetworkXioServer::run(std::promise<void> &promise) {
   for (int i = 0; i < numCoresForIO_; i++) {
     std::string uri = transport_ + "://" + ipaddr_ + ":" + std::to_string(port_ + i + 1);
     auto newcd = new NetworkXioClientData(this, uri, i);
-    newcd->ncd_thread = std::thread(portal_func, newcd);
+    newcd->ncd_thread = std::thread(std::bind(&NetworkXioServer::portal_func, this, newcd));
     cdVec_.push_back(newcd);
   }
 

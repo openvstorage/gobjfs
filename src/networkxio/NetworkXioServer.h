@@ -83,6 +83,8 @@ public:
 
 private:
   //    DECLARE_LOGGER("NetworkXioServer");
+  //
+  void portal_func(NetworkXioClientData* cd);
 
   std::string transport_;
   std::string ipaddr_;
