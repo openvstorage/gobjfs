@@ -39,10 +39,119 @@ static inline void pack_msg(NetworkXioRequest *req) {
   req->s_msg = o_msg.pack_msg();
 }
 
-NetworkXioIOHandler::NetworkXioIOHandler(NetworkXioServer* server)
-    : server_(server) {}
+NetworkXioIOHandler::NetworkXioIOHandler(NetworkXioServer* server, NetworkXioClientData* cd)
+  : server_(server)
+  , cd_(cd) {
+  disk_.handler_ = this;
+  disk_.startEventHandler();
+}
 
 NetworkXioIOHandler::~NetworkXioIOHandler() {
+  disk_.stopEventHandler();
+}
+
+template <class T> 
+static void static_disk_event(int fd, int events, void *data) {
+  T *obj = reinterpret_cast<T *>(data);
+  if (obj == NULL) {
+    return;
+  }
+  obj->runEventHandler(fd, events, data);
+}
+
+void NetworkXioIOHandler::Disk::startEventHandler() {
+
+  try {
+
+    pipe_ = PipeUPtr(new Pipe);
+
+    if (xio_context_add_ev_handler(handler_->cd_->ncd_ctx, pipe_->getReadFD(), XIO_POLLIN,
+                                 static_disk_event<NetworkXioIOHandler::Disk>,
+                                 this)) {
+      throw FailedRegisterEventHandler("failed to register event handler");
+    }
+    GLOG_INFO("registered pipe=" << (void*)pipe_.get() 
+        << ",fd=" << pipe_->getReadFD() 
+        << " for thread=" << gettid());
+  } catch (std::exception& e) {
+    GLOG_ERROR("failed to init handler " << e.what());
+  }
+}
+
+// this runs in the context of the portal thread
+int NetworkXioIOHandler::Disk::runEventHandler(int fd, int events, void* data) {
+
+  if (fd != pipe_->getReadFD()) {
+    GLOG_ERROR("Received event for unknown fd="
+      << static_cast<int32_t>(fd) 
+      << ",expected=" << static_cast<int32_t>(pipe_->getReadFD())
+      << ",thread=" << gettid());
+    return 0;
+  }
+
+  gIOStatus iostatus;
+  int ret = ::read(fd, &iostatus, sizeof(iostatus));
+
+  if (ret != sizeof(iostatus)) {
+    GLOG_ERROR("Partial read detected.  Actual read=" << ret << " Expected=" << sizeof(iostatus));
+    return 0;
+  }
+
+  GLOG_DEBUG("Recieved event"
+             << " completionId: " << (void *)iostatus.completionId
+             << " status: " << iostatus.errorCode);
+
+  gIOBatch *batch = reinterpret_cast<gIOBatch *>(iostatus.completionId);
+  assert(batch != nullptr);
+
+  NetworkXioRequest *pXioReq =
+      static_cast<NetworkXioRequest *>(batch->opaque);
+  assert(pXioReq != nullptr);
+
+  gIOExecFragment &frag = batch->array[0];
+  // reset addr otherwise BatchFree will free it
+  // need to introduce ownership indicator
+  frag.addr = nullptr;
+  gIOBatchFree(batch);
+
+  switch (pXioReq->op) {
+
+  case NetworkXioMsgOpcode::ReadRsp: {
+
+    if (iostatus.errorCode == 0) {
+      // read must return the size which was read
+      pXioReq->retval = pXioReq->size;
+      pXioReq->errval = 0;
+      GLOG_DEBUG(" Read completed with completion ID"
+                 << iostatus.completionId);
+    } else {
+      pXioReq->retval = -1;
+      pXioReq->errval = iostatus.errorCode;
+      GLOG_ERROR("Read completion error " << iostatus.errorCode
+                                          << " For completion ID "
+                                          << iostatus.completionId);
+    }
+
+    pack_msg(pXioReq);
+
+    NetworkXioClientData *cd =
+        reinterpret_cast<NetworkXioClientData *>(pXioReq->pClientData);
+
+    cd->ncd_server->send_reply(pXioReq);
+
+  } break;
+
+  default: 
+    GLOG_ERROR("Got an event for non-read operation "
+               << (int)pXioReq->op);
+  }
+  return 0;
+}
+
+void NetworkXioIOHandler::Disk::stopEventHandler() {
+  GLOG_INFO("deregistered fd=" << pipe_->getReadFD() << " for thread=" << gettid());
+  xio_context_del_ev_handler(handler_->cd_->ncd_ctx, pipe_->getReadFD());
+  pipe_.reset();
 }
 
 void NetworkXioIOHandler::handle_open(NetworkXioRequest *req) {
@@ -116,7 +225,7 @@ int NetworkXioIOHandler::handle_read(NetworkXioRequest *req,
     frag.completionId = reinterpret_cast<uint64_t>(batch);
 
     ret = IOExecFileRead(server_->serviceHandle_, filename.c_str(), filename.size(),
-                         batch, server_->disk_.eventHandle_);
+                         batch, disk_.pipe_->getWriteFD());
 
     if (ret != 0) {
       GLOG_ERROR("IOExecFileRead failed with error " << ret);
@@ -192,12 +301,13 @@ bool NetworkXioIOHandler::process_request(NetworkXioRequest *req) {
   return finishNow;
 }
 
+// this func runs in context of portal thread
 void NetworkXioIOHandler::handle_request(NetworkXioRequest *req) {
   auto ret = process_request(req); 
   if (ret == true) {
     // this means request has error and can be immediately  
     // sent back to client
-    req->pClientData->worker_bottom_half(req);
+    req->pClientData->ncd_server->send_reply(req);
   }
 }
 }

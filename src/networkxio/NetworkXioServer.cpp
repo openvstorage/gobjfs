@@ -169,14 +169,9 @@ void portal_func(void* data) {
 
   GLOG_INFO("started portal uri=" << cd->ncd_uri << ",thread=" << gettid());
 
-  while (not cd->ncd_server->stopping) {
-    xio_context_run_loop(cd->ncd_ctx, XIO_INFINITE);
-    while (not cd->is_finished_empty()) {
-      cd->ncd_server->send_reply(cd->get_finished());
-    }
-  }
+  xio_context_run_loop(cd->ncd_ctx, XIO_INFINITE);
 
-  // TODO drop_ev_handler
+  xio_context_del_ev_handler(cd->ncd_ctx, cd->evfd);
 
   xio_unbind(cd->ncd_xio_server);
 
@@ -214,160 +209,6 @@ void NetworkXioServer::evfd_stop_loop(int /*fd*/, int /*events*/,
   xio_context_stop_loop(ctx.get());
 }
 
-void NetworkXioServer::Disk::startEventHandler(NetworkXioServer* server) {
-
-  this->server_ = server;
-
-  try {
-
-    eventHandle_ = IOExecEventFdOpen(server->serviceHandle_);
-    if (eventHandle_ == nullptr) {
-      throw std::runtime_error("failed to open event handle");
-    }
-
-    auto efd = IOExecEventFdGetReadFd(eventHandle_);
-    if (efd == -1) {
-      throw std::runtime_error("failed to get read fd");
-    }
-
-    epollfd = epoll_create1(0);
-    if (epollfd < 0) {
-      throw std::runtime_error("epoll create failed with errno " + std::to_string(errno));
-    }
-
-    struct epoll_event event;
-    event.data.fd = efd;
-    event.events = EPOLLIN;
-    int err = epoll_ctl(epollfd, EPOLL_CTL_ADD, efd, &event);
-    if (err != 0) {
-      throw std::runtime_error("epoll_ctl failed with error " + std::to_string(errno));
-    }
-
-    err = ioCompletionThreadShutdown.init(epollfd);
-    if (err != 0) {
-      throw std::runtime_error("failed to init shutdown notifier " + std::to_string(err));
-    }
-
-    ioCompletionThread = std::thread(std::bind(
-        &NetworkXioServer::Disk::runEventHandler, this, efd));
-
-  } catch (std::exception& e) {
-    GLOG_ERROR("failed to init handler " << e.what());
-  }
-}
-
-int NetworkXioServer::Disk::runEventHandler(int efd) {
-
-  const unsigned int max = XIO_COMPLETION_DEFAULT_MAX_EVENTS;
-  epoll_event events[max];
-
-  bool mustExit = false;
-
-  while (!mustExit) {
-
-    int n = epoll_wait(epollfd, events, max, -1);
-
-    for (int i = 0; i < n; i++) {
-
-      if (events[i].data.ptr == &ioCompletionThreadShutdown) {
-        uint64_t counter;
-        ioCompletionThreadShutdown.recv(counter);
-        mustExit = true;
-        GLOG_DEBUG("Received shutdown event for ptr=" << (void *)this);
-        continue;
-      }
-
-      if (efd != events[i].data.fd) {
-        GLOG_ERROR("Received event for unknown fd="
-                   << static_cast<uint32_t>(events[i].data.fd));
-        continue;
-      }
-
-      gIOStatus iostatus;
-      int ret = read(efd, &iostatus, sizeof(iostatus));
-
-      if (ret != sizeof(iostatus)) {
-        GLOG_ERROR("Partial read detected.  Actual read=" << ret << " Expected=" << sizeof(iostatus));
-        continue;
-      }
-
-      GLOG_DEBUG("Recieved event"
-                 << " completionId: " << (void *)iostatus.completionId
-                 << " status: " << iostatus.errorCode);
-
-      gIOBatch *batch = reinterpret_cast<gIOBatch *>(iostatus.completionId);
-      assert(batch != nullptr);
-
-      NetworkXioRequest *pXioReq =
-          static_cast<NetworkXioRequest *>(batch->opaque);
-      assert(pXioReq != nullptr);
-
-      gIOExecFragment &frag = batch->array[0];
-      // reset addr otherwise BatchFree will free it
-      // need to introduce ownership indicator
-      frag.addr = nullptr;
-      gIOBatchFree(batch);
-
-      switch (pXioReq->op) {
-
-      case NetworkXioMsgOpcode::ReadRsp: {
-
-        if (iostatus.errorCode == 0) {
-          // read must return the size which was read
-          pXioReq->retval = pXioReq->size;
-          pXioReq->errval = 0;
-          GLOG_DEBUG(" Read completed with completion ID"
-                     << iostatus.completionId);
-        } else {
-          pXioReq->retval = -1;
-          pXioReq->errval = iostatus.errorCode;
-          GLOG_ERROR("Read completion error " << iostatus.errorCode
-                                              << " For completion ID "
-                                              << iostatus.completionId);
-        }
-
-        pack_msg(pXioReq);
-
-        NetworkXioClientData *cd =
-            reinterpret_cast<NetworkXioClientData *>(pXioReq->pClientData);
-        cd->worker_bottom_half(pXioReq);
-      } break;
-
-      default: {
-        GLOG_ERROR("Got an event for non-read operation "
-                   << (int)pXioReq->op);
-      }
-      }
-    }
-  }
-  return 0;
-}
-
-void NetworkXioServer::Disk::stopEventHandler() {
-  try {
-    int err = ioCompletionThreadShutdown.send();
-    if (err != 0) {
-      GLOG_ERROR("failed to notify completion thread");
-    } else {
-      ioCompletionThread.join();
-    }
-
-    ioCompletionThreadShutdown.destroy();
-
-  } catch (const std::exception &e) {
-    GLOG_ERROR("failed to join completion thread");
-  }
-
-  if (eventHandle_) {
-    IOExecEventFdClose(eventHandle_);
-    eventHandle_ = nullptr;
-  }
-
-  if (epollfd != -1) {
-    close(epollfd);
-    epollfd = -1;
-  }
-}
 
 void NetworkXioServer::run(std::promise<void> &promise) {
   int xopt = 2;
@@ -380,8 +221,6 @@ void NetworkXioServer::run(std::promise<void> &promise) {
   if (serviceHandle_ == nullptr) {
     throw std::bad_alloc();
   }
-
-  disk_.startEventHandler(this);
 
   xio_init();
 
@@ -475,8 +314,6 @@ void NetworkXioServer::run(std::promise<void> &promise) {
   ctx.reset();
   xio_mpool.reset();
 
-  disk_.stopEventHandler();
-
   if (serviceHandle_) {
     IOExecFileServiceDestroy(serviceHandle_);
     serviceHandle_ = nullptr;
@@ -502,7 +339,7 @@ NetworkXioServer::create_session_connection(xio_session *session,
     cd->ncd_mpool = xio_mpool.get();
     cd->ncd_server = this;
 
-    cd->ncd_ioh = new NetworkXioIOHandler(this);
+    cd->ncd_ioh = new NetworkXioIOHandler(this, cd);
 
   } catch (...) {
 

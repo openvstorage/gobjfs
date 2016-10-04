@@ -133,22 +133,6 @@ private:
 
   void destroy_client_data(NetworkXioClientData* cd);
 
-  // Disk IO related structures
-  struct Disk {
-
-    NetworkXioServer* server_{nullptr};
-    IOExecEventFdHandle eventHandle_{nullptr};
-    int epollfd = -1;
-    std::thread ioCompletionThread;
-    gobjfs::os::ShutdownNotifier ioCompletionThreadShutdown;
-
-    public:
-
-    void startEventHandler(NetworkXioServer* server);
-    int runEventHandler(int efd);
-    void stopEventHandler();
-  } disk_;
-
 };
 }
 } // namespace

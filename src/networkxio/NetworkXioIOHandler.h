@@ -20,6 +20,7 @@ but WITHOUT ANY WARRANTY of any kind.
 #include "NetworkXioRequest.h"
 
 #include <util/ShutdownNotifier.h>
+#include <util/Pipe.h>
 
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -34,7 +35,7 @@ namespace xio {
 
 class NetworkXioIOHandler {
 public:
-  NetworkXioIOHandler(NetworkXioServer* server);
+  NetworkXioIOHandler(NetworkXioServer* server, NetworkXioClientData *cd);
 
   ~NetworkXioIOHandler();
 
@@ -59,6 +60,19 @@ private:
   std::string configFileName_;
 
   NetworkXioServer* server_;
+
+  NetworkXioClientData* cd_;
+  //
+  // Disk IO related structures
+  struct Disk {
+
+    NetworkXioIOHandler* handler_;
+    PipeUPtr pipe_;
+
+    void startEventHandler();
+    int runEventHandler(int fd, int events, void* data);
+    void stopEventHandler();
+  } disk_;
 
 };
 
