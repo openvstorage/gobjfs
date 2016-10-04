@@ -34,6 +34,8 @@ public:
 
   int32_t pause();
 
+  bool notAvailable();
+
   int32_t wakeup(uint64_t count = 1);
 
   int getValue();

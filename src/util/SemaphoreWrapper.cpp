@@ -38,6 +38,14 @@ int32_t SemaphoreWrapper::init(unsigned int initVal, int epollfd) {
   return ret;
 }
 
+bool SemaphoreWrapper::notAvailable() {
+  int ret = sem_trywait(&semaphore_);
+  if ((ret == -1) && (errno == EAGAIN)) {
+    return true;
+  } 
+  return false;
+}
+
 int32_t SemaphoreWrapper::pause() {
   int ret = sem_wait(&semaphore_);
   if (ret != 0) {

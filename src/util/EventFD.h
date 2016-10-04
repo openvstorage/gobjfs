@@ -21,8 +21,8 @@ but WITHOUT ANY WARRANTY of any kind.
 #include <cstdint>
 #include <unistd.h>
 
-namespace gobjfs {
-namespace os {
+
+// cannot use namespace because this class used in typedef in gIOExecFile.h
 
 struct EventFD {
   EventFD() {
@@ -74,6 +74,3 @@ private:
   int evfd_;
 };
 
-
-}
-}
