@@ -224,9 +224,10 @@ int NetworkXioIOHandler::handle_read(NetworkXioRequest *req,
     frag.size = size;
     frag.completionId = reinterpret_cast<uint64_t>(batch);
 
-    // pass cd->coreId to the job; let the IOExecutor submit the job
-    // on the same core as the accelio portal thread on which it
-    // was received
+    // passing cd->coreId to the job allows the IOExecutor to execute
+    // job on the same core as the accelio portal thread on which it
+    // was received.  Not getting any perf improvement with this so
+    // disabling it.
     ret = IOExecFileRead(server_->serviceHandle_, filename.c_str(), filename.size(),
                          batch, 
                          disk_.pipe_->getWriteFD(),

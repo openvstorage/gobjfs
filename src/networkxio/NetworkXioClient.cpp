@@ -70,8 +70,11 @@ static inline std::shared_ptr<xio_session> getSession(const std::string& uri,
     // session does not exist, create one
     auto session = std::shared_ptr<xio_session>(xio_session_create(&session_params),
                                          dbg_xio_session_destroy);
+#ifdef SHARED_SESSION
+    //TODO change conn_idx = 0 when you enable this code
     //auto insertIter = sessionMap.insert(std::make_pair(uri, session));
     //assert(insertIter.second == true); // insert succeded
+#endif
     GLOG_INFO("session=" << (void*)session.get() << " created for " << uri);
     retptr = session;
   } else {
@@ -266,7 +269,15 @@ void NetworkXioClient::run() {
   cparams.session = session.get();
   cparams.ctx = ctx.get();
   cparams.conn_user_context = this;
-  cparams.conn_idx = 0;
+#ifdef SHARED_SESSION
+  cparams.conn_idx = 0; 
+  // xio will auto-increment internally when conn_idx = 0
+  // and load-balance when session is shared between multiple connections
+  // enable this code after fixing shared session destructor error
+#else
+  // this is temporary hack assuming max portals never more than 20
+  cparams.conn_idx = gettid() % 20;
+#endif
 
   conn = xio_connect(&cparams);
   if (conn == nullptr) {
