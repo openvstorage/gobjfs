@@ -40,9 +40,8 @@ namespace gobjfs {
 
 FilerCtx::FilerCtx() {}
 
-int32_t FilerCtx::init(int32_t queueDepth, int epollFD) {
+int32_t FilerCtx::init(int32_t queueDepth) {
   ioQueueDepth_ = queueDepth;
-  epollFD_ = epollFD;
 
   int retcode = 0;
 
@@ -55,50 +54,14 @@ int32_t FilerCtx::init(int32_t queueDepth, int epollFD) {
     }
     numAvailable_ = ioQueueDepth_;
 
-    retcode = eventfd(0, EFD_NONBLOCK | EFD_CLOEXEC);
-    if (retcode == -1) {
-      LOG(ERROR) << "Failed to create eventfd errno=" << -errno;
-      break;
-    }
-    eventFD_ = retcode;
-
-    epoll_event epollEvent;
-    bzero(&epollEvent, sizeof(epollEvent));
-
-    // since event.data is set to contain pointer to ctx,
-    // it will be returned by epoll_wait()
-    // this way, you can find FilerCtx from eventFD
-    epollEvent.data.ptr = (void *)this;
-
-    epollEvent.events = EPOLLIN | EPOLLPRI | EPOLLERR | EPOLLHUP;
-    retcode = epoll_ctl(epollFD_, EPOLL_CTL_ADD, eventFD_, &epollEvent);
-    if (retcode != 0) {
-      LOG(ERROR) << "Failed to add epoll errno=" << -errno;
-      break;
-    }
-
-    LOG(INFO) << "epoll registered filer fd=" << eventFD_
-              << " with ptr=" << (void *)this;
-
   } while (0);
 
   return retcode;
 }
 
 FilerCtx::~FilerCtx() {
-  int retcode = 0;
-  assert(epollFD_ >= 0);
 
-  /* IOExecutor itself is being destroyed
-  int retcode = epoll_ctl(epollFD_, EPOLL_CTL_DEL, eventFD_, NULL);
-  VLOG(2) << "FilerCtx: epoll_ctl retcode: " << retcode << std::endl;
-  assert(retcode >= 0);
-  */
-  retcode = close(eventFD_);
-  if (retcode < 0) {
-    LOG(ERROR) << "Failed to close fd=" << eventFD_ << " errno=" << -errno;
-  }
-  retcode = io_queue_release(ioCtx_);
+  int retcode = io_queue_release(ioCtx_);
   if (retcode < 0) {
     LOG(ERROR) << "Failed to release ioctx errno=" << retcode;
   }
@@ -203,9 +166,6 @@ void IOExecutor::Statistics::incrementOps(FilerJob *job) {
 }
 
 void IOExecutor::Statistics::print() const {
-  LOG(INFO) << "\"completionThread\":" << completionThread_.ToString();
-  LOG(INFO) << "\"submitterThread\":" << submitterThread_.ToString();
-  LOG(INFO) << "\"fdQueueThread\":" << submitterThread_.ToString();
 
   LOG(INFO) << getState();
 
@@ -253,40 +213,15 @@ std::string IOExecutor::Statistics::OpStats::getState() const {
 
 IOExecutor::IOExecutor(const std::string &name, CoreId core,
                        const Config &config)
-    : Executor(name, core), config_(config), requestQueue_(config.queueDepth_),
-      fdQueue_(0) {
+    : Executor(name, core), config_(config), requestQueue_(config.queueDepth_) {
   config_.print();
 
-  epollFD_ = epoll_create1(0);
-  assert(epollFD_ >= 0);
-
-  ctx_.init(config_.queueDepth_, epollFD_);
-
-  ctxCond_.init(config_.queueDepth_, /*fd*/ 0);
-  fdQueueCond_.init(0, /*fd*/ 0);
-
-  completionThreadShutdown_.init(epollFD_);
+  ctx_.init(config_.queueDepth_);
 
   state_ = State::RUNNING;
 
-  if (config_.noSubmitterThread_) {
-    periodicTimer_.init(epollFD_, 5 /*timer every n sec*/, 0);
-  } else {
-    submitterThread_ = std::thread(std::bind(&IOExecutor::execute, this));
-  }
-
-  try {
-    fdQueueThread_ = std::thread(std::bind(&IOExecutor::ProcessFdQueue, this));
-
-    completionThread_ =
-        std::thread(std::bind(&IOExecutor::ProcessCompletions, this));
-
-    LOG(INFO) << "IOExecutor started " << name_
-              << ":ioexecutor=" << (void *)this << ":core=" << core_;
-  } catch (const std::exception &e) {
-    LOG(ERROR) << "Unable to start threads. Exception=" << e.what();
-    state_ = State::NOT_STARTED;
-  }
+  LOG(INFO) << "IOExecutor started " << name_
+            << ":ioexecutor=" << (void *)this << ":core=" << core_;
 }
 
 IOExecutor::~IOExecutor() {
@@ -295,110 +230,15 @@ IOExecutor::~IOExecutor() {
   }
 }
 
-void IOExecutor::execute() {
-  if (core_ > CoreIdInvalid) {
-    gobjfs::os::BindThreadToCore(core_);
-  }
-  // gobjfs::RaiseThreadPriority();
-
-  LOG(INFO) << "IOExecutor started " << name_ << ":ioexecutor=" << (void *)this
-            << ":core=" << core_ << ":submitter threadid=" << gettid();
-
-  minSubmitSize_ = config_.minSubmitSize_;
-
-  while (state_ != NO_MORE_INTAKE) {
-    int32_t numProcessedInLoop = 0;
-
-    if (requestQueueSize_ >= (int32_t)minSubmitSize_) {
-      numProcessedInLoop += ProcessRequestQueue();
-      minSubmitSize_ = config_.minSubmitSize_;
-    } else {
-      // gradually reduce barrier to entry for new requests
-      if (minSubmitSize_ > 1)
-        minSubmitSize_ /= 2;
-    }
-
-    stats_.numProcessedInLoop_ = numProcessedInLoop;
-
-    // if no work done in this round, save some CPU
-    if (numProcessedInLoop == 0) {
-      stats_.idleLoop_++;
-      // sleep if no ctx and no requests for 5 consecutive loops
-      {
-        // if no work, lets wait
-        if ((requestQueueSize_ < (int32_t)minSubmitSize_) &&
-            (fdQueueSize_ == 0)) {
-          std::unique_lock<std::mutex> lck(submitterCond_.mutex_);
-          int32_t sleepTime = 1;
-
-          while ((requestQueueSize_ < (int32_t)minSubmitSize_) &&
-                 (fdQueueSize_ == 0) && (state_ == RUNNING)) {
-            if (minSubmitSize_ > 1)
-              minSubmitSize_ /= 2;
-
-            submitterWaitingForNewRequests_ = true;
-            if (sleepTime == 1) {
-              stats_.requestQueueLow1_++;
-            } else {
-              stats_.requestQueueLow2_++;
-            }
-            submitterCond_.cond_.wait_for(lck,
-                                          std::chrono::microseconds(sleepTime));
-            if (sleepTime < 1000)
-              sleepTime *= 10;
-            LOG_EVERY_N(INFO, 1000) // log every 10 sec or so
-                << "waiting with requestQueueSize=" << requestQueueSize_
-                << ":fdQueueSize=" << fdQueueSize_
-                << ":idleloop=" << stats_.idleLoop_
-                << ":minSubmitSize=" << minSubmitSize_
-                << ":numReads=" << stats_.read_.numOps_
-                << ":numWrites=" << stats_.write_.numOps_
-                << ":numNonAlignedWrites=" << stats_.nonAlignedWrite_.numOps_
-                << ":state=" << state_;
-            submitterWaitingForNewRequests_ = false;
-          }
-        }
-      }
-    }
-  }
-
-  stats_.submitterThread_.getThreadStats();
-}
-
 void IOExecutor::stop() {
-  state_ = State::NO_MORE_INTAKE;
-
-  if (!config_.noSubmitterThread_) {
-    submitterCond_.wakeup();
-    ctxCond_.wakeup();
-    try {
-      submitterThread_.join();
-    } catch (const std::exception &e) {
-      LOG(ERROR) << "Failed to join submitterThread. Exception=" << e.what();
-    }
-  }
-
-  fdQueueCond_.wakeup();
-  try {
-    fdQueueThread_.join();
-  } catch (const std::exception &e) {
-    LOG(ERROR) << "Failed to join fdQueueThread. Exception=" << e.what();
-  }
-
-  state_ = State::FINAL_SHUTDOWN;
-
-  completionThreadShutdown_.send();
-  try {
-    completionThread_.join();
-  } catch (const std::exception &e) {
-    LOG(ERROR) << "Failed to join completionThread. Exception=" << e.what();
-  }
 
   stats_.print();
 
-  close(epollFD_);
-
   state_ = State::TERMINATED;
+}
+
+void IOExecutor::execute() {
+  assert(0);
 }
 
 int32_t IOExecutor::ProcessRequestQueue() {
@@ -413,8 +253,11 @@ int32_t IOExecutor::ProcessRequestQueue() {
   // and free it after io_submit
   iocb cbVec[ctx_.ioQueueDepth_];
 
-  ctxCond_.pause();  // dummy increment to check if ctx available
-  ctxCond_.wakeup(); // undo decrement
+  while (ctx_.isEmpty()) {
+    handleXioEvent(-1, 0, nullptr);
+    LOG(WARNING) << "no free ctx";
+    usleep(1);
+  }
 
   while (!ctx_.isEmpty()) {
     const bool gotJob = requestQueue_.consume_one([&](FilerJob *job) {
@@ -422,7 +265,9 @@ int32_t IOExecutor::ProcessRequestQueue() {
 
       job->prepareCallblock(cb);
 
-      io_set_eventfd(cb, ctx_.eventFD_);
+      //io_set_eventfd(cb, ctx_.eventFD_);
+      assert(job->completionFd_ != -1);
+      io_set_eventfd(cb, job->completionFd_);
       post_iocb[numToSubmit] = cb;
 
     });
@@ -430,7 +275,6 @@ int32_t IOExecutor::ProcessRequestQueue() {
     if (gotJob) {
       numToSubmit++;
       ctx_.decrementNumAvailable(1);
-      ctxCond_.pause();
       int32_t num = requestQueueSize_--;
       assert(num >= 0);
       (void)num;
@@ -500,7 +344,6 @@ int32_t IOExecutor::ProcessRequestQueue() {
                    << " with errors=" << ostr.str();
 
         ctx_.incrementNumAvailable(numRemaining);
-        ctxCond_.wakeup(numRemaining);
         break;
 
       } else {
@@ -516,7 +359,6 @@ int32_t IOExecutor::ProcessRequestQueue() {
                        << " total size " << numToSubmit;
 
           ctx_.incrementNumAvailable(numSubmitted);
-          ctxCond_.wakeup(numSubmitted);
         } else {
           assert(numRemaining == 0);
           // we are done here
@@ -541,7 +383,6 @@ int32_t IOExecutor::ProcessRequestQueue() {
       }
 
       ctx_.incrementNumAvailable(numRemaining);
-      ctxCond_.wakeup(numRemaining);
 
       LOG(ERROR) << "only able to submit " << numRemaining << " out of "
                  << numToSubmit;
@@ -553,66 +394,6 @@ int32_t IOExecutor::ProcessRequestQueue() {
   }
 
   return (numToSubmit - numRemaining);
-}
-
-int32_t IOExecutor::ProcessFdQueue() {
-  if (core_ > CoreIdInvalid) {
-    gobjfs::os::BindThreadToCore(core_);
-  }
-
-  LOG(INFO) << "IOExecutor started " << name_ << ":ioexecutor=" << (void *)this
-            << ":core=" << core_ << ":fdQueue threadid=" << gettid();
-
-  uint32_t numConsumed = 0;
-
-  while (state_ != NO_MORE_INTAKE) {
-    fdQueueCond_.pause();
-
-    bool gotJob = fdQueue_.consume_one([&](FilerJob *job) {
-
-      if (job->op_ == FileOp::Delete) {
-        job->setWaitTime();
-        stats_.numSubmitted_++;
-        int retcode = ::unlink(job->fileName_.c_str());
-        job->retcode_ = (retcode == 0) ? 0 : -errno;
-        if (retcode != 0) {
-          LOG(ERROR) << "delete file=" << job->fileName_
-                     << " failed errno=" << job->retcode_;
-        }
-      } else if (job->op_ == FileOp::NonAlignedWrite) {
-        job->setWaitTime();
-        stats_.numSubmitted_++;
-        ssize_t writeSz =
-            ::pwrite(job->fd_, job->buffer_, job->userSize_, job->offset_);
-        if (writeSz != job->userSize_) {
-          job->retcode_ = -errno;
-          LOG(ERROR) << "op=" << job->op_ << " failed for job=" << (void *)job
-                     << " errno=" << job->retcode_;
-        } else {
-          job->retcode_ = 0;
-        }
-      } else {
-        LOG(ERROR) << "unknown op=" << job->op_ << " for job=" << (void *)job;
-        job->retcode_ = -EINVAL;
-      }
-
-      doPostProcessingOfJob(job);
-    });
-
-    if (gotJob) {
-      numConsumed++;
-    } else {
-      break;
-    }
-
-    fdQueueSize_--;
-    if (fdQueueSize_ >= (int32_t)config_.maxRequestQueueSize_) {
-      fdQueueHasSpace_.wakeup();
-    }
-  }
-
-  stats_.fdQueueThread_.getThreadStats();
-  return 0;
 }
 
 int IOExecutor::submitTask(FilerJob *job, bool blocking) {
@@ -636,40 +417,8 @@ int IOExecutor::submitTask(FilerJob *job, bool blocking) {
       }
     }
 
-    if ((job->op_ == FileOp::Delete) || (job->op_ == FileOp::Sync) ||
-        (job->op_ == FileOp::NonAlignedWrite)) {
 
-      if (fdQueueSize_ > (int32_t)config_.maxRequestQueueSize_) {
-        if (!blocking) {
-          LOG(ERROR) << "FD Queue full.  rejecting nonblocking job="
-                     << (void *)job;
-          ret = job->retcode_ = -EAGAIN;
-          break;
-        } else {
-          stats_.requestQueueFull_++;
-          fdQueueHasSpace_.pause();
-        }
-      }
-
-      // increment size before push, to prevent race conditions
-      job->setSubmitTime();
-      job->executor_ = this;
-      stats_.numQueued_++;
-
-      stats_.maxFdQueueSize_ = ++fdQueueSize_;
-
-      bool pushReturn = false;
-      do {
-        pushReturn = fdQueue_.push(job);
-        if (pushReturn == false) {
-          LOG_EVERY_N(WARNING, 10) << "push into fdQueue failing";
-        }
-      } while (pushReturn == false);
-      fdQueueCond_.wakeup();
-      break;
-    }
-
-    else if ((job->op_ == FileOp::Write) || (job->op_ == FileOp::Read)) {
+    if ((job->op_ == FileOp::Write) || (job->op_ == FileOp::Read)) {
 
       if (requestQueueSize_ > (int32_t)config_.maxRequestQueueSize_) {
         if (!blocking) {
@@ -700,22 +449,7 @@ int IOExecutor::submitTask(FilerJob *job, bool blocking) {
         }
       } while (pushReturn == false);
 
-      // if context is free & num jobs > min, wakeup
-
-      if (config_.noSubmitterThread_) {
-        if (requestQueueSize_ >= (int32_t)minSubmitSize_) {
-          std::unique_lock<std::mutex> lck(submitterCond_.mutex_);
-          if (requestQueueSize_ >= (int32_t)minSubmitSize_)
-            ProcessRequestQueue();
-        }
-      } else {
-        if (submitterWaitingForNewRequests_) {
-          std::unique_lock<std::mutex> lck(submitterCond_.mutex_);
-          if (submitterWaitingForNewRequests_) {
-            submitterCond_.cond_.notify_one();
-          }
-        }
-      }
+      ProcessRequestQueue();
     } else {
       LOG(ERROR) << "bad op=" << job->op_;
       ret = -EAGAIN;
@@ -725,156 +459,37 @@ int IOExecutor::submitTask(FilerJob *job, bool blocking) {
   return ret;
 }
 
-/**
- * The reason we need to use epoll_wait() is in order to obtain
- * shutdown notification without burning CPU.
- * Otherwise it would be sufficient to loop on io_getevents().
- */
-void IOExecutor::ProcessCompletions() {
+int IOExecutor::handleXioEvent(int fd, int events, void* data) {
 
-  if (core_ >= 0) {
-    gobjfs::os::BindThreadToCore(core_);
+  if (ctx_.isFull()) { 
+    return 0;
   }
 
-  LOG(INFO) << "IOExecutor started " << name_ << " ioexecutor=" << (void *)this
-            << " core=" << core_ << " completion threadid=" << gettid();
+  io_event readyIOEvents[EPOLL_MAXEVENT];
+  bzero(readyIOEvents, sizeof(io_event) * EPOLL_MAXEVENT);
 
-  epoll_event readyEpollEvents[EPOLL_MAXEVENT];
+  int numEventsGot = 0;
 
-  while (1) {
-    if ((state_ == FINAL_SHUTDOWN) &&
-        (stats_.numQueued_ == stats_.numCompleted_)) {
-      // all outstanding IO done. now its safe to exit
-      break;
+  //struct timespec ts = {0, 10000 };
+  do {
+    numEventsGot = io_getevents(
+        ctx_.ioCtx_, 1, EPOLL_MAXEVENT,
+        &readyIOEvents[0], nullptr);
+  } while ((numEventsGot == -EINTR) || (numEventsGot == -EAGAIN));
+
+  if (numEventsGot > 0) {
+    stats_.numCompletionEvents_ += numEventsGot;
+    // process the bottom half on all completed jobs in the io context
+    int ret = ProcessCallbacks(readyIOEvents, numEventsGot);
+    if (ret != 0) {
+      // TODO: handle errors
+      assert(false);
     }
-
-    bzero(readyEpollEvents, sizeof(epoll_event) * EPOLL_MAXEVENT);
-
-    int numEpollEvents = 0;
-
-    do {
-      numEpollEvents =
-          epoll_wait(epollFD_, readyEpollEvents, EPOLL_MAXEVENT, -1);
-    } while (numEpollEvents < 0 && ((errno == EINTR) || (errno == EAGAIN)));
-
-    if (numEpollEvents < 0) {
-      LOG(ERROR) << "completions thread got epoll_wait error=" << errno;
-      continue;
-    }
-
-    assert(numEpollEvents > 0); // should not happen
-    stats_.numCompletionEvents_ += numEpollEvents;
-
-    for (int i = 0; i < numEpollEvents; ++i) {
-      epoll_event &thisEvent = readyEpollEvents[i];
-
-      if ((thisEvent.events & (EPOLLERR | EPOLLHUP | EPOLLPRI)) ||
-          !(thisEvent.events & EPOLLIN)) {
-
-        LOG(WARNING) << " received abnormal event on epoll= "
-                     << static_cast<uint32_t>(thisEvent.events);
-
-      } else if (thisEvent.data.ptr == &completionThreadShutdown_) {
-
-        // handle shutdown request
-        LOG(INFO) << "completion thread for core=" << core_
-                  << " got shutdown request";
-        uint64_t counter;
-        completionThreadShutdown_.recv(counter);
-        // signal was sent to wakeup thread
-        if (state_ == State::FINAL_SHUTDOWN) {
-          // process jobs stuck in request queue
-          std::unique_lock<std::mutex> lck(submitterCond_.mutex_);
-          ProcessRequestQueue();
-        }
-
-      } else if (thisEvent.data.ptr == &periodicTimer_) {
-
-        if (config_.noSubmitterThread_) {
-          // handle timer request
-          VLOG(1) << "completion thread for core=" << core_
-                  << " got timer request";
-          periodicTimer_.recv();
-          if (state_ == State::FINAL_SHUTDOWN) {
-            // process jobs stuck in request queue
-            std::unique_lock<std::mutex> lck(submitterCond_.mutex_);
-            ProcessRequestQueue();
-          }
-        } else {
-          LOG(FATAL) << "how did we receive this event?";
-        }
-
-      } else if (thisEvent.data.ptr == &ctx_) {
-
-        // find out how many io events are actually available in the eventfd
-        FilerCtx *ctxPtr = reinterpret_cast<FilerCtx *>(thisEvent.data.ptr);
-        assert(ctxPtr);
-        int64_t numEvents = 0;
-
-        ssize_t ret = read(ctxPtr->eventFD_, &numEvents, sizeof(numEvents));
-
-        assert(ret == sizeof(numEvents));
-        assert(numEvents > 0 && numEvents <= ctxPtr->ioQueueDepth_);
-        {
-          // process all available io events from the firing io context
-          io_event readyIOEvents[numEvents];
-          bzero(readyIOEvents, sizeof(io_event) * numEvents);
-
-          VLOG(1) << "filerctx=" << ctxPtr << " has events=" << numEvents;
-
-          assert(ctxPtr == &ctx_);
-
-          int32_t numProcessedEvents = 0;
-          while (numProcessedEvents < numEvents) {
-
-            int numEventsGot = 0;
-            do {
-              numEventsGot = io_getevents(
-                  ctxPtr->ioCtx_, 1, (numEvents - numProcessedEvents),
-                  &readyIOEvents[numProcessedEvents], nullptr);
-            } while ((numEventsGot == -EINTR) || (numEventsGot == -EAGAIN));
-
-            if (numEventsGot >= 0) {
-              numProcessedEvents += numEventsGot;
-            } else {
-              LOG(ERROR) << "getevents error=" << errno;
-            }
-          }
-
-          // process the bottom half on all completed jobs in the io context
-          ret = ProcessCallbacks(readyIOEvents, numEvents);
-          if (ret != 0) {
-            // TODO: handle errors
-            assert(false);
-          }
-        }
-
-      } else {
-        LOG(ERROR) << "got unknown event with ptr="
-                   << static_cast<void *>(thisEvent.data.ptr);
-      }
-    }
-
-    if (submitterWaitingForFreeCtx_) {
-      std::unique_lock<std::mutex> lck(submitterCond_.mutex_);
-      if (submitterWaitingForFreeCtx_ && (!ctx_.isEmpty())) {
-        submitterCond_.cond_.notify_one();
-      }
-    }
+  } else if (numEventsGot < 0) {
+    LOG(ERROR) << "getevents error=" << errno;
   }
 
-  completionThreadShutdown_.destroy();
-
-  stats_.completionThread_.getThreadStats();
-
-  LOG(INFO) << " Completions thread exited "
-            << ":ioexecutor=" << (void *)this << ":core=" << core_
-            << ":state=" << state_ << ":numQueued=" << stats_.numQueued_
-            << ":numSubmitted=" << stats_.numSubmitted_
-            << ":numCompleted=" << stats_.numCompleted_
-            << ":numEventsProcessed=" << stats_.numCompletionEvents_;
-
-  // google::FlushLogFiles(0); TODO logging
+  return 0;
 }
 
 int32_t IOExecutor::ProcessCallbacks(io_event *events, int32_t numEvents) {
@@ -908,7 +523,6 @@ int32_t IOExecutor::ProcessCallbacks(io_event *events, int32_t numEvents) {
 
     doPostProcessingOfJob(job);
     ctx_.incrementNumAvailable();
-    ctxCond_.wakeup();
   }
 
   return error;
@@ -931,8 +545,7 @@ int32_t IOExecutor::doPostProcessingOfJob(FilerJob *job) {
 std::string IOExecutor::getState() const {
   std::ostringstream s;
 
-  s << "{\"core\":" << core_ << ",\"fdqueueSize\":" << fdQueueSize_
-    << ",\"requestQueue\":" << requestQueueSize_ << "," << ctx_.getState()
+  s << "{" << ctx_.getState()
     << "," << stats_.getState() << "}" << std::endl;
 
   return s.str();

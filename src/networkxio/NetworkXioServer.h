@@ -30,8 +30,6 @@ but WITHOUT ANY WARRANTY of any kind.
 #include <networkxio/gobjfs_config.h>
 #include <util/EventFD.h>
 
-using gobjfs::os::EventFD;
-
 namespace gobjfs {
 namespace xio {
 
@@ -105,9 +103,6 @@ private:
   FileTranslatorFunc fileTranslatorFunc_{nullptr};
 
   bool newInstance_{false};
-
-  // owned by NetworkXioServer
-  IOExecServiceHandle serviceHandle_{nullptr};
 
 public: // TODO
   bool stopping{false};

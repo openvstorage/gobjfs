@@ -214,13 +214,6 @@ void NetworkXioServer::run(std::promise<void> &promise) {
 
   XXEnter();
 
-  serviceHandle_ = IOExecFileServiceInit(numCoresForIO_, queueDepthForIO_,
-                                         fileTranslatorFunc_, newInstance_);
-
-  if (serviceHandle_ == nullptr) {
-    throw std::bad_alloc();
-  }
-
   xio_init();
 
   xio_set_opt(NULL, XIO_OPTLEVEL_ACCELIO, XIO_OPTNAME_MAX_IN_IOVLEN, &xopt,
@@ -312,11 +305,6 @@ void NetworkXioServer::run(std::promise<void> &promise) {
   server.reset();
   ctx.reset();
   xio_mpool.reset();
-
-  if (serviceHandle_) {
-    IOExecFileServiceDestroy(serviceHandle_);
-    serviceHandle_ = nullptr;
-  }
 
   std::lock_guard<std::mutex> lock_(mutex_);
   stopped = true;

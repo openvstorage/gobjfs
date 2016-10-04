@@ -18,6 +18,7 @@ but WITHOUT ANY WARRANTY of any kind.
 #pragma once
 
 #include "NetworkXioRequest.h"
+#include <gcommon.h>
 
 #include <util/ShutdownNotifier.h>
 #include <util/Pipe.h>
@@ -48,6 +49,8 @@ public:
 
   void handle_request(NetworkXioRequest *req);
 
+  int runEventHandler(gIOStatus& iostatus);
+
 private:
   void handle_open(NetworkXioRequest *req);
 
@@ -61,18 +64,16 @@ private:
 
   NetworkXioServer* server_;
 
+  IOExecServiceHandle serviceHandle_{nullptr};
+
+  IOExecEventFdHandle eventHandle_{nullptr};
+
+  int eventFD_{-1};
+
   NetworkXioClientData* cd_;
-  //
-  // Disk IO related structures
-  struct Disk {
 
-    NetworkXioIOHandler* handler_;
-    PipeUPtr pipe_;
-
-    void startEventHandler();
-    int runEventHandler(int fd, int events, void* data);
-    void stopEventHandler();
-  } disk_;
+  void startEventHandler();
+  void stopEventHandler();
 
 };
 

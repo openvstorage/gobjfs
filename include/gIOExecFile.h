@@ -78,6 +78,8 @@ void gIOStatusBatchFree(gIOStatusBatch *ptr);
 typedef int (*FileTranslatorFunc)(const char *old_name, size_t old_length,
                                   char *new_name);
 
+typedef int (*CallbackFunc) (gIOStatus&, void*);
+
 IOExecServiceHandle IOExecFileServiceInit(const char *pConfigFileName,
                                           FileTranslatorFunc fileTranslatorFunc,
                                           bool createFlag);
@@ -97,8 +99,7 @@ int32_t IOExecFileClose(IOExecFileHandle FileHandle);
 
 int32_t IOExecFileTruncate(IOExecFileHandle FileHandle, size_t newSize);
 
-struct IOExecEventFdInt;
-typedef IOExecEventFdInt *IOExecEventFdHandle;
+typedef struct EventFD *IOExecEventFdHandle;
 
 IOExecEventFdHandle IOExecEventFdOpen(IOExecServiceHandle serviceHandle);
 
@@ -108,6 +109,9 @@ int IOExecEventFdGetReadFd(IOExecEventFdHandle eventFdPtr);
 
 // hidden API to retrieve number of configured IOExecutors
 int32_t IOExecGetNumExecutors(IOExecServiceHandle serviceHandle);
+
+// used only in xio (rora fetcher) code path
+void* IOExecGetExecutorPtr(IOExecServiceHandle serviceHandle, int slot);
 
 // return the number of bytes filled in buffer
 int32_t IOExecGetStats(IOExecServiceHandle serviceHandle, char *buf,
@@ -152,12 +156,13 @@ int32_t IOExecFileRead(IOExecServiceHandle serviceHandle, const char *fileName,
  * @param pIOBatch batch containing offset, size and buffer to read
  * @param fd the fd on which callback notification should be written
  *           when job is completed
- * @param core_id on which to execute the job (-1 for no preference)
+ * @param callbackFunc to execute when job finishes
  */
 int32_t IOExecFileRead(IOExecServiceHandle serviceHandle, const char *fileName,
                        size_t fileNameLength, const gIOBatch *batch,
                        int notification_fd,
-                       int core_id);
+                       CallbackFunc callbackFunc,
+                       void* callbackFuncCtx);
 
 /**
  *
@@ -180,7 +185,7 @@ typedef IOExecServiceInt *service_handle_t;
 
 typedef IOExecFileInt *handle_t;
 
-typedef IOExecEventFdInt *event_t;
+typedef struct EventFD *event_t;
 
 typedef gIOBatch batch_t;
 

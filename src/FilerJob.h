@@ -2,6 +2,7 @@
 
 #include <Queueable.h>
 #include <gcommon.h>
+#include <gIOExecFile.h>
 #include <libaio.h>
 #include <sstream>
 #include <string>
@@ -59,6 +60,9 @@ public:
   int completionFd_{gobjfs::os::FD_INVALID};
   // ID points to I/O
   gCompletionID completionId_{0};
+
+  CallbackFunc callbackFunc_{nullptr};
+  void* callbackFuncCtx_{nullptr};
 
 public:
   FilerJob(const char *filename, FileOp op);

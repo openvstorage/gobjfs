@@ -60,9 +60,6 @@ using gobjfs::os::CpuStats;
  *	- FilerCtx is an async io context wrapper
  *	- Structure keeps track of parameters like
  *		ioQueueDepth_ : queue depth of io_context at async layer
- *		eventFD_			: eventfd to poll for async io
- *completions
- *		epollFD_			: Not used here. But set to
  *global
  *epollFD_
  */
@@ -70,22 +67,21 @@ class FilerCtx {
 public:
   io_context_t ioCtx_;
 
-  int epollFD_ = FD_INVALID;
-  int eventFD_ = FD_INVALID;
-
   int32_t ioQueueDepth_;
   std::atomic<int32_t> numAvailable_{0};
 
 public:
   explicit FilerCtx();
 
-  int32_t init(int32_t queueDepth, int epollFD);
+  int32_t init(int32_t queueDepth);
 
   ~FilerCtx();
 
   std::string getState() const;
 
   bool isEmpty() const { return (numAvailable_ == 0); }
+
+  bool isFull() const { return (numAvailable_ == ioQueueDepth_); }
 
   void incrementNumAvailable(int32_t count = 1) {
     numAvailable_ += count;
@@ -175,10 +171,6 @@ public:
     uint32_t requestQueueLow2_ = 0;
     uint32_t requestQueueFull_ = 0;
 
-    CpuStats completionThread_;
-    CpuStats submitterThread_;
-    CpuStats fdQueueThread_;
-
     void incrementOps(FilerJob *job);
 
     void clear() { bzero(this, sizeof(*this)); }
@@ -199,11 +191,14 @@ public:
 
   int32_t submitTask(FilerJob *job, bool blockIfQueueFull);
 
+  int handleXioEvent(int fd, int events, void* data);
+
   virtual void stop();
 
   std::string getState() const;
 
 private:
+
   virtual void execute();
 
   int32_t ProcessRequestQueue();
@@ -213,40 +208,12 @@ private:
   int32_t ProcessCallbacks(io_event *events, int32_t n_events);
   int32_t doPostProcessingOfJob(FilerJob *job);
 
-  std::thread submitterThread_;
-  ConditionWrapper submitterCond_;
-  SemaphoreWrapper ctxCond_; // signals if ctx available
-
-  // set when submitterThread waits for new requests
-  std::atomic<bool> submitterWaitingForNewRequests_{false};
-
-  // set when submitterThread waits for free io_context
-  std::atomic<bool> submitterWaitingForFreeCtx_{false};
-
   uint32_t minSubmitSize_{1};
-
-  std::thread completionThread_;
-  ShutdownNotifier completionThreadShutdown_;
-  // writing to this fd causes completionThread_ to exit
-  //
-  TimerNotifier periodicTimer_;
 
   // Requests added by submitTask
   boost::lockfree::queue<FilerJob *> requestQueue_;
   ConditionWrapper requestQueueHasSpace_;
   std::atomic<int32_t> requestQueueSize_{0};
-
-  // for metadata ops (create, delete, sync)
-  std::thread fdQueueThread_;
-  ConditionWrapper fdQueueHasSpace_;
-  SemaphoreWrapper fdQueueCond_; // signals if fdQueue has new elem
-  boost::lockfree::queue<FilerJob *> fdQueue_;
-  std::atomic<int32_t> fdQueueSize_{0};
-  // size variables are kept as "signed" to catch
-  // increment/decrement errors
-
-  // fd on which completion thread waits
-  int epollFD_ = FD_INVALID;
 
   FilerCtx ctx_;
 };

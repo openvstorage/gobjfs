@@ -24,6 +24,7 @@ but WITHOUT ANY WARRANTY of any kind.
 #include <gobjfs_log.h>
 #include <util/os_utils.h>
 #include <gparse.h>
+#include <util/EventFD.h>
 
 #include <mutex>
 #include <fcntl.h>
@@ -161,6 +162,11 @@ struct IOExecServiceInt {
 
 int32_t IOExecGetNumExecutors(IOExecServiceHandle serviceHandle) {
   return serviceHandle->ioexecVec.size();
+}
+
+void* IOExecGetExecutorPtr(IOExecServiceHandle serviceHandle, int slot) {
+  auto sptr = serviceHandle->ioexecVec.at(slot);
+  return sptr.get();
 }
 
 int32_t IOExecGetStats(IOExecServiceHandle serviceHandle, char *buf,
@@ -311,52 +317,14 @@ int32_t IOExecFileServiceDestroy(IOExecServiceHandle serviceHandle) {
 
 // =======================================================
 
-/* internal representation of EventFdHandle */
-struct IOExecEventFdInt {
-  int fd[2]{-1, -1};
-
-  IOExecEventFdInt(int in_fd[]) {
-    fd[0] = in_fd[0];
-    fd[1] = in_fd[1];
-    assert(fd[0] >= 0);
-    assert(fd[1] >= 0);
-  }
-
-  ~IOExecEventFdInt() {
-    close(fd[0]);
-    close(fd[1]);
-  }
-};
-
 IOExecEventFdHandle IOExecEventFdOpen(IOExecServiceHandle serviceHandle) {
-
-  IOExecEventFdHandle eventFdPtr = nullptr;
 
   if (!serviceHandle || !serviceHandle->isValid()) {
     LOG(ERROR) << "service handle is invalid";
-    return eventFdPtr;
+    return nullptr;
   }
 
-  // open pipe
-  int fd[2];
-
-  int retcode = pipe(fd);
-
-  if (retcode != 0) {
-    LOG(ERROR) << "failed to allocate pipe errno=" << errno;
-    close(fd[0]);
-    close(fd[1]);
-  } else {
-    int pipeSz = fcntl(fd[1], F_GETPIPE_SZ);
-    if (pipeSz != -1) {
-      LOG(INFO) << " created pipes=" << fd[0] << ":" << fd[1]
-                << ":size=" << pipeSz;
-    } else {
-      LOG(WARNING) << " Failed to get pipesz for fd=" << fd[1]
-                   << ":errno=" << -errno;
-    }
-    eventFdPtr = new IOExecEventFdInt(fd);
-  }
+  IOExecEventFdHandle eventFdPtr = new EventFD();
 
   return eventFdPtr;
 }
@@ -371,7 +339,7 @@ int IOExecEventFdGetReadFd(IOExecEventFdHandle eventFdPtr) {
     LOG(ERROR) << "Rejecting GetReadFd attempt with null eventHandle";
     return gobjfs::os::FD_INVALID;
   }
-  return eventFdPtr->fd[0];
+  return (int)(*eventFdPtr);
 }
 
 // =======================================================
@@ -462,7 +430,8 @@ static int32_t IOExecFileOp(const char *name, FileOp optype,
                             IOExecFileHandle fileHandle, bool closeFileHandle,
                             const gIOBatch *batch,
                             int notification_fd,
-                            int core_id) {
+                            CallbackFunc callbackFunc,
+                            void* callbackFuncCtx) {
 
   int retcode = 0;
 
@@ -472,12 +441,12 @@ static int32_t IOExecFileOp(const char *name, FileOp optype,
   }
 
   int jobFd = notification_fd;
-  int ioexec_core = (core_id >= 0 && core_id < fileHandle->serviceHandle->ioexecVec.size()) ? 
-    core_id : fileHandle->core;
+  int ioexec_core = 0;
 
   gobjfs::IOExecutorSPtr ioexecPtr;
   try {
-    ioexecPtr = fileHandle->serviceHandle->ioexecVec.at(ioexec_core);
+    // TODO slot
+    ioexecPtr = fileHandle->serviceHandle->ioexecVec.at(0);
   } catch (const std::exception &e) {
     LOG(ERROR) << "entry=" << ioexec_core
                << " doesnt exist in ioexec vector of size="
@@ -500,6 +469,8 @@ static int32_t IOExecFileOp(const char *name, FileOp optype,
     job->completionFd_ = jobFd;
     job->canBeFreed_ = true; // free job after completion
     job->closeFileHandle_ = closeFileHandle;
+    job->callbackFunc_ = callbackFunc;
+    job->callbackFuncCtx_ = callbackFuncCtx;
     retcode = ioexecPtr->submitTask(job, /*blocking*/ false);
     if (retcode != 0) {
       LOG(WARNING) << "job not submitted due to overflow";
@@ -509,17 +480,21 @@ static int32_t IOExecFileOp(const char *name, FileOp optype,
   return retcode;
 }
 
-static int32_t IOExecFileOp(const char *name, FileOp optype,
-                            IOExecFileHandle fileHandle, bool closeFileHandle,
+static int32_t IOExecFileOp(const char *name, 
+                            FileOp optype,
+                            IOExecFileHandle fileHandle, 
+                            bool closeFileHandle,
                             const gIOBatch *batch,
                             IOExecEventFdHandle eventFdHandle) {
 
-  if (!eventFdHandle || (eventFdHandle->fd[1] == gobjfs::os::FD_INVALID)) {
+  if (!eventFdHandle || ((int)(*eventFdHandle) == gobjfs::os::FD_INVALID)) {
     LOG(ERROR) << "Rejecting " << name << " with invalid eventfd";
     return -EINVAL;
   }
 
-  return IOExecFileOp(name, optype, fileHandle, closeFileHandle, batch, eventFdHandle->fd[1], -1);
+  //return IOExecFileOp(name, optype, fileHandle, closeFileHandle, batch, eventFdHandle->fd[1], nullptr);
+  //TODO
+  return IOExecFileOp(name, optype, fileHandle, closeFileHandle, batch, (int)(*eventFdHandle), nullptr, nullptr);
 }
 
 
@@ -561,10 +536,13 @@ int32_t IOExecFileRead(IOExecServiceHandle serviceHandle, const char *fileName,
 }
 
 // called internally from NetworkXioIOHandler
-int32_t IOExecFileRead(IOExecServiceHandle serviceHandle, const char *fileName,
-                       size_t fileNameLength, const gIOBatch *batch,
-                       int notification_fd,
-                       int core_id) {
+int32_t IOExecFileRead(IOExecServiceHandle serviceHandle, 
+                      const char *fileName,
+                      size_t fileNameLength, 
+                      const gIOBatch *batch,
+                      int notification_fd,
+                      CallbackFunc callbackFunc,
+                      void* callbackFuncCtx)  {
 
   auto fileHandle =
       IOExecFileOpen(serviceHandle, fileName, fileNameLength, O_DIRECT | O_RDONLY);
@@ -574,7 +552,7 @@ int32_t IOExecFileRead(IOExecServiceHandle serviceHandle, const char *fileName,
 
   bool closeFileHandle = true;
   auto ret = IOExecFileOp("read", FileOp::Read, fileHandle, closeFileHandle,
-                          batch, notification_fd, core_id);
+                          batch, notification_fd, callbackFunc, callbackFuncCtx);
 
   // close fileHandle but do not close fd which is still in use
   // because the fd will be closed after FilerJob::reset
@@ -617,7 +595,7 @@ int32_t IOExecFileDelete(IOExecServiceHandle serviceHandle,
     return -EINVAL;
   }
 
-  if (!eventFdHandle || (eventFdHandle->fd[1] == gobjfs::os::FD_INVALID)) {
+  if (!eventFdHandle || ((int)(*eventFdHandle) == gobjfs::os::FD_INVALID)) {
     LOG(ERROR) << "Rejecting delete with invalid eventfd";
     return -EINVAL;
   }
@@ -634,7 +612,7 @@ int32_t IOExecFileDelete(IOExecServiceHandle serviceHandle,
 
   auto job = new FilerJob(absFileName, FileOp::Delete);
   job->completionId_ = completionId;
-  job->completionFd_ = eventFdHandle->fd[1];
+  job->completionFd_ = (int)(*eventFdHandle);
   job->canBeFreed_ = true; // free job after completion
   int retcode = serviceHandle->ioexecVec[0]->submitTask(job, true);
   if (retcode != 0) {

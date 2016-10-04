@@ -31,7 +31,6 @@ but WITHOUT ANY WARRANTY of any kind.
 #include <util/Spinlock.h>
 #include <util/EventFD.h>
 
-using gobjfs::os::EventFD;
 
 namespace gobjfs {
 namespace xio {

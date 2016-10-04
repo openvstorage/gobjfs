@@ -20,6 +20,7 @@ but WITHOUT ANY WARRANTY of any kind.
 
 #include <networkxio/gobjfs_client_common.h>
 #include <gobjfs_client.h>
+#include <IOExecutor.h>
 
 #include "NetworkXioIOHandler.h"
 #include <networkxio/NetworkXioCommon.h>
@@ -42,12 +43,38 @@ static inline void pack_msg(NetworkXioRequest *req) {
 NetworkXioIOHandler::NetworkXioIOHandler(NetworkXioServer* server, NetworkXioClientData* cd)
   : server_(server)
   , cd_(cd) {
-  disk_.handler_ = this;
-  disk_.startEventHandler();
+
+
+  const int numCores = 1;
+
+  serviceHandle_ = IOExecFileServiceInit(numCores, 
+        server->queueDepthForIO_,
+        server->fileTranslatorFunc_, 
+        server->newInstance_);
+
+  if (serviceHandle_ == nullptr) {
+    throw std::bad_alloc();
+  }
+
+  // TODO smart ptr
+  eventHandle_ = IOExecEventFdOpen(serviceHandle_);
+
+  eventFD_ = IOExecEventFdGetReadFd(eventHandle_);
+
+  startEventHandler();
 }
 
 NetworkXioIOHandler::~NetworkXioIOHandler() {
-  disk_.stopEventHandler();
+
+  stopEventHandler();
+
+  IOExecEventFdClose(eventHandle_);
+
+  if (serviceHandle_) {
+    IOExecFileServiceDestroy(serviceHandle_);
+    serviceHandle_ = nullptr;
+  }
+
 }
 
 template <class T> 
@@ -56,50 +83,38 @@ static void static_disk_event(int fd, int events, void *data) {
   if (obj == NULL) {
     return;
   }
-  obj->runEventHandler(fd, events, data);
+  obj->handleXioEvent(fd, events, data);
 }
 
-void NetworkXioIOHandler::Disk::startEventHandler() {
+void NetworkXioIOHandler::startEventHandler() {
 
   try {
 
-    pipe_ = PipeUPtr(new Pipe);
+    void* ioexecPtr = IOExecGetExecutorPtr(serviceHandle_, 0);
 
-    if (xio_context_add_ev_handler(handler_->cd_->ncd_ctx, pipe_->getReadFD(), XIO_POLLIN,
-                                 static_disk_event<NetworkXioIOHandler::Disk>,
-                                 this)) {
+    if (xio_context_add_ev_handler(cd_->ncd_ctx, eventFD_,
+                                XIO_POLLIN,
+                                static_disk_event<gobjfs::IOExecutor>,
+                                ioexecPtr)) {
+
       throw FailedRegisterEventHandler("failed to register event handler");
+
     }
-    GLOG_INFO("registered pipe=" << (void*)pipe_.get() 
-        << ",fd=" << pipe_->getReadFD() 
+    GLOG_INFO("registered fd=" << eventFD_
         << " for thread=" << gettid());
   } catch (std::exception& e) {
     GLOG_ERROR("failed to init handler " << e.what());
   }
 }
 
+static int static_runEventHandler(gIOStatus& iostatus, void* ctx) {
+  NetworkXioIOHandler* handler = (NetworkXioIOHandler*)ctx;
+  handler->runEventHandler(iostatus);
+  return 0;
+}
+
 // this runs in the context of the portal thread
-int NetworkXioIOHandler::Disk::runEventHandler(int fd, int events, void* data) {
-
-  if (fd != pipe_->getReadFD()) {
-    GLOG_ERROR("Received event for unknown fd="
-      << static_cast<int32_t>(fd) 
-      << ",expected=" << static_cast<int32_t>(pipe_->getReadFD())
-      << ",thread=" << gettid());
-    return 0;
-  }
-
-  gIOStatus iostatus;
-  int ret = ::read(fd, &iostatus, sizeof(iostatus));
-
-  if (ret != sizeof(iostatus)) {
-    GLOG_ERROR("Partial read detected.  Actual read=" << ret << " Expected=" << sizeof(iostatus));
-    return 0;
-  }
-
-  GLOG_DEBUG("Recieved event"
-             << " completionId: " << (void *)iostatus.completionId
-             << " status: " << iostatus.errorCode);
+int NetworkXioIOHandler::runEventHandler(gIOStatus& iostatus) {
 
   gIOBatch *batch = reinterpret_cast<gIOBatch *>(iostatus.completionId);
   assert(batch != nullptr);
@@ -148,10 +163,9 @@ int NetworkXioIOHandler::Disk::runEventHandler(int fd, int events, void* data) {
   return 0;
 }
 
-void NetworkXioIOHandler::Disk::stopEventHandler() {
-  GLOG_INFO("deregistered fd=" << pipe_->getReadFD() << " for thread=" << gettid());
-  xio_context_del_ev_handler(handler_->cd_->ncd_ctx, pipe_->getReadFD());
-  pipe_.reset();
+void NetworkXioIOHandler::stopEventHandler() {
+  GLOG_INFO("deregistered fd=" << eventFD_ << " for thread=" << gettid());
+  xio_context_del_ev_handler(cd_->ncd_ctx, eventFD_);
 }
 
 void NetworkXioIOHandler::handle_open(NetworkXioRequest *req) {
@@ -168,6 +182,8 @@ void NetworkXioIOHandler::handle_open(NetworkXioRequest *req) {
 int NetworkXioIOHandler::handle_read(NetworkXioRequest *req,
                                      const std::string &filename, size_t size,
                                      off_t offset) {
+
+
   int ret = 0;
   req->op = NetworkXioMsgOpcode::ReadRsp;
 #ifdef BYPASS_READ
@@ -178,7 +194,7 @@ int NetworkXioIOHandler::handle_read(NetworkXioRequest *req,
     return 0;
   } 
 #endif
-  if (!server_->serviceHandle_) {
+  if (!serviceHandle_) {
     GLOG_ERROR("no service handle");
     req->retval = -1;
     req->errval = EIO;
@@ -228,11 +244,11 @@ int NetworkXioIOHandler::handle_read(NetworkXioRequest *req,
     // job on the same core as the accelio portal thread on which it
     // was received.  Not getting any perf improvement with this so
     // disabling it.
-    ret = IOExecFileRead(server_->serviceHandle_, filename.c_str(), filename.size(),
+    ret = IOExecFileRead(serviceHandle_, filename.c_str(), filename.size(),
                          batch, 
-                         disk_.pipe_->getWriteFD(),
-                         //cd_->coreId_);
-                         -1);
+                         eventFD_,
+                         static_runEventHandler,
+                         (void*)this);
 
     if (ret != 0) {
       GLOG_ERROR("IOExecFileRead failed with error " << ret);

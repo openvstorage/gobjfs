@@ -110,21 +110,21 @@ void FilerJob::setBuffer(off_t fileOffset, char *buffer, size_t size) {
 }
 
 void FilerJob::reset() {
+
   VLOG(2) << "FilerJob reset "
           << ":completionFd=" << completionFd_
           << ":completionId=" << completionId_;
+
+  setServiceTime();
 
   gIOStatus iostatus;
   iostatus.completionId = completionId_;
   iostatus.errorCode = retcode_;
 
-  if (write(completionFd_, &iostatus, sizeof(iostatus)) != sizeof(iostatus)) {
-    LOG(ERROR) << "For job=" << (void *)this
-               << " Failed to signal IO status for "
-               << " completionId: " << completionId_
-               << " returnCode: " << retcode_;
+  // call NetworkXioIOHandler->runEventHandler
+  if (callbackFunc_) {
+    callbackFunc_(iostatus, callbackFuncCtx_);
   }
 
-  setServiceTime();
 }
 }
