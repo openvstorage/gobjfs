@@ -224,8 +224,14 @@ int NetworkXioIOHandler::handle_read(NetworkXioRequest *req,
     frag.size = size;
     frag.completionId = reinterpret_cast<uint64_t>(batch);
 
+    // pass cd->coreId to the job; let the IOExecutor submit the job
+    // on the same core as the accelio portal thread on which it
+    // was received
     ret = IOExecFileRead(server_->serviceHandle_, filename.c_str(), filename.size(),
-                         batch, disk_.pipe_->getWriteFD());
+                         batch, 
+                         disk_.pipe_->getWriteFD(),
+                         //cd_->coreId_);
+                         -1);
 
     if (ret != 0) {
       GLOG_ERROR("IOExecFileRead failed with error " << ret);

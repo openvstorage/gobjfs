@@ -461,7 +461,8 @@ int32_t IOExecFileTruncate(IOExecFileHandle fileHandle, size_t newSize) {
 static int32_t IOExecFileOp(const char *name, FileOp optype,
                             IOExecFileHandle fileHandle, bool closeFileHandle,
                             const gIOBatch *batch,
-                            int notification_fd) {
+                            int notification_fd,
+                            int core_id) {
 
   int retcode = 0;
 
@@ -471,12 +472,14 @@ static int32_t IOExecFileOp(const char *name, FileOp optype,
   }
 
   int jobFd = notification_fd;
+  int ioexec_core = (core_id >= 0 && core_id < fileHandle->serviceHandle->ioexecVec.size()) ? 
+    core_id : fileHandle->core;
 
   gobjfs::IOExecutorSPtr ioexecPtr;
   try {
-    ioexecPtr = fileHandle->serviceHandle->ioexecVec.at(fileHandle->core);
+    ioexecPtr = fileHandle->serviceHandle->ioexecVec.at(ioexec_core);
   } catch (const std::exception &e) {
-    LOG(ERROR) << "entry=" << fileHandle->core
+    LOG(ERROR) << "entry=" << ioexec_core
                << " doesnt exist in ioexec vector of size="
                << fileHandle->serviceHandle->ioexecVec.size();
     return -EINVAL;
@@ -516,7 +519,7 @@ static int32_t IOExecFileOp(const char *name, FileOp optype,
     return -EINVAL;
   }
 
-  return IOExecFileOp(name, optype, fileHandle, closeFileHandle, batch, eventFdHandle->fd[1]);
+  return IOExecFileOp(name, optype, fileHandle, closeFileHandle, batch, eventFdHandle->fd[1], -1);
 }
 
 
@@ -557,9 +560,11 @@ int32_t IOExecFileRead(IOExecServiceHandle serviceHandle, const char *fileName,
   return ret;
 }
 
+// called internally from NetworkXioIOHandler
 int32_t IOExecFileRead(IOExecServiceHandle serviceHandle, const char *fileName,
                        size_t fileNameLength, const gIOBatch *batch,
-                       int notification_fd) {
+                       int notification_fd,
+                       int core_id) {
 
   auto fileHandle =
       IOExecFileOpen(serviceHandle, fileName, fileNameLength, O_DIRECT | O_RDONLY);
@@ -569,7 +574,7 @@ int32_t IOExecFileRead(IOExecServiceHandle serviceHandle, const char *fileName,
 
   bool closeFileHandle = true;
   auto ret = IOExecFileOp("read", FileOp::Read, fileHandle, closeFileHandle,
-                          batch, notification_fd);
+                          batch, notification_fd, core_id);
 
   // close fileHandle but do not close fd which is still in use
   // because the fd will be closed after FilerJob::reset

@@ -152,10 +152,12 @@ int32_t IOExecFileRead(IOExecServiceHandle serviceHandle, const char *fileName,
  * @param pIOBatch batch containing offset, size and buffer to read
  * @param fd the fd on which callback notification should be written
  *           when job is completed
+ * @param core_id on which to execute the job (-1 for no preference)
  */
 int32_t IOExecFileRead(IOExecServiceHandle serviceHandle, const char *fileName,
                        size_t fileNameLength, const gIOBatch *batch,
-                       int notification_fd);
+                       int notification_fd,
+                       int core_id);
 
 /**
  *
