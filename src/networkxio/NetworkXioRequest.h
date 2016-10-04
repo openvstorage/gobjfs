@@ -32,16 +32,8 @@ but WITHOUT ANY WARRANTY of any kind.
 namespace gobjfs {
 namespace xio {
 
-struct Work;
 class NetworkXioServer;
 class NetworkXioIOHandler;
-
-typedef std::function<bool(Work *)> workitem_func_t;
-
-struct Work {
-  workitem_func_t func;
-  void *obj{nullptr};
-};
 
 struct NetworkXioClientData;
 
@@ -56,8 +48,6 @@ struct NetworkXioRequest {
   ssize_t retval{0};
   int errval{0};
   uintptr_t opaque{0};
-
-  Work work;
 
   xio_msg *xio_req{nullptr};
   xio_msg xio_reply;
@@ -78,7 +68,6 @@ struct NetworkXioRequest {
     : xio_req(req)
     , pClientData(clientData)
   {
-    work.obj = server;
   }
 };
 
