@@ -149,6 +149,8 @@ void NetworkXioServer::portal_func(NetworkXioClientData* cd) {
 
   gobjfs::os::BindThreadToCore(cd->coreId_);
   
+  // if context_params is null, max 100 connections per ctx
+  // see max_conns_per_ctx in accelio code
   cd->ncd_ctx = xio_context_create(NULL, 0, -1);
 
   if (xio_context_add_ev_handler(cd->ncd_ctx, cd->evfd, XIO_POLLIN,
