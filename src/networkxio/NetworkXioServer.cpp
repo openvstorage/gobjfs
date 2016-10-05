@@ -121,13 +121,11 @@ static int static_on_session_event(xio_session *session,
 template <class T>
 static int static_on_new_session(xio_session *session, xio_new_session_req *req,
                                  void *cb_user_context) {
-  XXEnter();
   T *obj = reinterpret_cast<T *>(cb_user_context);
   if (obj == NULL) {
     XXExit();
     return -1;
   }
-  XXExit();
   return obj->on_new_session(session, req);
 }
 
@@ -379,7 +377,7 @@ void NetworkXioServer::destroy_session_connection(
 }
 
 int NetworkXioServer::on_new_session(xio_session *session,
-                                     xio_new_session_req * /*req*/) {
+                                     xio_new_session_req *req) {
 
   const char* portal_array[cdVec_.size()];
 
@@ -393,7 +391,12 @@ int NetworkXioServer::on_new_session(xio_session *session,
         "cannot accept new session, error: " << xio_strerror(xio_errno()));
   }
 
-  GLOG_DEBUG("Got a new connection request");
+  sockaddr_in *sa = (sockaddr_in*)&req->src_addr;
+  const char *ipAddr = inet_ntoa(sa->sin_addr);
+  std::string uriStr(req->uri, req->uri_len);
+  GLOG_INFO("Got a new session request for uri=" << uriStr.c_str()
+      << " and addr=" << ipAddr << " port=" << sa->sin_port);
+
   return 0;
 }
 
