@@ -37,7 +37,7 @@ namespace xio {
 
 class NetworkXioIOHandler {
 public:
-  NetworkXioIOHandler(NetworkXioServer* server, NetworkXioClientData *cd);
+  NetworkXioIOHandler(PortalThreadData* pt);
 
   ~NetworkXioIOHandler();
 
@@ -68,15 +68,13 @@ private:
 private:
   std::string configFileName_;
 
-  NetworkXioServer* server_;
-
   IOExecServiceHandle serviceHandle_{nullptr};
 
   IOExecEventFdHandle eventHandle_{nullptr};
 
   int eventFD_{-1};
 
-  NetworkXioClientData* cd_;
+  PortalThreadData* pt_;
 
   void startEventHandler();
   void stopEventHandler();

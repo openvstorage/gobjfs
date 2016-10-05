@@ -36,7 +36,7 @@ namespace xio {
 
 class NetworkXioServer;
 class NetworkXioIOHandler;
-
+class PortalThreadData;
 struct NetworkXioClientData;
 
 struct NetworkXioRequest {
@@ -63,8 +63,7 @@ struct NetworkXioRequest {
   std::string s_msg;
 
   explicit NetworkXioRequest(xio_msg* req,
-      NetworkXioClientData* clientData,
-      NetworkXioServer* server)
+      NetworkXioClientData* clientData)
     : xio_req(req)
     , pClientData(clientData)
   {
@@ -74,44 +73,26 @@ struct NetworkXioRequest {
 
 struct NetworkXioClientData {
 
-  NetworkXioServer *ncd_server{nullptr};
-
-  // TODO make them shared_ptr like NetworkXioServer
-  xio_context *ncd_ctx{nullptr}; // portal
-  std::thread ncd_thread; // portal
-  std::string ncd_uri; // portal
-  xio_server* ncd_xio_server{nullptr}; // portal
+  PortalThreadData* pt_;
+  NetworkXioServer *server_{nullptr};
 
   xio_session *ncd_session{nullptr};
   xio_connection *ncd_conn{nullptr};
-  xio_mempool *ncd_mpool{nullptr};
 
   int conn_state = 0; // 1 = conn, 2 = disconn
   uint64_t ncd_refcnt{0};
 
-  NetworkXioIOHandler *ncd_ioh{nullptr};
-
   std::list<NetworkXioRequest *> ncd_done_reqs;
 
-  int coreId_{-1};
-
-  EventFD evfd;
-
-  void evfd_stop_loop(int /*fd*/, int /*events*/, void * /*data*/) {
-    evfd.readfd();
-    xio_context_stop_loop(ncd_ctx);
+  explicit NetworkXioClientData(PortalThreadData* pt,
+      xio_session* session,
+      xio_connection* conn)
+    : pt_(pt)
+    , ncd_session(session)
+    , ncd_conn(conn) 
+    , conn_state(1)
+  {
   }
-
-  void stop_loop() {
-    evfd.writefd();
-  }
-
-  explicit NetworkXioClientData(NetworkXioServer* server,
-      const std::string& uri,
-      int coreId)
-    : ncd_server(server)
-    , ncd_uri(uri) 
-    , coreId_(coreId) {}
 };
 
 }

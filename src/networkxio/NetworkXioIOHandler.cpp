@@ -40,17 +40,15 @@ static inline void pack_msg(NetworkXioRequest *req) {
   req->s_msg = o_msg.pack_msg();
 }
 
-NetworkXioIOHandler::NetworkXioIOHandler(NetworkXioServer* server, NetworkXioClientData* cd)
-  : server_(server)
-  , cd_(cd) {
-
+NetworkXioIOHandler::NetworkXioIOHandler(PortalThreadData* pt)
+  : pt_(pt) {
 
   const int numCores = 1;
 
   serviceHandle_ = IOExecFileServiceInit(numCores, 
-        server->queueDepthForIO_,
-        server->fileTranslatorFunc_, 
-        server->newInstance_);
+        pt_->server_->queueDepthForIO_,
+        pt_->server_->fileTranslatorFunc_, 
+        pt_->server_->newInstance_);
 
   if (serviceHandle_ == nullptr) {
     throw std::bad_alloc();
@@ -94,7 +92,7 @@ void NetworkXioIOHandler::startEventHandler() {
 
     void* ioexecPtr = IOExecGetExecutorPtr(serviceHandle_, 0);
 
-    if (xio_context_add_ev_handler(cd_->ncd_ctx, eventFD_,
+    if (xio_context_add_ev_handler(pt_->ctx_, eventFD_,
                                 XIO_POLLIN,
                                 static_disk_event<gobjfs::IOExecutor>,
                                 ioexecPtr)) {
@@ -151,10 +149,7 @@ int NetworkXioIOHandler::runEventHandler(gIOStatus& iostatus) {
 
     pack_msg(pXioReq);
 
-    NetworkXioClientData *cd =
-        reinterpret_cast<NetworkXioClientData *>(pXioReq->pClientData);
-
-    cd->ncd_server->send_reply(pXioReq);
+    pt_->server_->send_reply(pXioReq);
 
   } break;
 
@@ -167,7 +162,7 @@ int NetworkXioIOHandler::runEventHandler(gIOStatus& iostatus) {
 
 void NetworkXioIOHandler::stopEventHandler() {
   GLOG_INFO("deregistered fd=" << eventFD_ << " for thread=" << gettid());
-  xio_context_del_ev_handler(cd_->ncd_ctx, eventFD_);
+  xio_context_del_ev_handler(pt_->ctx_, eventFD_);
 }
 
 void NetworkXioIOHandler::handle_open(NetworkXioRequest *req) {
@@ -204,7 +199,7 @@ int NetworkXioIOHandler::handle_read(NetworkXioRequest *req,
     return -1;
   }
 
-  ret = xio_mempool_alloc(req->pClientData->ncd_mpool, size, &req->reg_mem);
+  ret = xio_mempool_alloc(pt_->mpool_, size, &req->reg_mem);
   if (ret < 0) {
     // could not allocate from mempool, try mem alloc
     ret = xio_mem_alloc(size, &req->reg_mem);
@@ -327,20 +322,23 @@ bool NetworkXioIOHandler::process_request(NetworkXioRequest *req) {
 }
 
 void NetworkXioIOHandler::drainQueue() {
-    NetworkXioServer* server{nullptr};
-    for (auto req : workQueue) {
-    	if (!server) {
-            server = req->pClientData->ncd_server;
-        }
-  	auto ret = process_request(req); 
-  	if (ret == true) {
-    	  // this means request has error and can be immediately  
-    	  // sent back to client
-    	  server->send_reply(req);
-	}
+
+  NetworkXioServer* server{nullptr};
+
+  for (auto req : workQueue) {
+    if (!server) {
+      server = req->pClientData->pt_->server_;
     }
-    workQueue.clear();
-    firstCall = true;
+    auto ret = process_request(req); 
+    if (ret == true) {
+      // this means request has error and can be immediately  
+      // sent back to client
+      server->send_reply(req);
+	  }
+  }
+
+  workQueue.clear();
+  firstCall = true;
 }
 
 // this func runs in context of portal thread
@@ -351,9 +349,11 @@ void NetworkXioIOHandler::handle_request(NetworkXioRequest *req) {
   // and can be removed
   workQueue.push_back(req);
   if (firstCall) {
+#ifdef BATCHING
     firstCall = false;
-    xio_context_stop_loop(cd_->ncd_ctx);
+    xio_context_stop_loop(pt_->ctx_);
   } else {
+#endif
     drainQueue();
   }
 }

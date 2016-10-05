@@ -38,6 +38,49 @@ MAKE_EXCEPTION(FailedCreateXioContext);
 MAKE_EXCEPTION(FailedRegisterEventHandler);
 MAKE_EXCEPTION(FailedCreateXioMempool);
 
+struct PortalThreadData {
+
+  NetworkXioServer* server_{nullptr}; 
+  NetworkXioIOHandler* ioh_{nullptr};
+  
+  xio_server* xio_server_{nullptr};
+
+  std::string uri_; 
+  std::thread thread_; 
+
+  xio_context *ctx_{nullptr};  
+  xio_mempool *mpool_{nullptr};
+  EventFD evfd_;
+
+  bool stopping = false;
+  bool stopped = false;
+
+  int coreId_{-1};
+
+  void evfd_stop_loop(int /*fd*/, int /*events*/, void * /*data*/) {
+    evfd_.readfd();
+    xio_context_stop_loop(ctx_);
+  }
+
+  void stop_loop() {
+    stopping = true;
+    evfd_.writefd();
+  }
+
+  void portal_func();
+
+  PortalThreadData(NetworkXioServer* server, const std::string& uri, int coreId)
+    : server_(server)
+    , uri_(uri)
+    , coreId_(coreId) 
+    {}
+
+  ~PortalThreadData() {
+    delete ioh_;
+    // TODO free others
+  }
+};
+
 class NetworkXioServer {
 public:
   NetworkXioServer(const std::string &transport, 
@@ -60,7 +103,7 @@ public:
 
   int on_session_event(xio_session *session,
                        xio_session_event_data *event_data,
-                       NetworkXioClientData* cd);
+                       void* cb_user_context);
 
   int on_new_session(xio_session *session, xio_new_session_req *req);
 
@@ -80,12 +123,11 @@ public:
 
   void evfd_stop_loop(int fd, int events, void *data);
 
-  static void xio_destroy_ctx_shutdown(xio_context *ctx);
+  static void destroy_ctx_shutdown(xio_context *ctx);
 
 private:
   //    DECLARE_LOGGER("NetworkXioServer");
   //
-  void portal_func(NetworkXioClientData* cd);
 
   std::string transport_;
   std::string ipaddr_;
@@ -93,7 +135,8 @@ private:
 
   // one for each portal
   // not using smart ptrs because it will interfere with accelio shutdown logic
-  std::vector<NetworkXioClientData*> cdVec_;
+  // TODO : free this memory 
+  std::vector<PortalThreadData*> ptVec_;
 
   std::string configFileName_;
 
@@ -110,6 +153,7 @@ public: // TODO
 private:
 
   friend class NetworkXioIOHandler; // access serviceHandle_
+  friend class PortalThreadData; // access mpool
 
   std::mutex mutex_;
   std::condition_variable cv_;
@@ -124,12 +168,12 @@ private:
 
   int create_session_connection(xio_session *session,
                                 xio_session_event_data *event_data,
-                                NetworkXioClientData* cd);
+                                PortalThreadData* cd);
 
   void destroy_session_connection(
     xio_session *session ATTRIBUTE_UNUSED, 
     xio_session_event_data *evdata,
-    NetworkXioClientData* cd);
+    PortalThreadData* cd);
 
   void deallocate_request(NetworkXioRequest *req);
 

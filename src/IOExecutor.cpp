@@ -253,10 +253,9 @@ int32_t IOExecutor::ProcessRequestQueue() {
   // and free it after io_submit
   iocb cbVec[ctx_.ioQueueDepth_];
 
-  while (ctx_.isEmpty()) {
+  if (ctx_.isEmpty()) {
+    // lets see if we can get any free ctx
     handleXioEvent(-1, 0, nullptr);
-    LOG(WARNING) << "no free ctx";
-    usleep(1);
   }
 
   while (!ctx_.isEmpty()) {
