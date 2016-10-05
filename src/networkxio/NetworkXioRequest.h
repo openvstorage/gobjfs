@@ -19,7 +19,6 @@ but WITHOUT ANY WARRANTY of any kind.
 
 #include <list>
 #include <functional>
-#include <atomic>
 #include <queue>
 #include <thread>
 #include <boost/thread/lock_guard.hpp>
@@ -87,8 +86,8 @@ struct NetworkXioClientData {
   xio_connection *ncd_conn{nullptr};
   xio_mempool *ncd_mpool{nullptr};
 
-  std::atomic<bool> ncd_disconnected{true};
-  std::atomic<uint64_t> ncd_refcnt{0};
+  int conn_state = 0; // 1 = conn, 2 = disconn
+  uint64_t ncd_refcnt{0};
 
   NetworkXioIOHandler *ncd_ioh{nullptr};
 

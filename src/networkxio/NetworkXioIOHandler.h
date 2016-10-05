@@ -28,6 +28,7 @@ but WITHOUT ANY WARRANTY of any kind.
 #include <fcntl.h>
 #include <iostream>
 #include <assert.h>
+#include <list>
 
 #include "gIOExecFile.h"
 
@@ -44,12 +45,17 @@ public:
 
   NetworkXioIOHandler &operator=(const NetworkXioIOHandler &) = delete;
 
-  // @return whether req is finished into workQueue on func return
+  // @return whether req is finished 
   bool process_request(NetworkXioRequest *req);
 
   void handle_request(NetworkXioRequest *req);
 
+  void drainQueue();
+
   int runEventHandler(gIOStatus& iostatus);
+
+  std::list<NetworkXioRequest*> workQueue;
+  bool firstCall = true;
 
 private:
   void handle_open(NetworkXioRequest *req);

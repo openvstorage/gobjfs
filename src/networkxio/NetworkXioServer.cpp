@@ -121,13 +121,11 @@ static int static_on_session_event(xio_session *session,
 template <class T>
 static int static_on_new_session(xio_session *session, xio_new_session_req *req,
                                  void *cb_user_context) {
-  XXEnter();
   T *obj = reinterpret_cast<T *>(cb_user_context);
   if (obj == NULL) {
     XXExit();
     return -1;
   }
-  XXExit();
   return obj->on_new_session(session, req);
 }
 
@@ -170,7 +168,18 @@ void NetworkXioServer::portal_func(NetworkXioClientData* cd) {
 
   GLOG_INFO("started portal uri=" << cd->ncd_uri << ",thread=" << gettid());
 
-  xio_context_run_loop(cd->ncd_ctx, XIO_INFINITE);
+  while (cd->conn_state < 2) {
+    int timeout_ms = XIO_INFINITE;
+    if (cd->ncd_ioh && (!cd->ncd_ioh->firstCall)) {
+      // cant use ncd_refcnt since it is decrement on dellocate req?
+      timeout_ms = 0;
+    }
+    int numEvents = xio_context_run_loop(cd->ncd_ctx, timeout_ms);
+    if (timeout_ms == 0) {
+      cd->ncd_ioh->drainQueue();
+    }
+    (void) numEvents;
+  }
 
   xio_context_del_ev_handler(cd->ncd_ctx, cd->evfd);
 
@@ -323,7 +332,7 @@ NetworkXioServer::create_session_connection(xio_session *session,
     
     cd->ncd_session = session;
     cd->ncd_conn = evdata->conn;
-    cd->ncd_disconnected = false;
+    cd->conn_state = 1;
     cd->ncd_refcnt = 0;
     cd->ncd_mpool = xio_mpool.get();
     cd->ncd_server = this;
@@ -349,7 +358,8 @@ NetworkXioServer::create_session_connection(xio_session *session,
 }
 
 void NetworkXioServer::destroy_client_data(NetworkXioClientData* cd) {
-  if (cd->ncd_disconnected && !cd->ncd_refcnt) {
+  if ((cd->conn_state == 2) && !cd->ncd_refcnt) {
+    // TODO drain work queue here if ncd_refcnt
     xio_connection_destroy(cd->ncd_conn);
     cd->ncd_conn = nullptr;
     delete cd->ncd_ioh;
@@ -363,13 +373,13 @@ void NetworkXioServer::destroy_session_connection(
     NetworkXioClientData* cd) {
   //auto cd = static_cast<NetworkXioClientData *>(evdata->conn_user_context);
   if (cd) {
-    cd->ncd_disconnected = true;
+    cd->conn_state = 2;
     destroy_client_data(cd);
   }
 }
 
 int NetworkXioServer::on_new_session(xio_session *session,
-                                     xio_new_session_req * /*req*/) {
+                                     xio_new_session_req *req) {
 
   const char* portal_array[cdVec_.size()];
 
@@ -383,7 +393,12 @@ int NetworkXioServer::on_new_session(xio_session *session,
         "cannot accept new session, error: " << xio_strerror(xio_errno()));
   }
 
-  GLOG_DEBUG("Got a new connection request");
+  sockaddr_in *sa = (sockaddr_in*)&req->src_addr;
+  const char *ipAddr = inet_ntoa(sa->sin_addr);
+  std::string uriStr(req->uri, req->uri_len);
+  GLOG_INFO("Got a new session request for uri=" << uriStr.c_str()
+      << " and addr=" << ipAddr << " port=" << sa->sin_port);
+
   return 0;
 }
 

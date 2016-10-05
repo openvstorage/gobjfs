@@ -66,6 +66,8 @@ NetworkXioIOHandler::NetworkXioIOHandler(NetworkXioServer* server, NetworkXioCli
 
 NetworkXioIOHandler::~NetworkXioIOHandler() {
 
+  assert(workQueue.empty());
+
   stopEventHandler();
 
   IOExecEventFdClose(eventHandle_);
@@ -324,13 +326,35 @@ bool NetworkXioIOHandler::process_request(NetworkXioRequest *req) {
   return finishNow;
 }
 
+void NetworkXioIOHandler::drainQueue() {
+    NetworkXioServer* server{nullptr};
+    for (auto req : workQueue) {
+    	if (!server) {
+            server = req->pClientData->ncd_server;
+        }
+  	auto ret = process_request(req); 
+  	if (ret == true) {
+    	  // this means request has error and can be immediately  
+    	  // sent back to client
+    	  server->send_reply(req);
+	}
+    }
+    workQueue.clear();
+    firstCall = true;
+}
+
 // this func runs in context of portal thread
 void NetworkXioIOHandler::handle_request(NetworkXioRequest *req) {
-  auto ret = process_request(req); 
-  if (ret == true) {
-    // this means request has error and can be immediately  
-    // sent back to client
-    req->pClientData->ncd_server->send_reply(req);
+
+  // TODO this batching should not delay open request
+  // but the open request is a no-op right now
+  // and can be removed
+  workQueue.push_back(req);
+  if (firstCall) {
+    firstCall = false;
+    xio_context_stop_loop(cd_->ncd_ctx);
+  } else {
+    drainQueue();
   }
 }
 }
