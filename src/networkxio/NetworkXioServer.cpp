@@ -126,12 +126,13 @@ static int static_on_session_event(xio_session *session,
   GLOG_INFO("got session event=" << xio_session_event_str(event_data->event)
       << ",reason=" << xio_strerror(event_data->reason)
       << ",is_portal=" << (tdata != nullptr)
+      << ",tdata_ptr=" << (void*)tdata
+      << ",cb_user_ctx=" << (void*)cb_user_context
       << ",thread=" << gettid() 
       << ",addr=" << (ipAddr ? ipAddr : "null")
       << ",port=" << port
       << ",uri=" << geturi(session));
 
-  // TODO
   T *obj = reinterpret_cast<T *>(cb_user_context);
   if (obj == NULL) {
     return -1;
@@ -194,7 +195,12 @@ void PortalThreadData::portal_func() {
 
   xio_server_ = xio_bind(ctx_, &portal_ops, uri_.c_str(), NULL, 0, this);
 
-  GLOG_INFO("started portal coreId=" << coreId_ << " uri=" << uri_ << " with thread=" << gettid());
+  GLOG_INFO("started portal ptr=" << (void*)this
+      << ",coreId=" << coreId_ 
+      << ",ioh=" << (void*)ioh_ 
+      << ",evfd=" << evfd_ 
+      << ",uri=" << uri_ 
+      << ",thread=" << gettid());
 
   int numIdleLoops = 0;
   while (not stopping) {
@@ -219,6 +225,11 @@ void PortalThreadData::portal_func() {
   xio_unbind(xio_server_);
 
   xio_context_destroy(ctx_);
+
+  GLOG_INFO("stopped portal ptr=" << (void*)this
+      << ",coreId=" << coreId_ 
+      << ",uri=" << uri_ 
+      << ",thread=" << gettid());
 }
 
 NetworkXioServer::NetworkXioServer(const std::string &transport,
@@ -375,7 +386,8 @@ NetworkXioServer::create_session_connection(xio_session *session,
 
     pt->numConnections_ ++;
     GLOG_INFO("portal=" << pt->coreId_ 
-        << " thread=" << gettid()
+        << ",thread=" << gettid()
+        << ",new clientData=" << (void*)cd
         << " now serving " << pt->numConnections_ << " connections(up 1)");
 
   } catch (...) {
@@ -429,6 +441,7 @@ int NetworkXioServer::on_session_event(xio_session *session,
     }
     break;
   case XIO_SESSION_CONNECTION_ERROR_EVENT:
+    break;
 
   case XIO_SESSION_CONNECTION_TEARDOWN_EVENT:
     // signals loss of a connection within existing session
@@ -436,14 +449,17 @@ int NetworkXioServer::on_session_event(xio_session *session,
       NetworkXioClientData* cd = (NetworkXioClientData*)tdata;
       cd->conn_state = 2;
       if (cd->ncd_refcnt != 0) {
-        GLOG_INFO("deferring free since clientdata=" << (void*)cd 
+    	GLOG_INFO("portal=" << cd->pt_->coreId_ 
+            << " deferring connection teardown since clientdata=" << (void*)cd 
             << " has unsent replies=" << cd->ncd_refcnt
             << " msg list size=" << cd->ncd_done_reqs.size());
       } else {
         assert(cd->ncd_conn == event_data->conn);
         xio_connection_destroy(cd->ncd_conn);
     	cd->pt_->numConnections_ --;
-    	GLOG_INFO("portal=" << cd->pt_->coreId_ << " now serving " << cd->pt_->numConnections_ << " connections(down 1)");
+    	GLOG_INFO("portal=" << cd->pt_->coreId_ 
+            << " delete clientData=" << (void*)cd
+            << " now serving " << cd->pt_->numConnections_ << " connections(down 1)");
         delete cd;
       }
     }
@@ -498,6 +514,7 @@ int NetworkXioServer::on_msg_send_complete(xio_session *session
     GLOG_INFO("closing deferred connection" << cd);
     cd->pt_->numConnections_ ++;
     GLOG_INFO("portal=" << cd->pt_->coreId_ 
+        << " delete cd=" << (void*)cd
         << " thread=" << gettid()
         << " now serving " << cd->pt_->numConnections_ << " connections(down 1)");
     delete cd;

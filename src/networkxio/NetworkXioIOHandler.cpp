@@ -101,6 +101,7 @@ void NetworkXioIOHandler::startEventHandler() {
 
     }
     GLOG_INFO("registered fd=" << eventFD_
+        << " ioexecutor=" << ioexecPtr
         << " for thread=" << gettid());
   } catch (std::exception& e) {
     GLOG_ERROR("failed to init handler " << e.what());
