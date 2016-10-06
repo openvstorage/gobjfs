@@ -51,11 +51,11 @@ public:
   void handle_request(NetworkXioRequest *req);
 
   void drainQueue();
+  bool alreadyInvoked() const;
 
   int runEventHandler(gIOStatus& iostatus);
 
   std::list<NetworkXioRequest*> workQueue;
-  bool firstCall = true;
 
 private:
   void handle_open(NetworkXioRequest *req);

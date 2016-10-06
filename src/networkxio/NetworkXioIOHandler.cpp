@@ -321,6 +321,10 @@ bool NetworkXioIOHandler::process_request(NetworkXioRequest *req) {
   return finishNow;
 }
 
+bool NetworkXioIOHandler::alreadyInvoked() const {
+  return (workQueue.size() > 1);
+}
+
 void NetworkXioIOHandler::drainQueue() {
 
   NetworkXioServer* server{nullptr};
@@ -334,11 +338,10 @@ void NetworkXioIOHandler::drainQueue() {
       // this means request has error and can be immediately  
       // sent back to client
       server->send_reply(req);
-	  }
+    }
   }
 
   workQueue.clear();
-  firstCall = true;
 }
 
 // this func runs in context of portal thread
@@ -348,12 +351,11 @@ void NetworkXioIOHandler::handle_request(NetworkXioRequest *req) {
   // but the open request is a no-op right now
   // and can be removed
   workQueue.push_back(req);
-  if (firstCall) {
-#ifdef BATCHING
-    firstCall = false;
+  if (!alreadyInvoked()) {
+    // if invoked first time, then poll is being done with
+    // infinite time, so stop the loop.
     xio_context_stop_loop(pt_->ctx_);
   } else {
-#endif
     drainQueue();
   }
 }

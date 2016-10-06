@@ -178,26 +178,25 @@ void PortalThreadData::portal_func() {
 
   xio_server_ = xio_bind(ctx_, &portal_ops, uri_.c_str(), NULL, 0, this);
 
-  GLOG_INFO("started portal uri=" << uri_ << " with thread=" << gettid());
+  GLOG_INFO("started portal coreId=" << coreId_ << " uri=" << uri_ << " with thread=" << gettid());
 
-  xio_context_run_loop(ctx_, timeout_ms);
-
-#ifdef BATCHING
+  int numIdleLoops = 0;
   while (not stopping) {
     int timeout_ms = XIO_INFINITE;
-    if (cd->ncd_ioh && (!cd->ncd_ioh->firstCall)) {
-      // cant use ncd_refcnt since it is decrement on dellocate req?
+    if (ioh_->alreadyInvoked()) {
+      // if workQueue is small, just do a quick check if there are more requests
       timeout_ms = 0;
+      numIdleLoops ++;
     }
     int numEvents = xio_context_run_loop(ctx_, timeout_ms);
-    if (timeout_ms == 0) {
-      cd->ncd_ioh->drainQueue();
+    if ((timeout_ms == 0) && (numIdleLoops == 2)) {
+      // if no req received, then handler was not called
+      // so we must manually drain the queue
+      ioh_->drainQueue();
+      numIdleLoops = 0;
     }
     (void) numEvents;
   }
-#else
-  xio_context_run_loop(ctx_, XIO_INFINITE);
-#endif
 
   xio_context_del_ev_handler(ctx_, evfd_);
 
@@ -358,6 +357,11 @@ NetworkXioServer::create_session_connection(xio_session *session,
     (void)xio_modify_connection(evdata->conn, &xconattr,
         XIO_CONNECTION_ATTR_USER_CTX);
 
+    pt->numConnections_ ++;
+    GLOG_INFO("portal=" << pt->coreId_ 
+        << " thread=" << gettid()
+        << " now serving " << pt->numConnections_ << " connections(up 1)");
+
   } catch (...) {
 
     GLOG_ERROR("cannot create client data ");
@@ -409,15 +413,20 @@ int NetworkXioServer::on_session_event(xio_session *session,
     }
     break;
   case XIO_SESSION_CONNECTION_TEARDOWN_EVENT:
+  case XIO_SESSION_CONNECTION_ERROR_EVENT:
     // signals loss of a connection within existing session
     if (tdata) {
       NetworkXioClientData* cd = (NetworkXioClientData*)tdata;
       cd->conn_state = 2;
       if (cd->ncd_refcnt != 0) {
-        GLOG_INFO("defering free since clientdata has unsent replies=" << cd->ncd_refcnt);
+        GLOG_INFO("deferring free since clientdata=" << (void*)cd 
+            << " has unsent replies=" << cd->ncd_refcnt
+            << " msg list size=" << cd->ncd_done_reqs.size());
       } else {
         assert(cd->ncd_conn == event_data->conn);
         xio_connection_destroy(cd->ncd_conn);
+    	cd->pt_->numConnections_ --;
+    	GLOG_INFO("portal=" << cd->pt_->coreId_ << " now serving " << cd->pt_->numConnections_ << " connections(down 1)");
         delete cd;
       }
     }
@@ -460,16 +469,21 @@ int NetworkXioServer::on_msg_send_complete(xio_session *session
                                                ATTRIBUTE_UNUSED,
                                            xio_msg *msg ATTRIBUTE_UNUSED,
                                            void *cb_user_ctx) {
-  NetworkXioClientData *clientData =
+  NetworkXioClientData *cd =
       static_cast<NetworkXioClientData *>(cb_user_ctx);
-  NetworkXioRequest *req = clientData->ncd_done_reqs.front();
-  clientData->ncd_done_reqs.pop_front();
+  NetworkXioRequest *req = cd->ncd_done_reqs.front();
+  cd->ncd_done_reqs.pop_front();
   deallocate_request(req);
-  clientData->ncd_refcnt --;
+  cd->ncd_refcnt --;
   
-  if ((clientData->conn_state == 2) && (clientData->ncd_refcnt == 0)) {
-    xio_connection_destroy(clientData->ncd_conn);
-    delete clientData;
+  if ((cd->conn_state == 2) && (cd->ncd_refcnt == 0)) {
+    xio_connection_destroy(cd->ncd_conn);
+    GLOG_INFO("closing deferred connection" << cd);
+    cd->pt_->numConnections_ ++;
+    GLOG_INFO("portal=" << cd->pt_->coreId_ 
+        << " thread=" << gettid()
+        << " now serving " << cd->pt_->numConnections_ << " connections(down 1)");
+    delete cd;
   }
   return 0;
 }
