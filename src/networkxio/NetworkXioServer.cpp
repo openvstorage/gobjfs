@@ -438,20 +438,19 @@ int NetworkXioServer::on_session_event(xio_session *session,
       // signals a new connection for portal
       create_session_connection(session, event_data, (PortalThreadData*)tdata);
     } else {
-      // new conn received on main session
+      // new conn received on main session - do nothing
       // since we are using portals, this connection will be closed 
       // and then a event for new portal connection will be received
-      mainConn_ = event_data->conn;
     }
     break;
   case XIO_SESSION_CONNECTION_ERROR_EVENT:
+    xio_disconnect(event_data->conn);
+    GLOG_INFO("disconnecting conn=" << event_data->conn << " thread=" << gettid());
     break;
 
   case XIO_SESSION_CONNECTION_TEARDOWN_EVENT:
     // signals loss of a connection within existing session
     if (tdata) {
-
-      assert(mainConn_ != event_data->conn);
 
       NetworkXioClientData* cd = (NetworkXioClientData*)tdata;
       cd->conn_state = 2;
@@ -470,9 +469,8 @@ int NetworkXioServer::on_session_event(xio_session *session,
         delete cd;
       }
     } else {
-      assert(mainConn_ == event_data->conn);
-      xio_connection_destroy(mainConn_);
-      mainConn_ = nullptr;
+      xio_connection_destroy(event_data->conn);
+   	  GLOG_INFO("destroying conn=" << event_data->conn << " thread=" << gettid());
     }
     break;
   case XIO_SESSION_TEARDOWN_EVENT:

@@ -161,9 +161,6 @@ private:
   std::shared_ptr<xio_server> server;
   std::shared_ptr<xio_mempool> xio_mpool;
 
-  // derived from fe_conn stored in raio server example in accelio
-  xio_connection* mainConn_{nullptr};
-
   int create_session_connection(xio_session *session,
                                 xio_session_event_data *event_data,
                                 PortalThreadData* cd);
