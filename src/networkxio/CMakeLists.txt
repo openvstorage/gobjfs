@@ -6,6 +6,7 @@ include_directories(${PROJECT_SOURCE_DIR}/thirdparty/msgpack/include)
 
 set(CLIENT_SOURCES 
   gobjfs_client.cpp
+  NetworkXioCommon.cpp
   NetworkXioClient.cpp
   )
 
@@ -40,6 +41,7 @@ install(TARGETS gobjfs_client_static
 set(SERVER_SOURCES 
   NetworkXioIOHandler.cpp
   NetworkXioServer.cpp
+  NetworkXioCommon.cpp
   gobjfs_server.cpp
   )
 

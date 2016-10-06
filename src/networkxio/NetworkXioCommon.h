@@ -18,6 +18,8 @@ but WITHOUT ANY WARRANTY of any kind.
 #pragma once
 
 #include <iostream>
+#include <string>
+#include <libxio.h>
 
 namespace gobjfs {
 namespace xio {
@@ -33,5 +35,10 @@ enum class NetworkXioMsgOpcode {
 };
 
 #define GetNegative(err) (err > 0) ? -err : err;
+
+std::string getURI(xio_session* s);
+
+int getAddressAndPort(xio_connection* conn, std::string& ipAddr, int& port);
+
 }
 } // namespace

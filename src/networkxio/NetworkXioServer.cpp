@@ -22,14 +22,16 @@ but WITHOUT ANY WARRANTY of any kind.
 #include <sys/epoll.h> // epoll_create1
 #include <boost/thread/lock_guard.hpp>
 
+#include <util/os_utils.h>
+
 #include <networkxio/gobjfs_client_common.h>
 #include <networkxio/gobjfs_config.h>
 #include <gobjfs_client.h>
-#include <util/os_utils.h>
 
 #include "NetworkXioServer.h"
 #include "NetworkXioProtocol.h"
 #include "NetworkXioRequest.h"
+#include "NetworkXioCommon.h"
 #include "gobjfs_getenv.h"
 
 using gobjfs::os::DirectIOSize;
@@ -38,13 +40,6 @@ namespace gobjfs {
 namespace xio {
 
 static constexpr int XIO_COMPLETION_DEFAULT_MAX_EVENTS = 100;
-
-static std::string geturi(xio_session *s) {
-	xio_session_attr attr;
-	int ret = xio_query_session(s, &attr, XIO_SESSION_ATTR_URI);
-	if (ret == 0) return attr.uri;
-	return "";
-}
 
 // TODO cleanup duplicate of function existing in NetworkXioIOHandler
 static inline void pack_msg(NetworkXioRequest *req) {
@@ -110,18 +105,9 @@ static int static_on_session_event(xio_session *session,
     tdata = event_data->conn_user_context;
   }
 
-  xio_connection_attr conn_attr;
-  int ret = xio_query_connection(event_data->conn, 
-    &conn_attr,
-    XIO_CONNECTION_ATTR_PEER_ADDR);
-
-  const char* ipAddr = nullptr;
+  std::string ipAddr;
   int port = -1;
-  if (ret == 0) {
-    sockaddr_in *sa = (sockaddr_in*)&conn_attr.peer_addr;
-    ipAddr = inet_ntoa(sa->sin_addr);
-    port = sa->sin_port;
-  }
+  getAddressAndPort(event_data->conn, ipAddr, port);
 
   GLOG_INFO("got session event=" << xio_session_event_str(event_data->event)
       << ",reason=" << xio_strerror(event_data->reason)
@@ -129,9 +115,9 @@ static int static_on_session_event(xio_session *session,
       << ",tdata_ptr=" << (void*)tdata
       << ",cb_user_ctx=" << (void*)cb_user_context
       << ",thread=" << gettid() 
-      << ",addr=" << (ipAddr ? ipAddr : "null")
+      << ",addr=" << ipAddr.c_str()
       << ",port=" << port
-      << ",uri=" << geturi(session));
+      << ",uri=" << getURI(session));
 
   T *obj = reinterpret_cast<T *>(cb_user_context);
   if (obj == NULL) {

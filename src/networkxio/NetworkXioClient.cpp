@@ -29,6 +29,7 @@ but WITHOUT ANY WARRANTY of any kind.
 #include <networkxio/gobjfs_config.h>
 #include <gobjfs_client.h>
 #include "NetworkXioClient.h"
+#include "NetworkXioCommon.h"
 #include "gobjfs_getenv.h"
 
 namespace gobjfs {
@@ -43,19 +44,9 @@ typedef std::map<std::string, std::shared_ptr<xio_session>> SessionMap;
 static SessionMap sessionMap;
 static std::mutex mutex;
 
-static std::string geturi(xio_session* s)
-{
-	xio_session_attr attr;
-	int ret = xio_query_session(s, &attr, XIO_SESSION_ATTR_URI);
-	if (ret == 0) {
-		return attr.uri;
-	}
-	return "";
-}
-
 static int dbg_xio_session_destroy(xio_session* s)
 {
-    GLOG_INFO("destroying session=" << (void*)s << " for uri="  << geturi(s));
+    GLOG_INFO("destroying session=" << (void*)s << " for uri="  << getURI(s));
     return xio_session_destroy(s);
 }
 
@@ -156,9 +147,17 @@ static int static_on_session_event(xio_session *session,
     return -1;
   }
 
+  std::string ipAddr;
+  int port = -1;
+  getAddressAndPort(event_data->conn, ipAddr, port);
+
   GLOG_INFO("got session event=" << xio_session_event_str(event_data->event)
-      << ",tid=" << gettid() 
-      << ",uri=" << geturi(session));
+      << ",reason=" << xio_strerror(event_data->reason)
+      << ",cb_user_ctx=" << (void*)cb_user_context
+      << ",thread=" << gettid() 
+      << ",addr=" << ipAddr.c_str()
+      << ",port=" << port
+      << ",uri=" << getURI(session));
 
   return obj->on_session_event(session, event_data);
 }
