@@ -110,9 +110,25 @@ static int static_on_session_event(xio_session *session,
     tdata = event_data->conn_user_context;
   }
 
+  xio_connection_attr conn_attr;
+  int ret = xio_query_connection(event_data->conn, 
+    &conn_attr,
+    XIO_CONNECTION_ATTR_PEER_ADDR);
+
+  const char* ipAddr = nullptr;
+  int port = -1;
+  if (ret == 0) {
+    sockaddr_in *sa = (sockaddr_in*)&conn_attr.peer_addr;
+    ipAddr = inet_ntoa(sa->sin_addr);
+    port = sa->sin_port;
+  }
+
   GLOG_INFO("got session event=" << xio_session_event_str(event_data->event)
+      << ",reason=" << xio_strerror(event_data->reason)
       << ",is_portal=" << (tdata != nullptr)
       << ",thread=" << gettid() 
+      << ",addr=" << (ipAddr ? ipAddr : "null")
+      << ",port=" << port
       << ",uri=" << geturi(session));
 
   // TODO
@@ -412,8 +428,9 @@ int NetworkXioServer::on_session_event(xio_session *session,
       // ignore
     }
     break;
-  case XIO_SESSION_CONNECTION_TEARDOWN_EVENT:
   case XIO_SESSION_CONNECTION_ERROR_EVENT:
+
+  case XIO_SESSION_CONNECTION_TEARDOWN_EVENT:
     // signals loss of a connection within existing session
     if (tdata) {
       NetworkXioClientData* cd = (NetworkXioClientData*)tdata;
