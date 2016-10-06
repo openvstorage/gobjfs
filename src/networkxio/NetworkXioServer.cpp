@@ -101,7 +101,7 @@ static int static_on_session_event(xio_session *session,
     // this is a portal event 
     // for new connection, it will be a ptr to PortalThreadData
     // for connection being destroyed, it will be ptr to NetworkClientData
-    // since we modify the connection user ctx
+    // since we modify the connection user ctx using xio_modify_connection()
     tdata = event_data->conn_user_context;
   }
 
@@ -113,6 +113,7 @@ static int static_on_session_event(xio_session *session,
 
   GLOG_INFO("got session event=" << xio_session_event_str(event_data->event)
       << ",reason=" << xio_strerror(event_data->reason)
+      << ",conn=" << event_data->conn
       << ",is_portal=" << (tdata != nullptr)
       << ",tdata_ptr=" << (void*)tdata
       << ",cb_user_ctx=" << (void*)cb_user_context
@@ -416,10 +417,12 @@ int NetworkXioServer::on_new_session(xio_session *session,
   sockaddr_in *sa = (sockaddr_in*)&req->src_addr;
   const char *ipAddr = inet_ntoa(sa->sin_addr);
   std::string uriStr(req->uri, req->uri_len);
+
   GLOG_INFO("Got a new session request for uri=" << uriStr.c_str()
-      << " thread=" << gettid()
-      << " and addr=" << ipAddr 
-      << " port=" << sa->sin_port);
+      << ",thread=" << gettid()
+      << ",addr=" << ipAddr
+      << ",port=" << sa->sin_port
+      );
 
   return 0;
 }
@@ -435,7 +438,10 @@ int NetworkXioServer::on_session_event(xio_session *session,
       // signals a new connection for portal
       create_session_connection(session, event_data, (PortalThreadData*)tdata);
     } else {
-      // ignore
+      // new conn received on main session
+      // since we are using portals, this connection will be closed 
+      // and then a event for new portal connection will be received
+      mainConn_ = event_data->conn;
     }
     break;
   case XIO_SESSION_CONNECTION_ERROR_EVENT:
@@ -444,6 +450,9 @@ int NetworkXioServer::on_session_event(xio_session *session,
   case XIO_SESSION_CONNECTION_TEARDOWN_EVENT:
     // signals loss of a connection within existing session
     if (tdata) {
+
+      assert(mainConn_ != event_data->conn);
+
       NetworkXioClientData* cd = (NetworkXioClientData*)tdata;
       cd->conn_state = 2;
       if (cd->ncd_refcnt != 0) {
@@ -461,21 +470,14 @@ int NetworkXioServer::on_session_event(xio_session *session,
         delete cd;
       }
     } else {
-      xio_connection_destroy(event_data->conn);
+      assert(mainConn_ == event_data->conn);
+      xio_connection_destroy(mainConn_);
+      mainConn_ = nullptr;
     }
     break;
   case XIO_SESSION_TEARDOWN_EVENT:
-    // signals loss of session
-    // cannot directly call xio_context_stop_loop() on portal ctx
-    // since the portal threads own that ctx and are accessing it
-    // while this function is being run in the main thread
-    // so we write to the evfd instead
-    for (auto elem : ptVec_) {
-      elem->stop_loop();
-    }
-    if (ctx) {
-      xio_context_stop_loop(ctx.get());
-    }
+    // loss of session from a particular client
+    // there can be other clients still running
     xio_session_destroy(session);
     break;
   default:
