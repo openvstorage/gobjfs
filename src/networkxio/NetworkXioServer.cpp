@@ -158,6 +158,15 @@ static void static_evfd_stop_loop(int fd, int events, void *data) {
   XXExit();
 }
 
+void PortalThreadData::evfd_stop_loop(int /*fd*/, int /*events*/, void * /*data*/) {
+  evfd_.readfd();
+  xio_context_stop_loop(ctx_);
+}
+
+void PortalThreadData::stop_loop() {
+  stopping = true;
+  evfd_.writefd();
+}
 
 void PortalThreadData::portal_func() {
 

@@ -58,15 +58,9 @@ struct PortalThreadData {
 
   int coreId_{-1};
 
-  void evfd_stop_loop(int /*fd*/, int /*events*/, void * /*data*/) {
-    evfd_.readfd();
-    xio_context_stop_loop(ctx_);
-  }
+  void evfd_stop_loop(int /*fd*/, int /*events*/, void * /*data*/);
 
-  void stop_loop() {
-    stopping = true;
-    evfd_.writefd();
-  }
+  void stop_loop();
 
   void portal_func();
 
