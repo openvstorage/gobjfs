@@ -51,6 +51,7 @@ struct PortalThreadData {
   xio_context *ctx_{nullptr};  
   xio_mempool *mpool_{nullptr};
   EventFD evfd_;
+  size_t numConnections_{0};
 
   bool stopping = false;
   bool stopped = false;
