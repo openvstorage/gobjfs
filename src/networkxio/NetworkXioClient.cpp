@@ -151,7 +151,8 @@ static int static_on_session_event(xio_session *session,
   int peerPort = -1;
   std::string localAddr;
   int localPort = -1;
-  getAddressAndPort(event_data->conn, localAddr, localPort, peerAddr, peerPort);
+  // causing a SEGV
+  //getAddressAndPort(event_data->conn, localAddr, localPort, peerAddr, peerPort);
 
   GLOG_INFO("got session event=" << xio_session_event_str(event_data->event)
       << ",reason=" << xio_strerror(event_data->reason)
@@ -376,9 +377,7 @@ int NetworkXioClient::on_session_event(xio_session *session
   case XIO_SESSION_CONNECTION_ERROR_EVENT:
     break; // for debugging
   case XIO_SESSION_CONNECTION_TEARDOWN_EVENT:
-    if (disconnecting) {
-      xio_connection_destroy(event_data->conn);
-    }
+    xio_connection_destroy(event_data->conn);
     disconnected = true;
     break;
   case XIO_SESSION_TEARDOWN_EVENT:
@@ -422,7 +421,7 @@ void NetworkXioClient::xio_send_open_request(const void *opaque) {
   xmsg->msg.opcode(NetworkXioMsgOpcode::OpenReq);
   xmsg->msg.opaque((uintptr_t)xmsg);
 
-  xio_msg_prepare(xmsg);
+  msg_prepare(xmsg);
   send_msg(xmsg);
   XXExit();
 }
@@ -441,7 +440,7 @@ void NetworkXioClient::xio_send_read_request(const std::string &filename,
   xmsg->msg.offset(offset_in_bytes);
   xmsg->msg.filename_ = filename;
 
-  xio_msg_prepare(xmsg);
+  msg_prepare(xmsg);
 
   vmsg_sglist_set_nents(&xmsg->xreq.in, 1);
   xmsg->xreq.in.data_iov.sglist[0].iov_base = buf;
@@ -479,77 +478,7 @@ int NetworkXioClient::on_response(xio_session *session __attribute__((unused)),
   return 0;
 }
 
-int NetworkXioClient::on_msg_error_control(
-    xio_session *session ATTRIBUTE_UNUSED, xio_status error ATTRIBUTE_UNUSED,
-    xio_msg_direction direction, xio_msg *msg,
-    void *cb_user_context ATTRIBUTE_UNUSED) {
-  XXEnter();
-  NetworkXioMsg imsg;
-  xio_msg_s *xio_msg;
-
-  session_data *sdata = static_cast<session_data *>(cb_user_context);
-  xio_context *ctx = sdata->ctx;
-  if (direction == XIO_MSG_DIRECTION_IN) {
-    try {
-      imsg.unpack_msg(static_cast<const char *>(msg->in.header.iov_base),
-                      msg->in.header.iov_len);
-    } catch (...) {
-      xio_release_response(msg);
-      GLOG_ERROR("failed to unpack msg");
-      return 0;
-    }
-    msg->in.header.iov_base = NULL;
-    msg->in.header.iov_len = 0;
-    vmsg_sglist_set_nents(&msg->in, 0);
-    xio_release_response(msg);
-  } else /* XIO_MSG_DIRECTION_OUT */
-  {
-    try {
-      imsg.unpack_msg(static_cast<const char *>(msg->out.header.iov_base),
-                      msg->out.header.iov_len);
-    } catch (...) {
-      GLOG_ERROR("failed to unpack msg");
-      return 0;
-    }
-  }
-  xio_msg = reinterpret_cast<xio_msg_s *>(imsg.opaque());
-
-  ovs_xio_complete_request_control(const_cast<void *>(xio_msg->opaque), -1,
-                                   EIO);
-  xio_context_stop_loop(ctx);
-  XXExit();
-  return 0;
-}
-
-int
-NetworkXioClient::on_session_event_control(xio_session *session,
-                                           xio_session_event_data *event_data,
-                                           void *cb_user_context) {
-  XXEnter();
-  session_data *sdata = static_cast<session_data *>(cb_user_context);
-  xio_context *ctx = sdata->ctx;
-  switch (event_data->event) {
-  case XIO_SESSION_CONNECTION_TEARDOWN_EVENT:
-    GLOG_DEBUG("Sending XIO_SESSION_CONNECTION_TEARDOWN_EVENT");
-    if (sdata->disconnecting) {
-      xio_connection_destroy(event_data->conn);
-    }
-    sdata->disconnected = true;
-    xio_context_stop_loop(ctx);
-    break;
-  case XIO_SESSION_TEARDOWN_EVENT:
-    GLOG_DEBUG("Sending XIO_SESSION_TEARDOWN_EVENT");
-    xio_session_destroy(session);
-    xio_context_stop_loop(ctx);
-    break;
-  default:
-    break;
-  }
-  XXExit();
-  return 0;
-}
-
-void NetworkXioClient::xio_msg_prepare(xio_msg_s *xmsg) {
+void NetworkXioClient::msg_prepare(xio_msg_s *xmsg) {
   XXEnter();
   xmsg->s_msg = xmsg->msg.pack_msg();
 
