@@ -31,7 +31,9 @@ std::string getURI(xio_session* s) {
     return "null";
 }
 
-int getAddressAndPort(xio_connection* conn, std::string& ipAddr, int& port) {
+int getAddressAndPort(xio_connection* conn, 
+    std::string& localAddr, int& localPort,
+    std::string& peerAddr, int& peerPort) {
 
   if (!conn) {
     return -1;
@@ -40,15 +42,22 @@ int getAddressAndPort(xio_connection* conn, std::string& ipAddr, int& port) {
   xio_connection_attr conn_attr;
   int ret = xio_query_connection(conn,
     &conn_attr,
-    XIO_CONNECTION_ATTR_PEER_ADDR);
+    XIO_CONNECTION_ATTR_LOCAL_ADDR | XIO_CONNECTION_ATTR_PEER_ADDR);
 
   if (ret == 0) {
-    sockaddr_in *sa = (sockaddr_in*)&conn_attr.peer_addr;
-    ipAddr = inet_ntoa(sa->sin_addr);
-    port = sa->sin_port;
+    {
+      sockaddr_in *pa = (sockaddr_in*)&conn_attr.peer_addr;
+      peerAddr = inet_ntoa(pa->sin_addr);
+      peerPort = pa->sin_port;
+    }
+    {
+      sockaddr_in *la = (sockaddr_in*)&conn_attr.local_addr;
+      localAddr = inet_ntoa(la->sin_addr);
+      localPort = la->sin_port;
+    }
   } else {
-    ipAddr = "null";
-    port = -1;
+    localAddr = peerAddr = "null";
+    localPort = peerPort = -1;
   }
   return ret;
 }

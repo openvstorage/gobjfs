@@ -38,7 +38,9 @@ enum class NetworkXioMsgOpcode {
 
 std::string getURI(xio_session* s);
 
-int getAddressAndPort(xio_connection* conn, std::string& ipAddr, int& port);
+int getAddressAndPort(xio_connection* conn, 
+    std::string& localAddr, int& localPort,
+    std::string& peerAddr, int& peerPort);
 
 }
 } // namespace

@@ -105,9 +105,11 @@ static int static_on_session_event(xio_session *session,
     tdata = event_data->conn_user_context;
   }
 
-  std::string ipAddr;
-  int port = -1;
-  getAddressAndPort(event_data->conn, ipAddr, port);
+  std::string peerAddr;
+  int peerPort = -1;
+  std::string localAddr;
+  int localPort = -1;
+  getAddressAndPort(event_data->conn, localAddr, localPort, peerAddr, peerPort);
 
   GLOG_INFO("got session event=" << xio_session_event_str(event_data->event)
       << ",reason=" << xio_strerror(event_data->reason)
@@ -115,8 +117,10 @@ static int static_on_session_event(xio_session *session,
       << ",tdata_ptr=" << (void*)tdata
       << ",cb_user_ctx=" << (void*)cb_user_context
       << ",thread=" << gettid() 
-      << ",addr=" << ipAddr.c_str()
-      << ",port=" << port
+      << ",peer_addr=" << peerAddr.c_str()
+      << ",peer_port=" << peerPort
+      << ",local_addr=" << localAddr.c_str()
+      << ",local_port=" << localPort
       << ",uri=" << getURI(session));
 
   T *obj = reinterpret_cast<T *>(cb_user_context);
