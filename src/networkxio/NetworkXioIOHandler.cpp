@@ -322,7 +322,7 @@ bool NetworkXioIOHandler::process_request(NetworkXioRequest *req) {
 }
 
 bool NetworkXioIOHandler::alreadyInvoked() const {
-  return (workQueue.size() > 1);
+  return (workQueue.size() > 0);
 }
 
 void NetworkXioIOHandler::drainQueue() {
