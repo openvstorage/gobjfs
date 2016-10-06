@@ -135,11 +135,6 @@ int ctx_init(client_ctx_ptr ctx) {
       err = -EIO;
       XXDone();
     }
-    err = ovs_xio_open_device(ctx);
-    if (err < 0) {
-      GLOG_ERROR("ovs_xio_open_device failed with error " << err);
-      XXDone();
-    }
   }
 done:
   XXExit();

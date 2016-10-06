@@ -136,15 +136,7 @@ private:
 
   void shutdown();
 
-  static int on_msg_error_control(xio_session *session, xio_status error,
-                                  xio_msg_direction direction, xio_msg *msg,
-                                  void *cb_user_context);
-
-  static int on_session_event_control(xio_session *session,
-                                      xio_session_event_data *event_data,
-                                      void *cb_user_context);
-
-  static void xio_msg_prepare(xio_msg_s *xmsg);
+  static void msg_prepare(xio_msg_s *xmsg);
 
 };
 
