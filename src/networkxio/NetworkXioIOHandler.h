@@ -20,9 +20,6 @@ but WITHOUT ANY WARRANTY of any kind.
 #include "NetworkXioRequest.h"
 #include <gcommon.h>
 
-#include <util/ShutdownNotifier.h>
-#include <util/Pipe.h>
-
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
