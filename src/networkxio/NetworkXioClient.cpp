@@ -368,6 +368,10 @@ int NetworkXioClient::on_session_event(xio_session *session
                                        xio_session_event_data *event_data) {
   XXEnter();
   switch (event_data->event) {
+  case XIO_SESSION_CONNECTION_DISCONNECTED_EVENT:
+  case XIO_SESSION_ERROR_EVENT:
+  case XIO_SESSION_CONNECTION_ERROR_EVENT:
+    break; // for debugging
   case XIO_SESSION_CONNECTION_TEARDOWN_EVENT:
     if (disconnecting) {
       xio_connection_destroy(event_data->conn);
