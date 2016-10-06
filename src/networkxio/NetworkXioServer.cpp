@@ -242,7 +242,6 @@ void NetworkXioServer::destroy_ctx_shutdown(xio_context *ctx) {
 
 NetworkXioServer::~NetworkXioServer() { shutdown(); }
 
-// TODO same for Portal
 void NetworkXioServer::evfd_stop_loop(int /*fd*/, int /*events*/,
                                       void * /*data*/) {
   evfd.readfd();
@@ -448,6 +447,8 @@ int NetworkXioServer::on_session_event(xio_session *session,
             << " now serving " << cd->pt_->numConnections_ << " connections(down 1)");
         delete cd;
       }
+    } else {
+      xio_connection_destroy(event_data->conn);
     }
     break;
   case XIO_SESSION_TEARDOWN_EVENT:
