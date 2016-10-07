@@ -302,7 +302,7 @@ static void doRandomRead(ThreadCtx *ctx) {
         std::free(iocb->aio_buf);
         std::free(iocb);
         ctx->benchInfo.failedReads ++;
-        LOG(ERROR) << "failed0";
+        //LOG(ERROR) << "failed0";
       } else {
         ctx->iocb_vec.push_back(iocb);
       }
@@ -316,12 +316,12 @@ static void doRandomRead(ThreadCtx *ctx) {
           ctx->benchInfo.readLatency = latencyTimer.elapsedMicroseconds();
 
           if (ret != 0) {
-            LOG(ERROR) << "failed suspend " << ret;
+            //LOG(ERROR) << "failed suspend " << ret;
             ctx->benchInfo.failedReads ++;      
           } else {
             ret = aio_return(ctx->ctx_ptr, elem);
             if (ret != config.blockSize) {
-              LOG(ERROR) << "failed1 " << ret;
+              //LOG(ERROR) << "failed1 " << ret;
               ctx->benchInfo.failedReads ++;      
             }
           }
@@ -346,7 +346,7 @@ static void doRandomRead(ThreadCtx *ctx) {
         
         if (ret != 0) {
           ctx->benchInfo.failedReads += ctx->iocb_vec.size();
-          LOG(ERROR) << "failed2";
+          //LOG(ERROR) << "failed2";
           for (auto &elem : ctx->iocb_vec) {
             aio_finish(ctx->ctx_ptr, elem);
             std::free(elem->aio_buf);
@@ -362,7 +362,7 @@ static void doRandomRead(ThreadCtx *ctx) {
             ssize_t ret = aio_return(ctx->ctx_ptr, elem);
             if (ret != config.blockSize) {
               ctx->benchInfo.failedReads ++;
-              LOG(ERROR) << "failed3";
+              //LOG(ERROR) << "failed3";
             }
             aio_finish(ctx->ctx_ptr, elem);
             std::free(elem->aio_buf);
@@ -390,7 +390,7 @@ static void doRandomRead(ThreadCtx *ctx) {
       ssize_t ret = aio_return(ca->ctx->ctx_ptr, ca->iocb);
       if (ret != config.blockSize) {
         ca->ctx->benchInfo.failedReads ++;
-        LOG(ERROR) << "failed4";
+        //LOG(ERROR) << "failed4";
       }
 
       ca->ctx->benchInfo.readLatency = ca->latencyTimer.elapsedMicroseconds();
@@ -421,7 +421,7 @@ static void doRandomRead(ThreadCtx *ctx) {
 
       if (ret != 0) {
         ctx->benchInfo.failedReads ++;
-        LOG(ERROR) << "failed5";
+        //LOG(ERROR) << "failed5";
         aio_release_completion(comp);
         aio_finish(ctx->ctx_ptr, iocb);
         std::free(iocb->aio_buf);
@@ -567,13 +567,10 @@ int main(int argc, char *argv[]) {
     s << ":num_threads=" << config.maxThr
       << ":iops=" << globalBenchInfo.iops
       << ":read_latency(usec)=" << globalBenchInfo.readLatency
+      << ":failed reads=" << globalBenchInfo.failedReads
       << ":process_stats=" << endCpuStats.ToString();
 
     LOG(INFO) << s.str();
-
-    if (globalBenchInfo.failedReads) {
-      LOG(ERROR) << "failed reads=" << globalBenchInfo.failedReads;
-    }
   }
 
   {
