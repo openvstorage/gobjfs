@@ -24,6 +24,9 @@ but WITHOUT ANY WARRANTY of any kind.
 namespace gobjfs {
 namespace xio {
 
+/**
+ * currently only readReq/Rsp is needed
+ */
 enum class NetworkXioMsgOpcode {
   Noop,
   OpenReq,

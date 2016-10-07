@@ -39,6 +39,9 @@ class NetworkXioIOHandler;
 class PortalThreadData;
 struct NetworkXioClientData;
 
+/**
+ * one per request
+ */
 struct NetworkXioRequest {
   NetworkXioMsgOpcode op{NetworkXioMsgOpcode::Noop};
 
@@ -71,6 +74,11 @@ struct NetworkXioRequest {
 };
 
 
+/**
+ * created on new connection event 
+ * it is one per connection
+ * destroyed when connection is closed
+ */
 struct NetworkXioClientData {
 
   PortalThreadData* pt_;
@@ -79,7 +87,9 @@ struct NetworkXioClientData {
   xio_session *ncd_session{nullptr};
   xio_connection *ncd_conn{nullptr};
 
+  // TODO make this enum
   int conn_state = 0; // 1 = conn, 2 = disconn
+
   uint64_t ncd_refcnt{0};
 
   std::list<NetworkXioRequest *> ncd_done_reqs;

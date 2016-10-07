@@ -29,6 +29,11 @@ namespace xio {
 class NetworkXioServer;
 class NetworkXioIOHandler;
 
+/**
+ * This object is one per Portal thread created by the server
+ * Array of these is maintained by NetworkXioServer
+ * it contains NetworkXioIOHandler which contains handlers for various functions
+ */
 struct PortalThreadData {
 
   NetworkXioServer* server_{nullptr}; 
@@ -39,21 +44,27 @@ struct PortalThreadData {
   std::string uri_; 
   std::thread thread_; 
 
+  // context must be per-thread as per accelio
   xio_context *ctx_{nullptr};  
+
   xio_mempool *mpool_{nullptr};
+
   EventFD evfd_;
+
+  // number of connections currently handled by this thread
   size_t numConnections_{0};
 
   bool stopping = false;
   bool stopped = false;
 
+  // one which core is the thread bound
   int coreId_{-1};
 
-  void evfd_stop_loop(int /*fd*/, int /*events*/, void * /*data*/);
-
+  // to stop the thread event loop, call this func
   void stop_loop();
 
-  void portal_func();
+  // called from accelio event loop only
+  void evfd_stop_loop(int /*fd*/, int /*events*/, void * /*data*/);
 
   PortalThreadData(NetworkXioServer* server, const std::string& uri, int coreId)
     : server_(server)
@@ -65,6 +76,13 @@ struct PortalThreadData {
     delete ioh_;
     // TODO free others
   }
+
+  private:
+
+  // the thread executes this func
+  void portal_func();
+
+  friend class NetworkXioServer;
 };
 
 }

@@ -168,7 +168,6 @@ void NetworkXioIOHandler::stopEventHandler() {
 }
 
 void NetworkXioIOHandler::handle_open(NetworkXioRequest *req) {
-  int err = 0;
   GLOG_DEBUG("trying to open volume ");
 
   req->op = NetworkXioMsgOpcode::OpenRsp;
@@ -285,8 +284,8 @@ void NetworkXioIOHandler::handle_error(NetworkXioRequest *req, int errval) {
 bool NetworkXioIOHandler::process_request(NetworkXioRequest *req) {
   bool finishNow = true;
   xio_msg *xio_req = req->xio_req;
-  xio_iovec_ex *isglist = vmsg_sglist(&xio_req->in);
-  int inents = vmsg_sglist_nents(&xio_req->in);
+  //xio_iovec_ex *isglist = vmsg_sglist(&xio_req->in);
+  //int inents = vmsg_sglist_nents(&xio_req->in);
 
   NetworkXioMsg i_msg(NetworkXioMsgOpcode::Noop);
   try {

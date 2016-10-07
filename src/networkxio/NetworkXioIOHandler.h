@@ -32,6 +32,8 @@ but WITHOUT ANY WARRANTY of any kind.
 namespace gobjfs {
 namespace xio {
 
+static int static_runEventHandler(gIOStatus& iostatus, void* ctx);
+
 class NetworkXioIOHandler {
 public:
   NetworkXioIOHandler(PortalThreadData* pt);
@@ -48,11 +50,8 @@ public:
   void handle_request(NetworkXioRequest *req);
 
   void drainQueue();
+
   bool alreadyInvoked() const;
-
-  int runEventHandler(gIOStatus& iostatus);
-
-  std::list<NetworkXioRequest*> workQueue;
 
 private:
   void handle_open(NetworkXioRequest *req);
@@ -62,6 +61,18 @@ private:
 
   void handle_error(NetworkXioRequest *req, int errval);
 
+  void startEventHandler();
+
+  int runEventHandler(gIOStatus& iostatus);
+
+  void stopEventHandler();
+
+  /**
+   * this func is passed as argument to IOExecFileRead
+   * it gets called from FilerJob::reset
+   */
+  friend int static_runEventHandler(gIOStatus& iostatus, void* ctx);
+
 private:
   std::string configFileName_;
 
@@ -69,12 +80,15 @@ private:
 
   IOExecEventFdHandle eventHandle_{nullptr};
 
+  // fd on which disk IO completions are received
+  // this is one per portal thread
+  // it is passed to IOExecutor when a disk IO job is submitted
   int eventFD_{-1};
 
+  // pointer to parent 
   PortalThreadData* pt_;
 
-  void startEventHandler();
-  void stopEventHandler();
+  std::list<NetworkXioRequest*> workQueue;
 
 };
 
