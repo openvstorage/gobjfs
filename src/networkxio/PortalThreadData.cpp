@@ -82,7 +82,7 @@ void PortalThreadData::changeNumConnections(int change) {
   numConnections_ += change;
   // dynamically increase and decrease minSubmitSize based on 
   // connections to portal
-  ioh_->ioexecPtr_->setMinSubmitSize(numConnections_/2);
+  ioh_->ioexecPtr_->setMinSubmitSize(numConnections_);
 }
 
 void PortalThreadData::portal_func() {
