@@ -157,7 +157,7 @@ public:
     OpStats read_;
 
     gobjfs::stats::MaxValue<uint32_t> maxRequestQueueSize_;
-    gobjfs::stats::MaxValue<uint32_t> minSubmitSize_;
+    gobjfs::stats::StatsCounter<uint32_t> minSubmitSize_;
 
     gobjfs::stats::StatsCounter<int64_t> numProcessedInLoop_;
 
