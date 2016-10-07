@@ -22,11 +22,14 @@ but WITHOUT ANY WARRANTY of any kind.
 #include <gobjfs_client.h>
 #include <IOExecutor.h>
 
+#include "gobjfs_getenv.h"
 #include "NetworkXioIOHandler.h"
-#include <networkxio/NetworkXioCommon.h>
+#include "NetworkXioCommon.h"
 #include "NetworkXioProtocol.h"
 #include "NetworkXioServer.h"
 #include "PortalThreadData.h"
+
+#include <util/lang_utils.h>
 
 using namespace std;
 namespace gobjfs {
@@ -40,6 +43,31 @@ static inline void pack_msg(NetworkXioRequest *req) {
   o_msg.opaque(req->opaque);
   req->s_msg = o_msg.pack_msg();
 }
+
+/** 
+ * called from accelio event loop
+ */
+template <class T> 
+static void static_disk_event(int fd, int events, void *data) {
+  T *obj = reinterpret_cast<T *>(data);
+  if (obj == NULL) {
+    return;
+  }
+  obj->handleXioEvent(fd, events, data);
+}
+
+/** 
+ * called from accelio event loop
+ */
+template <class T> 
+static void static_timer_event(int fd, int events, void *data) {
+  T *obj = reinterpret_cast<T *>(data);
+  if (obj == NULL) {
+    return;
+  }
+  obj->runTimerHandler();
+}
+
 
 NetworkXioIOHandler::NetworkXioIOHandler(PortalThreadData* pt)
   : pt_(pt) {
@@ -60,6 +88,11 @@ NetworkXioIOHandler::NetworkXioIOHandler(PortalThreadData* pt)
 
   eventFD_ = IOExecEventFdGetReadFd(eventHandle_);
 
+  // TODO expose this config as env var
+  const int timerSec = getenv_with_default("GOBJFS_SERVER_STATS_TIMER_SEC", 60);
+  const int timerNanosec = 0;
+  statsTimerFD_ = gobjfs::make_unique<TimerNotifier>(timerSec, timerNanosec);
+
   startEventHandler();
 }
 
@@ -78,15 +111,6 @@ NetworkXioIOHandler::~NetworkXioIOHandler() {
 
 }
 
-template <class T> 
-static void static_disk_event(int fd, int events, void *data) {
-  T *obj = reinterpret_cast<T *>(data);
-  if (obj == NULL) {
-    return;
-  }
-  obj->handleXioEvent(fd, events, data);
-}
-
 void NetworkXioIOHandler::startEventHandler() {
 
   try {
@@ -101,21 +125,41 @@ void NetworkXioIOHandler::startEventHandler() {
       throw FailedRegisterEventHandler("failed to register event handler");
 
     }
-    GLOG_INFO("registered fd=" << eventFD_
-        << " ioexecutor=" << ioexecPtr
-        << " for thread=" << gettid());
+
+    GLOG_INFO("registered disk event fd=" << eventFD_
+        << ",ioexecutor=" << ioexecPtr
+        << ",thread=" << gettid());
+
+    // Add periodic timer to print per-thread stats
+    if (xio_context_add_ev_handler(pt_->ctx_, statsTimerFD_->getFD(),
+                                XIO_POLLIN,
+                                static_timer_event<NetworkXioIOHandler>,
+                                this)) {
+
+      throw FailedRegisterEventHandler("failed to register event handler");
+
+    }
+
+    GLOG_INFO("registered timer event fd=" << statsTimerFD_->getFD()
+        << ",thread=" << gettid());
+
   } catch (std::exception& e) {
     GLOG_ERROR("failed to init handler " << e.what());
   }
 }
 
+/** 
+ * called from FilerJob::reset after submitted IO is complete
+ */
 static int static_runEventHandler(gIOStatus& iostatus, void* ctx) {
   NetworkXioIOHandler* handler = (NetworkXioIOHandler*)ctx;
   handler->runEventHandler(iostatus);
   return 0;
 }
 
-// this runs in the context of the portal thread
+/**
+ * this runs in the context of the portal thread
+ */
 int NetworkXioIOHandler::runEventHandler(gIOStatus& iostatus) {
 
   gIOBatch *batch = reinterpret_cast<gIOBatch *>(iostatus.completionId);
@@ -163,8 +207,23 @@ int NetworkXioIOHandler::runEventHandler(gIOStatus& iostatus) {
 }
 
 void NetworkXioIOHandler::stopEventHandler() {
-  GLOG_INFO("deregistered fd=" << eventFD_ << " for thread=" << gettid());
+  GLOG_INFO("deregistered io fd=" << eventFD_ << " for thread=" << gettid());
   xio_context_del_ev_handler(pt_->ctx_, eventFD_);
+
+  if (statsTimerFD_) {
+    GLOG_INFO("deregistered timer fd=" << statsTimerFD_->getFD() << " for thread=" << gettid());
+    xio_context_del_ev_handler(pt_->ctx_, statsTimerFD_->getFD());
+  }
+}
+
+void NetworkXioIOHandler::runTimerHandler()
+{
+  // first drain the timer
+  uint64_t count = 0;
+  statsTimerFD_->recv(count);
+
+  GLOG_INFO("workQueue len=" << workQueueLen_); 
+  workQueueLen_.reset();
 }
 
 void NetworkXioIOHandler::handle_open(NetworkXioRequest *req) {
@@ -341,6 +400,8 @@ void NetworkXioIOHandler::drainQueue() {
       server->send_reply(req);
     }
   }
+
+  workQueueLen_ = workQueue.size();
 
   workQueue.clear();
 }

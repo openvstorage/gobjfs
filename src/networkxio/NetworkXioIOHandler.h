@@ -28,11 +28,15 @@ but WITHOUT ANY WARRANTY of any kind.
 #include <list>
 
 #include "gIOExecFile.h"
+#include <util/TimerNotifier.h>
+#include <util/Stats.h>
 
 namespace gobjfs {
 namespace xio {
 
 static int static_runEventHandler(gIOStatus& iostatus, void* ctx);
+using gobjfs::stats::StatsCounter;
+using gobjfs::os::TimerNotifier;
 
 class NetworkXioIOHandler {
 public:
@@ -53,6 +57,12 @@ public:
 
   bool alreadyInvoked() const;
 
+  /**
+   * handler called from accelio event loop
+   * to print periodic stats
+   */
+  void runTimerHandler();
+
 private:
   void handle_open(NetworkXioRequest *req);
 
@@ -66,6 +76,7 @@ private:
   int runEventHandler(gIOStatus& iostatus);
 
   void stopEventHandler();
+  
 
   /**
    * this func is passed as argument to IOExecFileRead
@@ -84,6 +95,11 @@ private:
   // this is one per portal thread
   // it is passed to IOExecutor when a disk IO job is submitted
   int eventFD_{-1};
+
+  // stats on queue length seen in drainQueue
+  StatsCounter<uint32_t> workQueueLen_;
+
+  std::unique_ptr<TimerNotifier> statsTimerFD_;
 
   // pointer to parent 
   PortalThreadData* pt_;
