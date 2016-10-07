@@ -184,7 +184,7 @@ IOExecutor::IOExecutor(const std::string &name, CoreId core,
     : Executor(name, core), config_(config), requestQueue_(config.queueDepth_) {
   config_.print();
 
-  minSubmitSize_ = config_.minSubmitSize_/2;
+  minSubmitSize_ = config_.minSubmitSize_;
 
   ctx_.init(config_.queueDepth_);
 
@@ -359,7 +359,7 @@ int32_t IOExecutor::ProcessRequestQueue() {
     }
 
     if (requestQueueSize_ < (int32_t)config_.maxRequestQueueSize_) {
-      requestQueueHasSpace_.wakeup();
+      //requestQueueHasSpace_.wakeup();
     }
   }
 
@@ -398,7 +398,8 @@ int IOExecutor::submitTask(FilerJob *job, bool blocking) {
           break;
         } else {
           stats_.requestQueueFull_++;
-          requestQueueHasSpace_.pause();
+          //requestQueueHasSpace_.pause();
+          assert("not supported" == 0); // TODO XIO
         }
       }
 

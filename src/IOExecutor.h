@@ -194,12 +194,11 @@ public:
 
   std::string getState() const;
 
-private:
-
-  virtual void execute();
-
   int32_t ProcessRequestQueue();
-  int32_t ProcessFdQueue();
+
+  void execute();
+
+private:
 
   void ProcessCompletions();
   int32_t ProcessCallbacks(io_event *events, int32_t n_events);
@@ -210,7 +209,7 @@ private:
   // Requests added by submitTask
   boost::lockfree::queue<FilerJob *> requestQueue_;
   ConditionWrapper requestQueueHasSpace_;
-  std::atomic<int32_t> requestQueueSize_{0};
+  int32_t requestQueueSize_{0};
 
   FilerCtx ctx_;
 };
