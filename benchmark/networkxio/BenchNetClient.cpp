@@ -193,6 +193,8 @@ BenchInfo globalBenchInfo;
 
 struct ThreadCtx {
 
+  int index_ = -1;
+
   uint32_t minFiles; 
   uint32_t maxFiles;
   uint32_t maxBlocks;
@@ -217,10 +219,12 @@ struct ThreadCtx {
 
   BenchInfo benchInfo;
 
-  explicit ThreadCtx(const Config& conf,
+  explicit ThreadCtx(int index,
+    const Config& conf,
     client_ctx_attr_ptr in_ctx_attr_ptr,
     client_ctx_ptr in_ctx_ptr) 
-    : ctx_attr_ptr(in_ctx_attr_ptr)
+    : index_(index)
+    , ctx_attr_ptr(in_ctx_attr_ptr)
     , ctx_ptr(in_ctx_ptr) {
     minFiles = 0;
     maxFiles = conf.maxFiles;
@@ -452,7 +456,9 @@ static void doRandomRead(ThreadCtx *ctx) {
     ctx->progressCount ++;
 
     if (ctx->progressCount == ctx->perThreadIO/10) {
-      LOG(INFO) << ((ctx->doneCount * 100)/ctx->perThreadIO) << " percent of work done";
+      LOG(INFO) << "thread=" << gettid() 
+        << " index=" << ctx->index_ 
+        << " work done percent=" << ((ctx->doneCount * 100)/ctx->perThreadIO);
       ctx->progressCount = 0;
     }
   }
@@ -545,7 +551,7 @@ int main(int argc, char *argv[]) {
   std::vector<std::future<void>> futVec;
 
   for (decltype(config.maxThr) thr = 0; thr < config.maxThr; thr++) {
-    ThreadCtx *ctx = new ThreadCtx(config, ctx_attr_ptr, ctx_ptr);
+    ThreadCtx *ctx = new ThreadCtx(thr, config, ctx_attr_ptr, ctx_ptr);
     auto f = std::async(std::launch::async, doRandomRead, ctx);
 
     futVec.emplace_back(std::move(f));
