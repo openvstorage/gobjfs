@@ -257,11 +257,12 @@ NetworkXioServer::create_session_connection(xio_session *session,
     (void)xio_modify_connection(evdata->conn, &xconattr,
         XIO_CONNECTION_ATTR_USER_CTX);
 
-    pt->numConnections_ ++;
+    pt->changeNumConnections(1);
+
     GLOG_INFO("portal=" << pt->coreId_ 
         << ",thread=" << gettid()
         << ",new clientData=" << (void*)cd
-        << " now serving " << pt->numConnections_ << " connections(up 1)");
+        << " now serving " << pt->numConnections() << " connections(up 1)");
 
   } catch (...) {
 
@@ -336,10 +337,11 @@ int NetworkXioServer::on_session_event(xio_session *session,
       } else {
         assert(cd->ncd_conn == event_data->conn);
         xio_connection_destroy(cd->ncd_conn);
-    	cd->pt_->numConnections_ --;
-    	GLOG_INFO("portal=" << cd->pt_->coreId_ 
+        cd->pt_->changeNumConnections(-1);
+    	  GLOG_INFO("portal=" << cd->pt_->coreId_ 
+            << " conn=" << (void*)cd->ncd_conn
             << " delete clientData=" << (void*)cd
-            << " now serving " << cd->pt_->numConnections_ << " connections(down 1)");
+            << " now serving " << cd->pt_->numConnections() << " connections(down 1)");
         delete cd;
       }
     } else {
@@ -385,12 +387,12 @@ int NetworkXioServer::on_msg_send_complete(xio_session *session
   
   if ((cd->conn_state == 2) && (cd->ncd_refcnt == 0)) {
     xio_connection_destroy(cd->ncd_conn);
-    GLOG_INFO("closing deferred connection" << cd);
-    cd->pt_->numConnections_ ++;
+    cd->pt_->changeNumConnections(-1);
     GLOG_INFO("portal=" << cd->pt_->coreId_ 
-        << " delete cd=" << (void*)cd
         << " thread=" << gettid()
-        << " now serving " << cd->pt_->numConnections_ << " connections(down 1)");
+        << " conn=" << (void*)cd->ncd_conn
+        << " closing deferred conn cd=" << (void*)cd
+        << " now serving " << cd->pt_->numConnections() << " connections(down 1)");
     delete cd;
   }
   return 0;

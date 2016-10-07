@@ -21,6 +21,7 @@ but WITHOUT ANY WARRANTY of any kind.
 #include "NetworkXioIOHandler.h"
 #include <util/os_utils.h>
 #include <gobjfs_log.h>
+#include <IOExecutor.h>
 
 namespace gobjfs {
 namespace xio {
@@ -77,6 +78,13 @@ void PortalThreadData::stop_loop() {
   evfd_.writefd();
 }
 
+void PortalThreadData::changeNumConnections(int change) {
+  numConnections_ += change;
+  // dynamically increase and decrease minSubmitSize based on 
+  // connections to portal
+  ioh_->ioexecPtr_->setMinSubmitSize(numConnections_/2);
+}
+
 void PortalThreadData::portal_func() {
 
   gobjfs::os::BindThreadToCore(1 + coreId_);
@@ -110,7 +118,27 @@ void PortalThreadData::portal_func() {
       << ",uri=" << uri_ 
       << ",thread=" << gettid());
 
-  xio_context_run_loop(ctx_, XIO_INFINITE);
+  //xio_context_run_loop(ctx_, XIO_INFINITE);
+  int numIdleLoops = 0;
+  while (not stopping) {
+    int timeout_ms = XIO_INFINITE;
+    if (ioh_->alreadyInvoked()) {
+      // if workQueue is small, do quick check to see if there are more requests
+      timeout_ms = 1;
+      numIdleLoops ++;
+    }
+    int numEvents = xio_context_run_loop(ctx_, timeout_ms);
+    if ((timeout_ms == 1) &&  
+        (numIdleLoops == 3)  &&
+        (ioh_->alreadyInvoked())) {
+      // if no new req received from network in last 3 loops, 
+      // then we must manually drain the queue
+      ioh_->drainQueue();
+      numIdleLoops = 0;
+    }
+    (void) numEvents;
+  }
+
 
   xio_context_del_ev_handler(ctx_, evfd_);
 
