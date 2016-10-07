@@ -72,6 +72,7 @@ static void static_timer_event(int fd, int events, void *data) {
 NetworkXioIOHandler::NetworkXioIOHandler(PortalThreadData* pt)
   : pt_(pt) {
 
+  // just create one IOExecutor and bind it to this handler
   const int numCores = 1;
 
   serviceHandle_ = IOExecFileServiceInit(numCores, 
@@ -222,7 +223,10 @@ void NetworkXioIOHandler::runTimerHandler()
   uint64_t count = 0;
   statsTimerFD_->recv(count);
 
-  GLOG_INFO("workQueue len=" << workQueueLen_); 
+  GLOG_INFO("thread=" << gettid() 
+      << ",portalId=" << pt_->coreId_ 
+      << ",numConnections=" << pt_->numConnections_
+      << ",workQueueLen=" << workQueueLen_); 
   workQueueLen_.reset();
 }
 
