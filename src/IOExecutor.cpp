@@ -122,27 +122,7 @@ int IOExecutor::Config::addOptions(
 
 void IOExecutor::Statistics::incrementOps(FilerJob *job) {
 
-  if (job->op_ == FileOp::Write) {
-
-    assert(job->size_);
-    write_.numOps_++;
-    write_.numBytes_ += job->size_;
-    write_.waitTime_ = job->waitTime();
-    write_.serviceTime_ = job->serviceTime();
-    write_.waitHist_ = job->waitTime();
-    write_.serviceHist_ = job->serviceTime();
-
-  } else if (job->op_ == FileOp::NonAlignedWrite) {
-
-    assert(job->size_);
-    nonAlignedWrite_.numOps_++;
-    nonAlignedWrite_.numBytes_ += job->size_;
-    nonAlignedWrite_.waitTime_ = job->waitTime();
-    nonAlignedWrite_.serviceTime_ = job->serviceTime();
-    nonAlignedWrite_.waitHist_ = job->waitTime();
-    nonAlignedWrite_.serviceHist_ = job->serviceTime();
-
-  } else if (job->op_ == FileOp::Read) {
+  if (job->op_ == FileOp::Read) {
 
     assert(job->size_);
     read_.numOps_++;
@@ -152,14 +132,8 @@ void IOExecutor::Statistics::incrementOps(FilerJob *job) {
     read_.waitHist_ = job->waitTime();
     read_.serviceHist_ = job->serviceTime();
 
-  } else if (job->op_ == FileOp::Delete) {
-
-    delete_.numOps_++;
-    // delete_.numBytes_ += job->size_; not increment
-    delete_.waitTime_ = job->waitTime();
-    delete_.serviceTime_ = job->serviceTime();
-    delete_.waitHist_ = job->waitTime();
-    delete_.serviceHist_ = job->serviceTime();
+  } else {
+	assert("bad_op" == 0);
   }
 
   numCompleted_++;
@@ -180,18 +154,12 @@ std::string IOExecutor::Statistics::getState() const {
 
   // json format
   s << "{\"stats\":{"
-    << "\"write\":" << write_.getState()
-    << ",\"nonAlignedWrite\":" << nonAlignedWrite_.getState()
-    << ",\"read\":" << read_.getState() << ",\"delete\":" << delete_.getState()
-    << ",\"numQueued\":" << numQueued_ << ",\"numSubmitted\":" << numSubmitted_
+    << ",\"read\":" << read_.getState() 
     << ",\"numCompleted\":" << numCompleted_
     << ",\"maxRequestQueueSize\":" << maxRequestQueueSize_
-    << ",\"maxFdQueueSize\":" << maxFdQueueSize_
     << ",\"idleLoop\":" << idleLoop_
     << ",\"numProcessedInLoop\":" << numProcessedInLoop_
     << ",\"numCompletionEvents\":" << numCompletionEvents_
-    << ",\"requestQueueLow1\":" << requestQueueLow1_
-    << ",\"requestQueueLow2\":" << requestQueueLow2_
     << ",\"requestQueueFull\":" << requestQueueFull_ << "}}";
 
   return s.str();
@@ -215,6 +183,8 @@ IOExecutor::IOExecutor(const std::string &name, CoreId core,
                        const Config &config)
     : Executor(name, core), config_(config), requestQueue_(config.queueDepth_) {
   config_.print();
+
+  minSubmitSize_ = config_.minSubmitSize_/2;
 
   ctx_.init(config_.queueDepth_);
 
@@ -350,6 +320,7 @@ int32_t IOExecutor::ProcessRequestQueue() {
         int32_t numSubmitted = iosubmitRetcode;
 
         stats_.numSubmitted_ += numSubmitted;
+        stats_.numProcessedInLoop_ = numSubmitted;
         numRemaining -= numSubmitted;
 
         if (numRemaining > 0) {
@@ -448,7 +419,10 @@ int IOExecutor::submitTask(FilerJob *job, bool blocking) {
         }
       } while (pushReturn == false);
 
-      ProcessRequestQueue();
+	  if (requestQueueSize_ > minSubmitSize_
+         && ctx_.numAvailable_ > minSubmitSize_) {
+      	ProcessRequestQueue();
+      }
     } else {
       LOG(ERROR) << "bad op=" << job->op_;
       ret = -EAGAIN;

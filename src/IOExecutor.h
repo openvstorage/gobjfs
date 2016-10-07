@@ -68,9 +68,9 @@ public:
   io_context_t ioCtx_;
 
   int32_t ioQueueDepth_;
-  std::atomic<int32_t> numAvailable_{0};
 
 public:
+  int32_t numAvailable_{0};
   explicit FilerCtx();
 
   int32_t init(int32_t queueDepth);
@@ -154,10 +154,7 @@ public:
     };
 
     // maintain per-op statistics
-    OpStats write_;
-    OpStats nonAlignedWrite_;
     OpStats read_;
-    OpStats delete_;
 
     gobjfs::stats::MaxValue<uint32_t> maxRequestQueueSize_;
     gobjfs::stats::MaxValue<uint32_t> maxFdQueueSize_;
