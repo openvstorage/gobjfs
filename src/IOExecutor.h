@@ -164,8 +164,8 @@ public:
     uint32_t idleLoop_ = 0;
     uint32_t numCompletionEvents_ = 0;
 
-    uint32_t requestQueueLow1_ = 0;
-    uint32_t requestQueueLow2_ = 0;
+    uint32_t numDirectFlushes_ = 0;
+    uint32_t numTimesCtxEmpty_ = 0;
     uint32_t requestQueueFull_ = 0;
 
     void incrementOps(FilerJob *job);
@@ -194,9 +194,21 @@ public:
 
   std::string getState() const;
 
-  int32_t ProcessRequestQueue();
+  // @param directCall : whether called from external obj or interally
+  // this gets recorded in stats
+  int32_t ProcessRequestQueue(bool directCall = true);
 
   void execute();
+
+  size_t requestQueueSize() const {
+    return requestQueueSize_;
+  }
+
+  // @param minSubmitSz change minSubmitSize dynamically based on
+  // number of connections
+  void setMinSubmitSize(size_t minSubmitSz) {
+    minSubmitSize_ = minSubmitSz;
+  }
 
 private:
 
@@ -208,7 +220,6 @@ private:
 
   // Requests added by submitTask
   boost::lockfree::queue<FilerJob *> requestQueue_;
-  ConditionWrapper requestQueueHasSpace_;
   int32_t requestQueueSize_{0};
 
   FilerCtx ctx_;
