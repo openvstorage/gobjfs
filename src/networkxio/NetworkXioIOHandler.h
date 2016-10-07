@@ -64,6 +64,10 @@ public:
    */
   void runTimerHandler();
 
+  bool alreadyInvoked();
+
+  void drainQueue();
+
 private:
   void handle_open(NetworkXioRequest *req);
 
@@ -109,6 +113,8 @@ private:
   PortalThreadData* pt_;
 
   IOExecutor* ioexecPtr_{nullptr};
+
+  friend class PortalThreadData;
 
 };
 

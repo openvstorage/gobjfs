@@ -51,20 +51,17 @@ struct PortalThreadData {
 
   EventFD evfd_;
 
-  // number of connections currently handled by this thread
-  size_t numConnections_{0};
-
   bool stopping = false;
   bool stopped = false;
 
   // one which core is the thread bound
   int coreId_{-1};
 
-  // to stop the thread event loop, call this func
-  void stop_loop();
+private:
+  // number of connections currently handled by this thread
+  size_t numConnections_{0};
 
-  // called from accelio event loop only
-  void evfd_stop_loop(int /*fd*/, int /*events*/, void * /*data*/);
+public:
 
   PortalThreadData(NetworkXioServer* server, const std::string& uri, int coreId)
     : server_(server)
@@ -74,7 +71,21 @@ struct PortalThreadData {
 
   ~PortalThreadData();
 
-  private:
+  // increase number of connections
+  // in-turn it increases minSubmitSize in IOExecutor
+  void changeNumConnections(int change);
+
+  size_t numConnections() const {
+    return numConnections_;
+  }
+
+  // to stop the thread event loop, call this func
+  void stop_loop();
+
+  // called from accelio event loop only
+  void evfd_stop_loop(int /*fd*/, int /*events*/, void * /*data*/);
+
+private:
 
   // the thread executes this func
   void portal_func();

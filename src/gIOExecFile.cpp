@@ -251,6 +251,9 @@ IOExecServiceHandle IOExecFileServiceInit(int32_t numCoresForIO,
     handle->ioConfig.cpuCores_.push_back(idx);
   }
   handle->ioConfig.queueDepth_ = queueDepthForIO;
+  // minSubmitSize is grown dynamically as connections increase
+  // see call to setMinSubmitSize()
+  handle->ioConfig.minSubmitSize_ = 1;
 
   ret = doCommonInit(handle);
 
