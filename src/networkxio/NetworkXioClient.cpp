@@ -400,7 +400,7 @@ void NetworkXioClient::send_msg(xio_msg_s *xmsg) {
       --nr_req_queue;
       stats.num_queued ++;
     }
-  } while (ret < 0);
+  } while (0);
 }
 
 void NetworkXioClient::xio_send_open_request(const void *opaque) {

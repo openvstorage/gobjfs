@@ -140,5 +140,10 @@ void PortalThreadData::portal_func() {
       << ",thread=" << gettid());
 }
 
+PortalThreadData::~PortalThreadData() {
+  delete ioh_;
+  // TODO free others
+}
+
 }
 }

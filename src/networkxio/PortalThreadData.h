@@ -72,10 +72,7 @@ struct PortalThreadData {
     , coreId_(coreId) 
     {}
 
-  ~PortalThreadData() {
-    delete ioh_;
-    // TODO free others
-  }
+  ~PortalThreadData();
 
   private:
 
