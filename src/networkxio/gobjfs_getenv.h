@@ -28,6 +28,8 @@ static T getenv_with_default(const std::string &name,
                               const T &default_value) {
   typedef typename std::remove_cv<T>::type T_;
 
+  T retval;
+
   static_assert(not(std::is_same<T_, uint8_t>::value or
                         std::is_same<T_, int8_t>::value or
                             std::is_same<T_, char>::value or
@@ -36,15 +38,16 @@ static T getenv_with_default(const std::string &name,
 
   const char *val = getenv(name.c_str());
   if (val == nullptr) {
-    return default_value;
+    retval = default_value;
   } else {
     try {
-      return static_cast<T>(boost::lexical_cast<T>(val));
+      retval = static_cast<T>(boost::lexical_cast<T>(val));
     }
     catch (...) {
-      return default_value;
+      retval = default_value;
     }
   }
+  return retval;
 }
 
 }
