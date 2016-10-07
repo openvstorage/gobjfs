@@ -79,7 +79,7 @@ void PortalThreadData::stop_loop() {
 
 void PortalThreadData::portal_func() {
 
-  gobjfs::os::BindThreadToCore(coreId_);
+  gobjfs::os::BindThreadToCore(1 + coreId_);
   
   // if context_params is null, max 100 connections per ctx
   // see max_conns_per_ctx in accelio code
@@ -110,23 +110,7 @@ void PortalThreadData::portal_func() {
       << ",uri=" << uri_ 
       << ",thread=" << gettid());
 
-  int numIdleLoops = 0;
-  while (not stopping) {
-    int timeout_ms = XIO_INFINITE;
-    if (ioh_->alreadyInvoked()) {
-      // if workQueue is small, just do a quick check if there are more requests
-      timeout_ms = 0;
-      numIdleLoops ++;
-    }
-    int numEvents = xio_context_run_loop(ctx_, timeout_ms);
-    if ((timeout_ms == 0) && (numIdleLoops == 2)) {
-      // if no req received, then handler was not called
-      // so we must manually drain the queue
-      ioh_->drainQueue();
-      numIdleLoops = 0;
-    }
-    (void) numEvents;
-  }
+  xio_context_run_loop(ctx_, XIO_INFINITE);
 
   xio_context_del_ev_handler(ctx_, evfd_);
 
@@ -138,6 +122,11 @@ void PortalThreadData::portal_func() {
       << ",coreId=" << coreId_ 
       << ",uri=" << uri_ 
       << ",thread=" << gettid());
+}
+
+PortalThreadData::~PortalThreadData() {
+ delete ioh_;
+ // TODO free others
 }
 
 }

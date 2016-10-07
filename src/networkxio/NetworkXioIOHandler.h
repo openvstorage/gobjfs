@@ -32,11 +32,16 @@ but WITHOUT ANY WARRANTY of any kind.
 #include <util/Stats.h>
 
 namespace gobjfs {
+  class IOExecutor;
+}
+
+using gobjfs::stats::StatsCounter;
+using gobjfs::os::TimerNotifier;
+
+namespace gobjfs {
 namespace xio {
 
 static int static_runEventHandler(gIOStatus& iostatus, void* ctx);
-using gobjfs::stats::StatsCounter;
-using gobjfs::os::TimerNotifier;
 
 class NetworkXioIOHandler {
 public:
@@ -52,10 +57,6 @@ public:
   bool process_request(NetworkXioRequest *req);
 
   void handle_request(NetworkXioRequest *req);
-
-  void drainQueue();
-
-  bool alreadyInvoked() const;
 
   /**
    * handler called from accelio event loop
@@ -96,7 +97,6 @@ private:
   // it is passed to IOExecutor when a disk IO job is submitted
   int eventFD_{-1};
 
-  // stats on queue length seen in drainQueue
   StatsCounter<uint32_t> workQueueLen_;
 
   std::unique_ptr<TimerNotifier> statsTimerFD_;
@@ -104,7 +104,7 @@ private:
   // pointer to parent 
   PortalThreadData* pt_;
 
-  std::list<NetworkXioRequest*> workQueue;
+  IOExecutor* ioexecPtr_{nullptr};
 
 };
 

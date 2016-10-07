@@ -99,8 +99,6 @@ NetworkXioIOHandler::NetworkXioIOHandler(PortalThreadData* pt)
 
 NetworkXioIOHandler::~NetworkXioIOHandler() {
 
-  assert(workQueue.empty());
-
   stopEventHandler();
 
   IOExecEventFdClose(eventHandle_);
@@ -116,19 +114,19 @@ void NetworkXioIOHandler::startEventHandler() {
 
   try {
 
-    void* ioexecPtr = IOExecGetExecutorPtr(serviceHandle_, 0);
+    ioexecPtr_ = static_cast<IOExecutor*>(IOExecGetExecutorPtr(serviceHandle_, 0));
 
     if (xio_context_add_ev_handler(pt_->ctx_, eventFD_,
                                 XIO_POLLIN,
                                 static_disk_event<gobjfs::IOExecutor>,
-                                ioexecPtr)) {
+                                (void*)ioexecPtr_)) {
 
       throw FailedRegisterEventHandler("failed to register event handler");
 
     }
 
     GLOG_INFO("registered disk event fd=" << eventFD_
-        << ",ioexecutor=" << ioexecPtr
+        << ",ioexecutor=" << ioexecPtr_
         << ",thread=" << gettid());
 
     // Add periodic timer to print per-thread stats
@@ -225,9 +223,9 @@ void NetworkXioIOHandler::runTimerHandler()
 
   GLOG_INFO("thread=" << gettid() 
       << ",portalId=" << pt_->coreId_ 
-      << ",numConnections=" << pt_->numConnections_
-      << ",workQueueLen=" << workQueueLen_); 
-  workQueueLen_.reset();
+      << ",ioexec=" << ioexecPtr_->stats_.getState());
+
+  ioexecPtr_->stats_.clear();
 }
 
 void NetworkXioIOHandler::handle_open(NetworkXioRequest *req) {
@@ -385,45 +383,10 @@ bool NetworkXioIOHandler::process_request(NetworkXioRequest *req) {
   return finishNow;
 }
 
-bool NetworkXioIOHandler::alreadyInvoked() const {
-  return (workQueue.size() > 0);
-}
-
-void NetworkXioIOHandler::drainQueue() {
-
-  NetworkXioServer* server{nullptr};
-
-  for (auto req : workQueue) {
-    if (!server) {
-      server = req->pClientData->pt_->server_;
-    }
-    auto ret = process_request(req); 
-    if (ret == true) {
-      // this means request has error and can be immediately  
-      // sent back to client
-      server->send_reply(req);
-    }
-  }
-
-  workQueueLen_ = workQueue.size();
-
-  workQueue.clear();
-}
-
 // this func runs in context of portal thread
 void NetworkXioIOHandler::handle_request(NetworkXioRequest *req) {
-
-  // TODO this batching should not delay open request
-  // but the open request is a no-op right now
-  // and can be removed
-  workQueue.push_back(req);
-  if (!alreadyInvoked()) {
-    // if invoked first time, then poll is being done with
-    // infinite time, so stop the loop.
-    xio_context_stop_loop(pt_->ctx_);
-  } else {
-    drainQueue();
-  }
+  auto ret = process_request(req); 
+  (void)ret;
 }
 }
 } // namespace gobjfs
