@@ -157,14 +157,14 @@ public:
     OpStats read_;
 
     gobjfs::stats::MaxValue<uint32_t> maxRequestQueueSize_;
-    gobjfs::stats::MaxValue<uint32_t> maxFdQueueSize_;
+    gobjfs::stats::MaxValue<uint32_t> minSubmitSize_;
 
     gobjfs::stats::StatsCounter<int64_t> numProcessedInLoop_;
 
-    uint32_t idleLoop_ = 0;
     uint32_t numCompletionEvents_ = 0;
 
     uint32_t numDirectFlushes_ = 0;
+    uint32_t numIndirectFlushes_ = 0;
     uint32_t numTimesCtxEmpty_ = 0;
     uint32_t requestQueueFull_ = 0;
 
@@ -206,9 +206,7 @@ public:
 
   // @param minSubmitSz change minSubmitSize dynamically based on
   // number of connections
-  void setMinSubmitSize(size_t minSubmitSz) {
-    minSubmitSize_ = minSubmitSz;
-  }
+  void setMinSubmitSize(size_t minSubmitSz);
 
 private:
 

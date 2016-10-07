@@ -157,10 +157,11 @@ std::string IOExecutor::Statistics::getState() const {
     << ",\"read\":" << read_.getState() 
     << ",\"numCompleted\":" << numCompleted_
     << ",\"maxRequestQueueSize\":" << maxRequestQueueSize_
-    << ",\"idleLoop\":" << idleLoop_
+    << ",\"minSubmitSize\":" << minSubmitSize_
     << ",\"numProcessedInLoop\":" << numProcessedInLoop_
     << ",\"numCompletionEvents\":" << numCompletionEvents_
     << ",\"numDirectFlushes\":" << numDirectFlushes_ 
+    << ",\"numIndirectFlushes\":" << numIndirectFlushes_ 
     << ",\"numTimesCtxEmpty\":" << numTimesCtxEmpty_
     << ",\"requestQueueFull\":" << requestQueueFull_ << "}}";
 
@@ -186,7 +187,7 @@ IOExecutor::IOExecutor(const std::string &name, CoreId core,
     : Executor(name, core), config_(config), requestQueue_(config.queueDepth_) {
   config_.print();
 
-  minSubmitSize_ = config_.minSubmitSize_;
+  setMinSubmitSize(config_.minSubmitSize_);
 
   ctx_.init(config_.queueDepth_);
 
@@ -209,6 +210,11 @@ void IOExecutor::stop() {
   state_ = State::TERMINATED;
 }
 
+void IOExecutor::setMinSubmitSize(size_t minSubmitSz) {
+    minSubmitSize_ = minSubmitSz;
+    stats_.minSubmitSize_ = minSubmitSz;
+}
+
 void IOExecutor::execute() {
   assert(0);
 }
@@ -227,6 +233,8 @@ int32_t IOExecutor::ProcessRequestQueue(bool directCall) {
 
   if (directCall) {
     stats_.numDirectFlushes_ ++;
+  } else {
+    stats_.numIndirectFlushes_ ++;
   }
 
   if (ctx_.isEmpty()) {
