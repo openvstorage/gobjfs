@@ -28,18 +28,20 @@ namespace os {
  * any thread waiting in epoll_wait()
  */
 class TimerNotifier {
+
   int fd_ = -1;
 
 public:
-  int32_t init(int epollFD, int timeoutSec, int timeoutNanosec);
+  TimerNotifier(int timeoutSec, int timeoutNanosec);
 
-  int32_t send();
+  int32_t getFD();
 
-  int32_t recv();
+  int32_t recv(uint64_t& count);
 
   int32_t destroy();
 
   ~TimerNotifier();
 };
+
 }
 }
