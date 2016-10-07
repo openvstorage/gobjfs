@@ -101,6 +101,10 @@ private:
 
   std::unique_ptr<TimerNotifier> statsTimerFD_;
 
+  int timerHandlerCalled_ = 0;
+
+  uint64_t newRequestsInLastEpoch_ = 0;
+
   // pointer to parent 
   PortalThreadData* pt_;
 

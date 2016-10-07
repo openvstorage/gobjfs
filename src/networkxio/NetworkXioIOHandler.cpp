@@ -35,6 +35,7 @@ using namespace std;
 namespace gobjfs {
 namespace xio {
 
+static uint64_t timerUsec = 50;
 
 static inline void pack_msg(NetworkXioRequest *req) {
   NetworkXioMsg o_msg(req->op);
@@ -89,9 +90,10 @@ NetworkXioIOHandler::NetworkXioIOHandler(PortalThreadData* pt)
 
   eventFD_ = IOExecEventFdGetReadFd(eventHandle_);
 
-  // TODO expose this config as env var
-  const int timerSec = getenv_with_default("GOBJFS_SERVER_STATS_TIMER_SEC", 60);
-  const int timerNanosec = 0;
+  // TODO timer should be initialized on first connection and destroyed if numConnections = 0
+  timerUsec = getenv_with_default("GOBJFS_SERVER_TIMER_USEC", 50);
+  const int64_t timerSec = 0;
+  const int64_t timerNanosec = timerUsec * 1000;
   statsTimerFD_ = gobjfs::make_unique<TimerNotifier>(timerSec, timerNanosec);
 
   startEventHandler();
@@ -217,15 +219,25 @@ void NetworkXioIOHandler::stopEventHandler() {
 
 void NetworkXioIOHandler::runTimerHandler()
 {
-  // first drain the timer
-  uint64_t count = 0;
-  statsTimerFD_->recv(count);
+  // only process if new requests received in this epoch
+  if (newRequestsInLastEpoch_) {
+    ioexecPtr_->ProcessRequestQueue();
+    newRequestsInLastEpoch_ = 0;
+  }
 
-  GLOG_INFO("thread=" << gettid() 
-      << ",portalId=" << pt_->coreId_ 
-      << ",ioexec=" << ioexecPtr_->stats_.getState());
+  // print logs every 60 sec
+  if (++ timerHandlerCalled_ == (60 * (uint64_t)1000000)/timerUsec) {
+    // first drain the timer
+    uint64_t count = 0;
+    statsTimerFD_->recv(count);
 
-  ioexecPtr_->stats_.clear();
+    GLOG_INFO("thread=" << gettid() 
+        << ",portalId=" << pt_->coreId_ 
+        << ",ioexec=" << ioexecPtr_->stats_.getState());
+
+    ioexecPtr_->stats_.clear();
+    timerHandlerCalled_ = 0;
+  }
 }
 
 void NetworkXioIOHandler::handle_open(NetworkXioRequest *req) {
@@ -385,6 +397,7 @@ bool NetworkXioIOHandler::process_request(NetworkXioRequest *req) {
 
 // this func runs in context of portal thread
 void NetworkXioIOHandler::handle_request(NetworkXioRequest *req) {
+  newRequestsInLastEpoch_ ++;
   auto ret = process_request(req); 
   (void)ret;
 }
