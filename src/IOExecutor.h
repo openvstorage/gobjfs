@@ -216,6 +216,10 @@ public:
   // number of connections
   void setMinSubmitSize(size_t minSubmitSz);
 
+  size_t minSubmitSize() const {
+    return minSubmitSize_;
+  }
+
 private:
 
   void ProcessCompletions();

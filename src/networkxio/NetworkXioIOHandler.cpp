@@ -224,6 +224,7 @@ void NetworkXioIOHandler::runTimerHandler()
   GLOG_INFO("thread=" << gettid() 
       << ",portalId=" << pt_->coreId_ 
       << ",numConnections=" << pt_->numConnections()
+      << ",minSubmitSize=" << ioexecPtr_->minSubmitSize()
       << ",ioexec=" << ioexecPtr_->stats_.getState());
 
   ioexecPtr_->stats_.clear();
