@@ -42,8 +42,8 @@ TimerNotifier::TimerNotifier(int timeoutSec, int timeoutNanosec) {
 
   struct itimerspec new_value;
   // gone in sixty seconds
-  new_value.it_value.tv_sec = 60;
-  new_value.it_value.tv_nsec = 0;
+  new_value.it_value.tv_sec = 0;
+  new_value.it_value.tv_nsec = 1000;
   new_value.it_interval.tv_sec = timeoutSec;
   new_value.it_interval.tv_nsec = timeoutNanosec;
 
