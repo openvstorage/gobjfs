@@ -221,11 +221,14 @@ void NetworkXioIOHandler::runTimerHandler()
   uint64_t count = 0;
   statsTimerFD_->recv(count);
 
-  GLOG_INFO("thread=" << gettid() 
+  if (pt_->numConnections()) { 
+    // no need to print if no connections exist
+    GLOG_INFO("thread=" << gettid() 
       << ",portalId=" << pt_->coreId_ 
       << ",numConnections=" << pt_->numConnections()
       << ",minSubmitSize=" << ioexecPtr_->minSubmitSize()
       << ",ioexec=" << ioexecPtr_->stats_.getState());
+  }
 
   ioexecPtr_->stats_.clear();
 }

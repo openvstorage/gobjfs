@@ -149,6 +149,7 @@ static int static_on_session_event(xio_session *session,
 
   GLOG_INFO("got session event=" << xio_session_event_str(event_data->event)
       << ",reason=" << xio_strerror(event_data->reason)
+      << ",conn=" << event_data->conn
       << ",cb_user_ctx=" << (void*)cb_user_context
       << ",thread=" << gettid() 
       << ",peer_addr=" << peerAddr.c_str()
