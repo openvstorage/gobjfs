@@ -26,6 +26,7 @@ but WITHOUT ANY WARRANTY of any kind.
 #include <networkxio/NetworkXioCommon.h>
 #include "NetworkXioProtocol.h"
 #include "NetworkXioServer.h"
+#include "PortalThreadData.h"
 
 using namespace std;
 namespace gobjfs {

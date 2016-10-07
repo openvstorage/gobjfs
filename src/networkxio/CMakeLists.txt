@@ -41,6 +41,7 @@ install(TARGETS gobjfs_client_static
 set(SERVER_SOURCES 
   NetworkXioIOHandler.cpp
   NetworkXioServer.cpp
+  PortalThreadData.cpp
   NetworkXioCommon.cpp
   gobjfs_server.cpp
   )

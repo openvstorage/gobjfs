@@ -38,44 +38,6 @@ MAKE_EXCEPTION(FailedCreateXioContext);
 MAKE_EXCEPTION(FailedRegisterEventHandler);
 MAKE_EXCEPTION(FailedCreateXioMempool);
 
-struct PortalThreadData {
-
-  NetworkXioServer* server_{nullptr}; 
-  NetworkXioIOHandler* ioh_{nullptr};
-  
-  xio_server* xio_server_{nullptr};
-
-  std::string uri_; 
-  std::thread thread_; 
-
-  xio_context *ctx_{nullptr};  
-  xio_mempool *mpool_{nullptr};
-  EventFD evfd_;
-  size_t numConnections_{0};
-
-  bool stopping = false;
-  bool stopped = false;
-
-  int coreId_{-1};
-
-  void evfd_stop_loop(int /*fd*/, int /*events*/, void * /*data*/);
-
-  void stop_loop();
-
-  void portal_func();
-
-  PortalThreadData(NetworkXioServer* server, const std::string& uri, int coreId)
-    : server_(server)
-    , uri_(uri)
-    , coreId_(coreId) 
-    {}
-
-  ~PortalThreadData() {
-    delete ioh_;
-    // TODO free others
-  }
-};
-
 class NetworkXioServer {
 public:
   NetworkXioServer(const std::string &transport, 
