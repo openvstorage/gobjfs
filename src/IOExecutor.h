@@ -98,6 +98,12 @@ public:
 
 class IOExecutor : public Executor {
 public:
+  enum CallType {
+    EXTERNAL = 0,
+    INLINE,
+    COMPLETION
+  };
+
   struct Config {
 
   public:
@@ -163,8 +169,10 @@ public:
 
     uint32_t numCompletionEvents_ = 0;
 
-    uint32_t numDirectFlushes_ = 0;
-    uint32_t numIndirectFlushes_ = 0;
+    uint32_t numExternalFlushes_ = 0;
+    uint32_t numInlineFlushes_ = 0;
+    uint32_t numCompletionFlushes_ = 0;
+
     uint32_t numTimesCtxEmpty_ = 0;
     uint32_t requestQueueFull_ = 0;
 
@@ -196,7 +204,7 @@ public:
 
   // @param directCall : whether called from external obj or interally
   // this gets recorded in stats
-  int32_t ProcessRequestQueue(bool directCall = true);
+  int32_t ProcessRequestQueue(CallType calledFrom = CallType::EXTERNAL);
 
   void execute();
 

@@ -160,8 +160,9 @@ std::string IOExecutor::Statistics::getState() const {
     << ",\"minSubmitSize\":" << minSubmitSize_
     << ",\"numProcessedInLoop\":" << numProcessedInLoop_
     << ",\"numCompletionEvents\":" << numCompletionEvents_
-    << ",\"numDirectFlushes\":" << numDirectFlushes_ 
-    << ",\"numIndirectFlushes\":" << numIndirectFlushes_ 
+    << ",\"numInlineFlushes\":" << numInlineFlushes_ 
+    << ",\"numExternalFlushes\":" << numExternalFlushes_ 
+    << ",\"numCompletionFlushes\":" << numCompletionFlushes_ 
     << ",\"numTimesCtxEmpty\":" << numTimesCtxEmpty_
     << ",\"requestQueueFull\":" << requestQueueFull_ << "}}";
 
@@ -219,7 +220,7 @@ void IOExecutor::execute() {
   assert(0);
 }
 
-int32_t IOExecutor::ProcessRequestQueue(bool directCall) {
+int32_t IOExecutor::ProcessRequestQueue(CallType calledFrom) {
   int32_t numToSubmit = 0;
 
   iocb *post_iocb[ctx_.ioQueueDepth_];
@@ -230,12 +231,6 @@ int32_t IOExecutor::ProcessRequestQueue(bool directCall) {
   // that is why we can allocate iocb array on stack
   // and free it after io_submit
   iocb cbVec[ctx_.ioQueueDepth_];
-
-  if (directCall) {
-    stats_.numDirectFlushes_ ++;
-  } else {
-    stats_.numIndirectFlushes_ ++;
-  }
 
   if (ctx_.isEmpty()) {
     // lets see if we can get any free ctx
@@ -337,6 +332,14 @@ int32_t IOExecutor::ProcessRequestQueue(bool directCall) {
         stats_.numSubmitted_ += numSubmitted;
         stats_.numProcessedInLoop_ = numSubmitted;
         numRemaining -= numSubmitted;
+        if (calledFrom == CallType::EXTERNAL) {
+          stats_.numExternalFlushes_ ++;
+        } else if (calledFrom == CallType::INLINE) {
+          stats_.numInlineFlushes_ ++;
+        } else if (calledFrom == CallType::COMPLETION) {
+          stats_.numCompletionFlushes_ ++;
+        }
+
 
         if (numRemaining > 0) {
           LOG(WARNING) << "Round=" << numTries << " submitted " << numSubmitted
@@ -437,7 +440,7 @@ int IOExecutor::submitTask(FilerJob *job, bool blocking) {
 
 	    if (requestQueueSize_ > minSubmitSize_
          && ctx_.numAvailable_ > minSubmitSize_) {
-      	ProcessRequestQueue(false);
+      	ProcessRequestQueue(CallType::INLINE);
       }
     } else {
       LOG(ERROR) << "bad op=" << job->op_;
@@ -477,7 +480,7 @@ int IOExecutor::handleXioEvent(int fd, int events, void* data) {
     // if enuf ctx got freed up, see if we can submit more IO
     if (requestQueueSize_ > minSubmitSize_
        && ctx_.numAvailable_ > minSubmitSize_) {
-      ProcessRequestQueue(false);
+      ProcessRequestQueue(CallType::COMPLETION);
     }
   } else if (numEventsGot < 0) {
     LOG(ERROR) << "getevents error=" << errno;
