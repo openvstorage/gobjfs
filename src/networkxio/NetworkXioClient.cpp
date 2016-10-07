@@ -127,17 +127,6 @@ void ovs_xio_aio_complete_request(void *opaque, ssize_t retval, int errval) {
   XXExit();
 }
 
-void ovs_xio_complete_request_control(void *opaque, ssize_t retval,
-                                      int errval) {
-  XXEnter();
-  aio_request *request = reinterpret_cast<aio_request *>(opaque);
-  if (request) {
-    request->_errno = errval;
-    request->_rv = retval;
-  }
-  XXExit();
-}
-
 template <class T>
 static int static_on_session_event(xio_session *session,
                                    xio_session_event_data *event_data,
