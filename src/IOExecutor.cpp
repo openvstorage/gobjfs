@@ -211,9 +211,11 @@ void IOExecutor::stop() {
   state_ = State::TERMINATED;
 }
 
-void IOExecutor::setMinSubmitSize(size_t minSubmitSz) {
+void IOExecutor::setMinSubmitSize(size_t minSubmitSz)  {
+  if (minSubmitSz > 0) {
     minSubmitSize_ = minSubmitSz;
     stats_.minSubmitSize_ = minSubmitSz;
+	}
 }
 
 void IOExecutor::execute() {
