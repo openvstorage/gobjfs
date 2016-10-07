@@ -292,6 +292,7 @@ void NetworkXioClient::shutdown() {
     GLOG_INFO("thread=" << gettid() << " destroying conn=" << conn);
     xio_connection_destroy(conn);
   }
+  //session.reset();
 }
 
 NetworkXioClient::~NetworkXioClient() { shutdown(); }

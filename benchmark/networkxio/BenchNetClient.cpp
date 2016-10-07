@@ -232,7 +232,7 @@ struct ThreadCtx {
   }
 
   ~ThreadCtx() {
-    ctx_ptr.reset();
+    //ctx_ptr.reset();
     ctx_attr_ptr.reset();
   }
 
@@ -466,9 +466,6 @@ static void doRandomRead(ThreadCtx *ctx) {
 
   endCpuStats -= startCpuStats;
 
-  if (!config.sharedCtxBetweenThreads) {
-    ctx->ctx_ptr.reset();
-  }
   // calc throughput
   ctx->benchInfo.iops = (ctx->perThreadIO * 1000 / timeMilli);
 
@@ -568,10 +565,6 @@ int main(int argc, char *argv[]) {
   endCpuStats.getProcessStats();
 
   endCpuStats -= startCpuStats;
-
-  if (config.sharedCtxBetweenThreads) {
-    ctx_ptr.reset();
-  }
 
   {
     std::ostringstream s;
