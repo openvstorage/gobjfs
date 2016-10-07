@@ -78,17 +78,21 @@ static inline std::shared_ptr<xio_session> getSession(const std::string& uri,
 /**
  * initialize xio once
  */
-std::atomic<int> xio_init_refcnt = ATOMIC_VAR_INIT(0);
+static int xio_init_refcnt = 0;
+static std::mutex xioLibMutex;
 
 static inline void xrefcnt_init() {
-  if (xio_init_refcnt.fetch_add(1, std::memory_order_relaxed) == 0) {
+  std::unique_lock<std::mutex> l(xioLibMutex);
+  if (++ xio_init_refcnt == 1) {
     xio_init();
+    GLOG_INFO("starting up xio lib");
   }
 }
 
-// TODO if one starts shutdown and other thread starts init ??
 static inline void xrefcnt_shutdown() {
-  if (xio_init_refcnt.fetch_sub(1, std::memory_order_relaxed) == 1) {
+  std::unique_lock<std::mutex> l(xioLibMutex);
+  if (-- xio_init_refcnt == 0) {
+    GLOG_INFO("shutting down xio lib");
     xio_shutdown();
   }
 }
@@ -279,11 +283,13 @@ void NetworkXioClient::run() {
 }
 
 void NetworkXioClient::shutdown() {
+  GLOG_INFO("thread=" << gettid() << " disconnecting conn=" << conn);
   xio_disconnect(conn);
   if (not disconnected) {
     disconnecting = true;
     xio_context_run_loop(ctx.get(), XIO_INFINITE);
   } else {
+    GLOG_INFO("thread=" << gettid() << " destroying conn=" << conn);
     xio_connection_destroy(conn);
   }
 }
