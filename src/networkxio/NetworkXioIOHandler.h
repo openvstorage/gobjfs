@@ -64,7 +64,7 @@ public:
    */
   void runTimerHandler();
 
-  bool alreadyInvoked();
+  size_t numPendingRequests();
 
   void drainQueue();
 

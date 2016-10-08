@@ -122,16 +122,16 @@ void PortalThreadData::portal_func() {
   int numIdleLoops = 0;
   while (not stopping) {
     int timeout_ms = XIO_INFINITE;
-    if (ioh_->alreadyInvoked()) {
+    const size_t pendingBefore = ioh_->numPendingRequests();
+    if (pendingBefore) {
       // if workQueue is small, do quick check to see if there are more requests
-      timeout_ms = 1;
+      timeout_ms = 0;
       numIdleLoops ++;
     }
     int numEvents = xio_context_run_loop(ctx_, timeout_ms);
-    if ((timeout_ms == 1) &&  
-        (numIdleLoops == 3)  &&
-        (ioh_->alreadyInvoked())) {
-      // if no new req received from network in last 3 loops, 
+    if (numIdleLoops == 1) {
+      const size_t pendingAfter = ioh_->numPendingRequests();
+      // if no new req received from network 
       // then we must manually drain the queue
       ioh_->drainQueue();
       numIdleLoops = 0;

@@ -389,8 +389,8 @@ bool NetworkXioIOHandler::process_request(NetworkXioRequest *req) {
   return finishNow;
 }
 
-bool NetworkXioIOHandler::alreadyInvoked() {
-  return (ioexecPtr_->requestQueueSize() > 0);
+size_t NetworkXioIOHandler::numPendingRequests() {
+  return ioexecPtr_->requestQueueSize();
 }
 
 void NetworkXioIOHandler::drainQueue() {
@@ -400,7 +400,7 @@ void NetworkXioIOHandler::drainQueue() {
 // this func runs in context of portal thread
 void NetworkXioIOHandler::handle_request(NetworkXioRequest *req) {
   process_request(req); 
-  if (alreadyInvoked()) { 
+  if (numPendingRequests()) { 
     // stop the loop so that we do custom handling
     // in top-level loop
     xio_context_stop_loop(pt_->ctx_);
