@@ -472,7 +472,7 @@ int IOExecutor::handleDiskCompletion(int numExpectedEvents) {
   } while ((numEventsGot == -EINTR) || (numEventsGot == -EAGAIN));
 
   if (numEventsGot > 0) {
-    stats_.numCompletionEvents_ += numEventsGot;
+    stats_.numCompletionEvents_ ++;
     // process the bottom half on all completed jobs in the io context
     int ret = ProcessCallbacks(readyIOEvents, numEventsGot);
     if (ret != 0) {
