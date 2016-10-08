@@ -19,7 +19,7 @@ but WITHOUT ANY WARRANTY of any kind.
 #pragma once
 
 #include <atomic>
-#include <boost/lockfree/queue.hpp>
+#include <queue>
 #include <libaio.h>
 #include <string>
 #include <vector>
@@ -67,13 +67,13 @@ class FilerCtx {
 public:
   io_context_t ioCtx_;
 
-  int32_t ioQueueDepth_;
+  size_t ioQueueDepth_;
 
 public:
-  int32_t numAvailable_{0};
+  size_t numAvailable_{0};
   explicit FilerCtx();
 
-  int32_t init(int32_t queueDepth);
+  int32_t init(size_t queueDepth);
 
   ~FilerCtx();
 
@@ -84,12 +84,12 @@ public:
   bool isFull() const { return (numAvailable_ == ioQueueDepth_); }
 
   void incrementNumAvailable(int32_t count = 1) {
+    assert(numAvailable_ + count <= ioQueueDepth_);
     numAvailable_ += count;
-    assert(numAvailable_ <= ioQueueDepth_);
   }
   void decrementNumAvailable(int32_t count) {
+    assert(numAvailable_ >= count);
     numAvailable_ -= count;
-    assert(numAvailable_ >= 0);
   }
 
   GOBJFS_DISALLOW_COPY(FilerCtx);
@@ -209,7 +209,7 @@ public:
   void execute();
 
   size_t requestQueueSize() const {
-    return requestQueueSize_;
+    return requestQueue_.size();
   }
 
   // @param minSubmitSz change minSubmitSize dynamically based on
@@ -229,8 +229,7 @@ private:
   uint32_t minSubmitSize_{1};
 
   // Requests added by submitTask
-  boost::lockfree::queue<FilerJob *> requestQueue_;
-  int32_t requestQueueSize_{0};
+  std::queue<FilerJob *> requestQueue_;
 
   FilerCtx ctx_;
 };

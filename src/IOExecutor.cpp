@@ -40,7 +40,7 @@ namespace gobjfs {
 
 FilerCtx::FilerCtx() {}
 
-int32_t FilerCtx::init(int32_t queueDepth) {
+int32_t FilerCtx::init(size_t queueDepth) {
   ioQueueDepth_ = queueDepth;
 
   int retcode = 0;
@@ -185,7 +185,8 @@ std::string IOExecutor::Statistics::OpStats::getState() const {
 
 IOExecutor::IOExecutor(const std::string &name, CoreId core,
                        const Config &config)
-    : Executor(name, core), config_(config), requestQueue_(config.queueDepth_) {
+    : Executor(name, core), config_(config) {
+
   config_.print();
 
   setMinSubmitSize(config_.minSubmitSize_);
@@ -240,28 +241,20 @@ int32_t IOExecutor::ProcessRequestQueue(CallType calledFrom) {
     handleXioEvent(-1, 0, nullptr);
   }
 
-  while (!ctx_.isEmpty()) {
-    const bool gotJob = requestQueue_.consume_one([&](FilerJob *job) {
-      iocb *cb = &cbVec[numToSubmit];
+  while (!ctx_.isEmpty() && requestQueue_.size()) {
 
-      job->prepareCallblock(cb);
+    FilerJob* job = requestQueue_.front();
+    requestQueue_.pop();
+    iocb *cb = &cbVec[numToSubmit ++];
 
-      //io_set_eventfd(cb, ctx_.eventFD_);
-      assert(job->completionFd_ != -1);
-      io_set_eventfd(cb, job->completionFd_);
-      post_iocb[numToSubmit] = cb;
+    job->prepareCallblock(cb);
 
-    });
+    //io_set_eventfd(cb, ctx_.eventFD_);
+    assert(job->completionFd_ != -1);
+    io_set_eventfd(cb, job->completionFd_);
+    post_iocb[numToSubmit] = cb;
 
-    if (gotJob) {
-      numToSubmit++;
-      ctx_.decrementNumAvailable(1);
-      int32_t num = requestQueueSize_--;
-      assert(num >= 0);
-      (void)num;
-    } else {
-      break;
-    }
+    ctx_.decrementNumAvailable(1);
   }
 
   int32_t numRemaining = numToSubmit;
@@ -377,10 +370,6 @@ int32_t IOExecutor::ProcessRequestQueue(CallType calledFrom) {
       LOG(ERROR) << "only able to submit " << numRemaining << " out of "
                  << numToSubmit;
     }
-
-    if (requestQueueSize_ < (int32_t)config_.maxRequestQueueSize_) {
-      //requestQueueHasSpace_.wakeup();
-    }
   }
 
   return (numToSubmit - numRemaining);
@@ -410,7 +399,7 @@ int IOExecutor::submitTask(FilerJob *job, bool blocking) {
 
     if ((job->op_ == FileOp::Write) || (job->op_ == FileOp::Read)) {
 
-      if (requestQueueSize_ > (int32_t)config_.maxRequestQueueSize_) {
+      if (requestQueue_.size() > config_.maxRequestQueueSize_) {
         if (!blocking) {
           LOG(ERROR) << "Async Queue full.  rejecting nonblocking job="
                      << (void *)job;
@@ -423,25 +412,15 @@ int IOExecutor::submitTask(FilerJob *job, bool blocking) {
         }
       }
 
-      // set FilerJob variables and increment queue size,
-      // before pushing into queue
-      // otherwise asserts fail because completion thread
-      // also changes FilerJob
-      stats_.maxRequestQueueSize_ = ++requestQueueSize_;
       job->setSubmitTime();
       job->executor_ = this;
       stats_.numQueued_++;
 
-      bool pushReturn = false;
-      do {
-        pushReturn = requestQueue_.push(job);
-        if (pushReturn == false) {
-          LOG_EVERY_N(WARNING, 10) << "push into requestQueue failing";
-        }
-      } while (pushReturn == false);
+      requestQueue_.push(job);
+      stats_.maxRequestQueueSize_ = requestQueue_.size();
 
-	    if (requestQueueSize_ > minSubmitSize_
-         && ctx_.numAvailable_ > minSubmitSize_) {
+	    if (requestQueue_.size() >= minSubmitSize_
+         && ctx_.numAvailable_ >= minSubmitSize_) {
       	ProcessRequestQueue(CallType::INLINE);
       }
     } else {
@@ -454,10 +433,6 @@ int IOExecutor::submitTask(FilerJob *job, bool blocking) {
 }
 
 int IOExecutor::handleXioEvent(int fd, int events, void* data) {
-
-  if (ctx_.isFull()) { 
-    return 0;
-  }
 
   io_event readyIOEvents[EPOLL_MAXEVENT];
   bzero(readyIOEvents, sizeof(io_event) * EPOLL_MAXEVENT);
@@ -480,8 +455,8 @@ int IOExecutor::handleXioEvent(int fd, int events, void* data) {
       assert(false);
     }
     // if enuf ctx got freed up, see if we can submit more IO
-    if (requestQueueSize_ > minSubmitSize_
-       && ctx_.numAvailable_ > minSubmitSize_) {
+    if (requestQueue_.size() >= minSubmitSize_
+       && ctx_.numAvailable_ >= minSubmitSize_) {
       ProcessRequestQueue(CallType::COMPLETION);
     }
   } else if (numEventsGot < 0) {
