@@ -163,7 +163,7 @@ public:
     // maintain per-op statistics
     OpStats read_;
 
-    gobjfs::stats::StatsCounter<int64_t> interArrivalUsec_;
+    gobjfs::stats::StatsCounter<int64_t> interArrivalNsec_;
     gobjfs::stats::Histogram<int64_t> interArrivalHist_;
 
     gobjfs::stats::MaxValue<uint32_t> maxRequestQueueSize_;

@@ -158,7 +158,7 @@ std::string IOExecutor::Statistics::getState() const {
     << ",\"numCompleted\":" << numCompleted_
     << ",\"maxRequestQueueSize\":" << maxRequestQueueSize_
     << ",\"minSubmitSize\":" << minSubmitSize_
-    << ",\"interArrival(usec)\":" << interArrivalUsec_
+    << ",\"interArrival(nsec)\":" << interArrivalNsec_
     << ",\"interArrivalHist\":" << interArrivalHist_
     << ",\"numProcessedInLoop\":" << numProcessedInLoop_
     << ",\"numCompletionEvents\":" << numCompletionEvents_
@@ -228,8 +228,8 @@ void IOExecutor::execute() {
 void IOExecutor::updateInterArrivalStats(const Timer& current) {
   if (stats_.read_.numOps_ > 1) {
     // calc diff after first job
-    auto diff = current.differenceMicroseconds(prevJobSubmitTime_);
-    stats_.interArrivalUsec_ = diff;
+    auto diff = current.differenceNanoseconds(prevJobSubmitTime_);
+    stats_.interArrivalNsec_ = diff;
     stats_.interArrivalHist_ = diff;
   } 
   prevJobSubmitTime_ = current;
