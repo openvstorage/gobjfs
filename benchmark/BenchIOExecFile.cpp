@@ -524,7 +524,21 @@ static void doRandomReadWrite(ThreadCtx *ctx) {
     (void)capture_errno;
   }
 
-  ctx->ioCompletionThreadShutdown.init(epollfd);
+  ctx->ioCompletionThreadShutdown.init();
+
+  {
+  {
+    epoll_event event;
+    event.data.fd = ctx->ioCompletionThreadShutdown.getFD();
+    event.events = EPOLLIN | EPOLLONESHOT;
+    int s = epoll_ctl(epollfd, EPOLL_CTL_ADD, event.data.fd, &event);
+    int capture_errno = errno;
+    // if epoll already had the fd, it emits error EEXIST
+    assert(s == 0 || capture_errno == EEXIST);
+    (void)capture_errno;
+  }
+
+  }
 
   std::thread ioCompletionThread(wait_for_iocompletion, epollfd, efd, ctx);
 

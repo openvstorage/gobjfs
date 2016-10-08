@@ -11,7 +11,15 @@ TEST(ShutdownNotifier, ReadWrite) {
   int epollFD = epoll_create1(0);
 
   ShutdownNotifier f;
-  f.init(epollFD);
+  f.init();
+
+  epoll_event epollEvent;
+  bzero(&epollEvent, sizeof(epollEvent));
+  epollEvent.data.ptr = this;
+   
+  epollEvent.events = EPOLLIN | EPOLLPRI;
+  int ret = epoll_ctl(epollFD, EPOLL_CTL_ADD, f.getFD(), &epollEvent);
+  EXPECT_EQ(ret, 0);
 
   for (int i = 0; i < 10; i++) {
     f.send();
@@ -22,7 +30,7 @@ TEST(ShutdownNotifier, ReadWrite) {
 
   EXPECT_EQ(counter, 1);
 
-  auto ret = f.destroy();
+  ret = f.destroy();
   EXPECT_EQ(ret, 0);
 
   close(epollFD);

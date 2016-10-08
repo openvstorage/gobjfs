@@ -33,6 +33,8 @@ class ShutdownNotifier {
 public:
   int32_t init();
 
+  int getFD() const { return fd_; }
+
   int32_t send();
 
   int32_t recv(uint64_t &counter);
