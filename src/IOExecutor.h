@@ -196,7 +196,7 @@ public:
 
   int32_t submitTask(FilerJob *job, bool blockIfQueueFull);
 
-  int handleXioEvent(int fd, int events, void* data);
+  int handleDiskCompletion(int numExpectedEvents);
 
   virtual void stop();
 

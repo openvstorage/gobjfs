@@ -238,21 +238,23 @@ int32_t IOExecutor::ProcessRequestQueue(CallType calledFrom) {
   if (ctx_.isEmpty()) {
     // lets see if we can get any free ctx
     stats_.numTimesCtxEmpty_ ++;
-    handleXioEvent(-1, 0, nullptr);
+    handleDiskCompletion(-1);
   }
 
   while (!ctx_.isEmpty() && requestQueue_.size()) {
 
     FilerJob* job = requestQueue_.front();
     requestQueue_.pop();
-    iocb *cb = &cbVec[numToSubmit ++];
+
+    iocb* cb = nullptr;
+    post_iocb[numToSubmit] = cb = &cbVec[numToSubmit];
+    numToSubmit ++;
 
     job->prepareCallblock(cb);
 
     //io_set_eventfd(cb, ctx_.eventFD_);
     assert(job->completionFd_ != -1);
     io_set_eventfd(cb, job->completionFd_);
-    post_iocb[numToSubmit] = cb;
 
     ctx_.decrementNumAvailable(1);
   }
@@ -414,14 +416,18 @@ int IOExecutor::submitTask(FilerJob *job, bool blocking) {
 
       job->setSubmitTime();
       job->executor_ = this;
-      stats_.numQueued_++;
 
       requestQueue_.push(job);
       stats_.maxRequestQueueSize_ = requestQueue_.size();
+      stats_.numQueued_++;
 
-	    if (requestQueue_.size() >= minSubmitSize_
-         && ctx_.numAvailable_ >= minSubmitSize_) {
-      	ProcessRequestQueue(CallType::INLINE);
+	    if (requestQueue_.size() >= minSubmitSize_) {
+          if (ctx_.numAvailable_ < minSubmitSize_) {
+            handleDiskCompletion(-2);
+          }
+          if (ctx_.numAvailable_ >= minSubmitSize_) {
+      	    ProcessRequestQueue(CallType::INLINE);
+          }
       }
     } else {
       LOG(ERROR) << "bad op=" << job->op_;
@@ -432,18 +438,37 @@ int IOExecutor::submitTask(FilerJob *job, bool blocking) {
   return ret;
 }
 
-int IOExecutor::handleXioEvent(int fd, int events, void* data) {
+/*
+ * called when kernel notifies eventFD that submitted async IO
+ * has completed
+ */
+int IOExecutor::handleDiskCompletion(int numExpectedEvents) {
 
-  io_event readyIOEvents[EPOLL_MAXEVENT];
-  bzero(readyIOEvents, sizeof(io_event) * EPOLL_MAXEVENT);
+  timespec *tsptr = nullptr;
+  timespec ts = {0, 1000 }; 
+  int minEvents = 1;
+  bool calledFromAccelio = (numExpectedEvents < 0);
+
+  if (not calledFromAccelio) {
+    // this is an internal call from within ioexecutor
+    // not called from accelio handler
+    // we dont know if any IO has completed
+    // therefore we wait 1 microsec
+    tsptr = &ts;
+    minEvents = 1;
+  } else {
+    minEvents = numExpectedEvents;
+  }
+
+  io_event readyIOEvents[ctx_.ioQueueDepth_];
+  bzero(readyIOEvents, sizeof(io_event) * ctx_.ioQueueDepth_);
 
   int numEventsGot = 0;
 
-  //struct timespec ts = {0, 10000 };
   do {
     numEventsGot = io_getevents(
-        ctx_.ioCtx_, 1, EPOLL_MAXEVENT,
-        &readyIOEvents[0], nullptr);
+        ctx_.ioCtx_, minEvents, ctx_.ioQueueDepth_,
+        &readyIOEvents[0], tsptr);
   } while ((numEventsGot == -EINTR) || (numEventsGot == -EAGAIN));
 
   if (numEventsGot > 0) {
@@ -454,13 +479,17 @@ int IOExecutor::handleXioEvent(int fd, int events, void* data) {
       // TODO: handle errors
       assert(false);
     }
-    // if enuf ctx got freed up, see if we can submit more IO
-    if (requestQueue_.size() >= minSubmitSize_
+    // if we are called from accelio handler
+    // and enuf ctx got freed up, submit more IO
+    if (calledFromAccelio && 
+       requestQueue_.size() >= minSubmitSize_
        && ctx_.numAvailable_ >= minSubmitSize_) {
       ProcessRequestQueue(CallType::COMPLETION);
     }
   } else if (numEventsGot < 0) {
-    LOG(ERROR) << "getevents error=" << errno;
+    if (calledFromAccelio) {
+      LOG(ERROR) << "getevents error=" << errno;
+    }
   }
 
   return 0;
