@@ -167,7 +167,7 @@ public:
 
     gobjfs::stats::StatsCounter<int64_t> numProcessedInLoop_;
 
-    uint32_t numCompletionEvents_ = 0;
+    gobjfs::stats::StatsCounter<uint32_t> numCompletionEvents_;
 
     uint32_t numExternalFlushes_ = 0;
     uint32_t numInlineFlushes_ = 0;
