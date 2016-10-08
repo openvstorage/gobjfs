@@ -44,11 +44,11 @@ struct EventFD {
 
   operator int() const { return evfd_; }
 
-  int readfd() {
+  static int readfd(int fd) {
     int ret;
     eventfd_t value = 0;
     do {
-      ret = eventfd_read(evfd_, &value);
+      ret = eventfd_read(fd, &value);
     } while (ret < 0 && errno == EINTR);
     if (ret == 0) {
       ret = value;
@@ -56,6 +56,10 @@ struct EventFD {
       abort();
     }
     return ret;
+  }
+
+  int readfd() {
+    return readfd(evfd_);
   }
 
   int writefd() {
