@@ -41,6 +41,8 @@ class Queueable {
   gobjfs::stats::Timer timer_;
 
 public:
+  friend class IOExecutor;
+
   explicit Queueable() : waitTime_(0), serviceTime_(0) {}
 
   ~Queueable() { waitTime_ = serviceTime_ = 0; }

@@ -50,6 +50,7 @@ class IOExecutor;
 
 using gobjfs::os::ConditionWrapper;
 using gobjfs::os::TimerNotifier;
+using gobjfs::stats::Timer;
 using gobjfs::os::ShutdownNotifier;
 using gobjfs::os::SemaphoreWrapper;
 using gobjfs::os::FD_INVALID;
@@ -162,6 +163,9 @@ public:
     // maintain per-op statistics
     OpStats read_;
 
+    gobjfs::stats::StatsCounter<int64_t> interArrivalUsec_;
+    gobjfs::stats::Histogram<int64_t> interArrivalHist_;
+
     gobjfs::stats::MaxValue<uint32_t> maxRequestQueueSize_;
     gobjfs::stats::StatsCounter<uint32_t> minSubmitSize_;
 
@@ -225,6 +229,10 @@ private:
   void ProcessCompletions();
   int32_t ProcessCallbacks(io_event *events, int32_t n_events);
   int32_t doPostProcessingOfJob(FilerJob *job);
+
+  void updateInterArrivalStats(const Timer& current);
+
+  Timer prevJobSubmitTime_;
 
   uint32_t minSubmitSize_{1};
 

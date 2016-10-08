@@ -158,6 +158,8 @@ std::string IOExecutor::Statistics::getState() const {
     << ",\"numCompleted\":" << numCompleted_
     << ",\"maxRequestQueueSize\":" << maxRequestQueueSize_
     << ",\"minSubmitSize\":" << minSubmitSize_
+    << ",\"interArrival(usec)\":" << interArrivalUsec_
+    << ",\"interArrivalHist\":" << interArrivalHist_
     << ",\"numProcessedInLoop\":" << numProcessedInLoop_
     << ",\"numCompletionEvents\":" << numCompletionEvents_
     << ",\"numInlineFlushes\":" << numInlineFlushes_ 
@@ -221,6 +223,16 @@ void IOExecutor::setMinSubmitSize(size_t minSubmitSz)  {
 
 void IOExecutor::execute() {
   assert(0);
+}
+
+void IOExecutor::updateInterArrivalStats(const Timer& current) {
+  if (stats_.read_.numOps_ > 1) {
+    // calc diff after first job
+    auto diff = current.differenceMicroseconds(prevJobSubmitTime_);
+    stats_.interArrivalUsec_ = diff;
+    stats_.interArrivalHist_ = diff;
+  } 
+  prevJobSubmitTime_ = current;
 }
 
 int32_t IOExecutor::ProcessRequestQueue(CallType calledFrom) {
@@ -415,6 +427,7 @@ int IOExecutor::submitTask(FilerJob *job, bool blocking) {
       }
 
       job->setSubmitTime();
+      updateInterArrivalStats(job->timer_);
       job->executor_ = this;
 
       requestQueue_.push(job);
@@ -482,8 +495,7 @@ int IOExecutor::handleDiskCompletion(int numExpectedEvents) {
     // if we are called from accelio handler
     // and enuf ctx got freed up, submit more IO
     if (calledFromAccelio && 
-       requestQueue_.size() >= minSubmitSize_
-       && ctx_.numAvailable_ >= minSubmitSize_) {
+       not ctx_.isEmpty()) {
       ProcessRequestQueue(CallType::COMPLETION);
     }
   } else if (numEventsGot < 0) {
