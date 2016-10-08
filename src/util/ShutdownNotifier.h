@@ -31,7 +31,7 @@ class ShutdownNotifier {
   int fd_ = -1;
 
 public:
-  int32_t init(int epollFD);
+  int32_t init();
 
   int32_t send();
 

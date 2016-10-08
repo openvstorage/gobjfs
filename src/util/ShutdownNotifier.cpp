@@ -30,7 +30,7 @@ but WITHOUT ANY WARRANTY of any kind.
 namespace gobjfs {
 namespace os {
 
-int32_t ShutdownNotifier::init(int epollFD) {
+int32_t ShutdownNotifier::init() {
   int32_t ret = 0;
 
   fd_ = eventfd(0, EFD_NONBLOCK | EFD_CLOEXEC | EFD_SEMAPHORE);
@@ -40,20 +40,6 @@ int32_t ShutdownNotifier::init(int epollFD) {
     return ret;
   }
 
-  epoll_event epollEvent;
-  bzero(&epollEvent, sizeof(epollEvent));
-  epollEvent.data.ptr = this;
-
-  epollEvent.events = EPOLLIN | EPOLLPRI;
-  ret = epoll_ctl(epollFD, EPOLL_CTL_ADD, fd_, &epollEvent);
-  if (ret < 0) {
-    ret = -errno;
-    LOG(ERROR) << "failed to add fd=" << fd_ << " to epollfd=" << epollFD
-               << " errno=" << ret;
-  } else {
-    LOG(INFO) << "epoll fd=" << epollFD << " registered shutdown fd=" << fd_
-              << " with ptr=" << this;
-  }
   return ret;
 }
 
@@ -90,13 +76,6 @@ int32_t ShutdownNotifier::send() {
 }
 
 int32_t ShutdownNotifier::destroy() {
-  /* No need to do this because epoll fd itself will be closed
-    int retcode = epoll_ctl(epollFD, EPOLL_CTL_DEL, fd_, NULL);
-    if (retcode != 0)
-    {
-      LOG(ERROR) << "Failed to remove fd=" << fd_ << " from epoll";
-    }
-  */
   int ret = 0;
   if (fd_ != -1) {
     ret = ::close(fd_);
