@@ -99,19 +99,18 @@ private:
   // fd on which disk IO completions are received
   // this is one per portal thread
   // it is passed to IOExecutor when a disk IO job is submitted
+public:
   int eventFD_{-1};
+private:
 
   StatsCounter<uint32_t> workQueueLen_;
 
   std::unique_ptr<TimerNotifier> statsTimerFD_;
 
-  int timerHandlerCalled_ = 0;
-
-  uint64_t newRequestsInLastEpoch_ = 0;
-
   // pointer to parent 
   PortalThreadData* pt_;
 
+public:
   IOExecutor* ioexecPtr_{nullptr};
 
   friend class PortalThreadData;

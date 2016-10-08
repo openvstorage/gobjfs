@@ -53,7 +53,8 @@ static void static_disk_event(int fd, int events, void *data) {
   if (obj == NULL) {
     return;
   }
-  obj->handleXioEvent(fd, events, data);
+  int numExpected = EventFD::readfd(obj->eventFD_);
+  obj->ioexecPtr_->handleDiskCompletion(numExpected);
 }
 
 /** 
@@ -117,8 +118,8 @@ void NetworkXioIOHandler::startEventHandler() {
 
     if (xio_context_add_ev_handler(pt_->ctx_, eventFD_,
                                 XIO_POLLIN,
-                                static_disk_event<gobjfs::IOExecutor>,
-                                (void*)ioexecPtr_)) {
+                                static_disk_event<NetworkXioIOHandler>,
+                                this)) {
 
       throw FailedRegisterEventHandler("failed to register event handler");
 
