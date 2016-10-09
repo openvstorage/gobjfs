@@ -180,6 +180,7 @@ struct FixedSizeFileManager {
   }
 };
 
+SemaphoreWrapper startTogether;
 FixedSizeFileManager fileMgr;
 
 // benchmark info which being recorded and printed
@@ -283,6 +284,9 @@ static void doRandomRead(ThreadCtx *ctx) {
     int err = ctx_init(ctx->ctx_ptr);
     assert(err == 0);
   }
+
+  startTogether.wakeup();
+  startTogether.pause();
 
   ctx->throughputTimer.reset();
 
@@ -546,6 +550,8 @@ int main(int argc, char *argv[]) {
   std::vector<ThreadCtx *> ctxVec;
 
   std::vector<std::future<void>> futVec;
+  
+  startTogether.init(config.maxThr, -1);
 
   for (decltype(config.maxThr) thr = 0; thr < config.maxThr; thr++) {
     ThreadCtx *ctx = new ThreadCtx(thr, config, ctx_attr_ptr, ctx_ptr);
