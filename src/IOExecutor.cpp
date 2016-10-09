@@ -457,19 +457,11 @@ int IOExecutor::submitTask(FilerJob *job, bool blocking) {
  */
 int IOExecutor::handleDiskCompletion(int numExpectedEvents) {
 
-  timespec *tsptr = nullptr;
   timespec ts = {0, 1000 }; 
   int minEvents = 1;
-  bool calledFromAccelio = (numExpectedEvents < 0);
+  bool calledFromAccelio = (numExpectedEvents > 0);
 
-  if (not calledFromAccelio) {
-    // this is an internal call from within ioexecutor
-    // not called from accelio handler
-    // we dont know if any IO has completed
-    // therefore we wait 1 microsec
-    tsptr = &ts;
-    minEvents = 1;
-  } else {
+  if (calledFromAccelio) {
     minEvents = numExpectedEvents;
   }
 
@@ -481,7 +473,7 @@ int IOExecutor::handleDiskCompletion(int numExpectedEvents) {
   do {
     numEventsGot = io_getevents(
         ctx_.ioCtx_, minEvents, ctx_.ioQueueDepth_,
-        &readyIOEvents[0], tsptr);
+        &readyIOEvents[0], &ts);
   } while ((numEventsGot == -EINTR) || (numEventsGot == -EAGAIN));
 
   if (numEventsGot > 0) {
@@ -500,7 +492,9 @@ int IOExecutor::handleDiskCompletion(int numExpectedEvents) {
     }
   } else if (numEventsGot < 0) {
     if (calledFromAccelio) {
-      LOG(ERROR) << "getevents error=" << errno;
+      LOG(ERROR) << "getevents error=" << numEventsGot 
+        << " min=" << minEvents
+        << " max=" << ctx_.ioQueueDepth_;
     }
   }
 
