@@ -578,7 +578,7 @@ int main(int argc, char *argv[]) {
     s << ":num_threads=" << config.maxThr
       << ":iops=" << globalBenchInfo.iops
       << ":read_latency(usec)=" << globalBenchInfo.readLatency
-      << ":failed reads=" << globalBenchInfo.failedReads
+      << ":failed_reads=" << globalBenchInfo.failedReads
       << ":process_stats=" << endCpuStats.ToString();
 
     LOG(INFO) << s.str();
@@ -591,7 +591,8 @@ int main(int argc, char *argv[]) {
       << config.maxThr << ","
       << globalBenchInfo.iops << "," 
       << globalBenchInfo.readLatency.mean() << "," 
-      << endCpuStats.getCpuUtilization();
+      << endCpuStats.getCpuUtilization() << ","
+      << "failed=" << globalBenchInfo.failedReads;
 
     LOG(INFO) << s.str() << std::endl;
   }
