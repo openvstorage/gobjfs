@@ -459,20 +459,25 @@ int IOExecutor::handleDiskCompletion(int numExpectedEvents) {
 
   timespec ts = {0, 1000 }; 
   int minEvents = 1;
+  const int maxEvents = ctx_.ioQueueDepth_;
   bool calledFromAccelio = (numExpectedEvents > 0);
 
   if (calledFromAccelio) {
     minEvents = numExpectedEvents;
   }
+  if (minEvents > maxEvents) {
+	// minevents should be less than max else u get EINVAL
+    minEvents = maxEvents;
+  }
 
-  io_event readyIOEvents[ctx_.ioQueueDepth_];
-  bzero(readyIOEvents, sizeof(io_event) * ctx_.ioQueueDepth_);
+  io_event readyIOEvents[maxEvents];
+  bzero(readyIOEvents, sizeof(io_event) * maxEvents);
 
   int numEventsGot = 0;
 
   do {
     numEventsGot = io_getevents(
-        ctx_.ioCtx_, minEvents, ctx_.ioQueueDepth_,
+        ctx_.ioCtx_, minEvents, maxEvents,
         &readyIOEvents[0], &ts);
   } while ((numEventsGot == -EINTR) || (numEventsGot == -EAGAIN));
 
@@ -494,7 +499,7 @@ int IOExecutor::handleDiskCompletion(int numExpectedEvents) {
     if (calledFromAccelio) {
       LOG(ERROR) << "getevents error=" << numEventsGot 
         << " min=" << minEvents
-        << " max=" << ctx_.ioQueueDepth_;
+        << " max=" << maxEvents;
     }
   }
 
