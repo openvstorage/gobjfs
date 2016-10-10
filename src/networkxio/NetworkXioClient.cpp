@@ -63,8 +63,8 @@ static inline std::shared_ptr<xio_session> getSession(const std::string& uri,
                                          dbg_xio_session_destroy);
 #ifdef SHARED_SESSION
     //TODO change conn_idx = 0 when you enable this code
-    //auto insertIter = sessionMap.insert(std::make_pair(uri, session));
-    //assert(insertIter.second == true); // insert succeded
+    auto insertIter = sessionMap.insert(std::make_pair(uri, session));
+    assert(insertIter.second == true); // insert succeded
 #endif
     GLOG_INFO("session=" << (void*)session.get() << " created for " << uri);
     retptr = session;
@@ -369,14 +369,18 @@ int NetworkXioClient::on_session_event(xio_session *session
                                        xio_session_event_data *event_data) {
   XXEnter();
   switch (event_data->event) {
+
   case XIO_SESSION_CONNECTION_DISCONNECTED_EVENT:
   case XIO_SESSION_ERROR_EVENT:
   case XIO_SESSION_CONNECTION_ERROR_EVENT:
+  case XIO_SESSION_CONNECTION_REFUSED_EVENT:
     break; // for debugging
+
   case XIO_SESSION_CONNECTION_TEARDOWN_EVENT:
     xio_connection_destroy(event_data->conn);
     disconnected = true;
     break;
+
   case XIO_SESSION_TEARDOWN_EVENT:
     xio_context_stop_loop(ctx.get());
     break;
