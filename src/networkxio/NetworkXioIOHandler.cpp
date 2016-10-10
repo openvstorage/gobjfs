@@ -449,7 +449,10 @@ void NetworkXioIOHandler::drainQueue() {
 
 // this func runs in context of portal thread
 void NetworkXioIOHandler::handle_request(NetworkXioRequest *req) {
-  process_request(req); 
+  bool finishNow = process_request(req); 
+  if (finishNow) {
+    pt_->server_->send_reply(req);
+  }
   if (numPendingRequests()) { 
     // stop the loop so that we do custom handling
     // in top-level loop
