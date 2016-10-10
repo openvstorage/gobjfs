@@ -60,6 +60,7 @@ namespace keywords = boost::log::keywords;
 
 struct Config {
 
+  uint32_t startCore = 1;
   uint32_t numCores = 2;
   uint32_t queueDepth = 20;
   bool newInstance = true;
@@ -72,6 +73,7 @@ struct Config {
     options_description desc("allowed options");
     desc.add_options()
         ("queue_depth", value<uint32_t>(&queueDepth)->required(), "queue depth in ioexecutor")
+        ("start_core", value<uint32_t>(&startCore)->required(), "starting core from which to reserve for ioexecutor")
         ("num_cores", value<uint32_t>(&numCores)->required(), "num cores to use for ioexecutor")
         ("new_instance", value<bool>(&newInstance), "new instance")
 
@@ -160,7 +162,7 @@ int main(int argc, char *argv[]) {
 
   NetworkXioServer *xs =
       new NetworkXioServer(config.transport, config.ipAddress, config.port, 
-          config.numCores, config.queueDepth, fileTranslatorFunc, config.newInstance);
+          config.startCore, config.numCores, config.queueDepth, fileTranslatorFunc, config.newInstance);
 
   xs->run(pr);
 }

@@ -90,7 +90,6 @@ private:
   friend int static_runEventHandler(gIOStatus& iostatus, void* ctx);
 
 private:
-  std::string configFileName_;
 
   IOExecServiceHandle serviceHandle_{nullptr};
 

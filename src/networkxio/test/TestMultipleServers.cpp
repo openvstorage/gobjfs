@@ -79,7 +79,7 @@ public:
 
     bool newInstance = true;
     for (size_t idx = 0; idx < NUM_SERVERS; idx++) {
-      xs[idx] = gobjfs_xio_server_start("tcp", "127.0.0.1", portNumber[idx], 1,
+      xs[idx] = gobjfs_xio_server_start("tcp", "127.0.0.1", portNumber[idx], 1, 1,
                                         200, fileTranslatorFunc, newInstance);
       EXPECT_NE(xs[idx], nullptr);
     }

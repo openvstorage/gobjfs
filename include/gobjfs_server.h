@@ -36,13 +36,14 @@ extern "C" {
 // @param transport : "tcp" or "rdma"
 // @param host : Host string FQDN or IP address
 // @param port : TCP/RDMA port
+// @param start_core : CPU core from which to start binding
 // @param number_cores : CPU cores on which to start IOExecutor
 // @param queue_depth : kernel queue depth to allocate for async io
 // @param is_new_instance : cleans up old directories
 // @return server_handle OR nullptr
 gobjfs_xio_server_handle
 gobjfs_xio_server_start(const char *transport, const char *host, int port,
-                        int32_t number_cores, int32_t queue_depth,
+                        int32_t start_core, int32_t number_cores, int32_t queue_depth,
                         FileTranslatorFunc file_translator_func,
                         bool is_new_instance);
 

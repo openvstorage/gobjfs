@@ -109,6 +109,7 @@ static int static_on_new_session(xio_session *session, xio_new_session_req *req,
 NetworkXioServer::NetworkXioServer(const std::string &transport,
                                     const std::string &ipaddr,
                                     int port,
+                                   int32_t startCoreForIO,
                                    int32_t numCoresForIO,
                                    int32_t queueDepthForIO,
                                    FileTranslatorFunc fileTranslatorFunc,
@@ -213,12 +214,15 @@ void NetworkXioServer::run(std::promise<void> &promise) {
   // then xio_accept() will decide which port+thread to use for a new connection
   for (int i = 0; i < numCoresForIO_; i++) {
     std::string uri = transport_ + "://" + ipaddr_ + ":" + std::to_string(port_ + i + 1);
-    auto newpt = new PortalThreadData(this, uri, i);
+    auto newpt = new PortalThreadData(this, uri, startCoreForIO_ + i + 1);
     newpt->thread_ = std::thread(std::bind(&PortalThreadData::portal_func, newpt));
     ptVec_.push_back(newpt);
   }
 
   promise.set_value();
+
+  // bind this thread to core different than the portal threads
+  gobjfs::os::BindThreadToCore(startCoreForIO_);
 
   while (not stopping) {
     int ret = xio_context_run_loop(ctx.get(), XIO_INFINITE);

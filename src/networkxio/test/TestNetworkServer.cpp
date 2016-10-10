@@ -69,7 +69,7 @@ public:
     EXPECT_EQ(writeSz, strlen(configContents));
 
     bool newInstance = true;
-    xs = gobjfs_xio_server_start("tcp", "127.0.0.1", portNumber, 1, 200,
+    xs = gobjfs_xio_server_start("tcp", "127.0.0.1", portNumber, 1, 1, 200,
                                  fileTranslatorFunc, newInstance);
     EXPECT_NE(xs, nullptr);
   }

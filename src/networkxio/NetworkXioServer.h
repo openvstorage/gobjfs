@@ -43,6 +43,7 @@ public:
   NetworkXioServer(const std::string &transport, 
       const std::string &ipaddr,
       int port,
+      int32_t startCoreForIO,
       int32_t numCoresForIO,
       int32_t queueDepthForIO,
       FileTranslatorFunc fileTranslatorFunc, 
@@ -95,8 +96,7 @@ private:
   // TODO : free this memory 
   std::vector<PortalThreadData*> ptVec_;
 
-  std::string configFileName_;
-
+  int32_t startCoreForIO_{0};
   int32_t numCoresForIO_{0};
   int32_t queueDepthForIO_{0};
 
