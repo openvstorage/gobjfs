@@ -38,6 +38,26 @@ MAKE_EXCEPTION(FailedCreateXioContext);
 MAKE_EXCEPTION(FailedRegisterEventHandler);
 MAKE_EXCEPTION(FailedCreateXioMempool);
 
+/*
+ *              NetworkXioServer [one per uri]
+ *               (one)
+ *                 |
+ *                 |
+ *                 V
+ *               (many)
+ *              PortalThreadData [one per port, bound to cpu core] 
+ *               (one)
+ *                 |     \
+ *                 |      --> (one) NetworkXioIOHandler 
+ *                 |                  \
+ *                 |                   --> (one) IOExecutor
+ *                 |
+ *                 V
+ *               (many)
+ *              NetworkXioClientData [one per client xio_connection]
+ *
+ */
+
 class NetworkXioServer {
 public:
   NetworkXioServer(const std::string &transport, 
