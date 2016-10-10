@@ -350,7 +350,7 @@ int IOExecEventFdGetReadFd(IOExecEventFdHandle eventFdPtr) {
 /* internal representation of FileHandle */
 struct IOExecFileInt {
   IOExecServiceHandle serviceHandle;
-  int fd{-1};
+  int fd{gobjfs::os::FD_INVALID};
   CoreId core{CoreIdInvalid};
 
   IOExecFileInt(IOExecServiceHandle serviceHandle, int fd, CoreId core)
@@ -359,7 +359,7 @@ struct IOExecFileInt {
   }
 
   ~IOExecFileInt() {
-    if (fd != -1) {
+    if (fd != gobjfs::os::FD_INVALID) {
       int ret = close(fd);
       if (ret != 0) {
         LOG(ERROR) << "failed to close fd=" << fd << " errno=" << errno;
@@ -533,7 +533,11 @@ int32_t IOExecFileRead(IOExecServiceHandle serviceHandle, const char *fileName,
 
   // close fileHandle but do not close fd which is still in use
   // because the fd will be closed after FilerJob::reset
-  fileHandle->fd = gobjfs::os::FD_INVALID;
+  if (ret == 0) {
+  	fileHandle->fd = gobjfs::os::FD_INVALID;
+  } else {
+    assert(fileHandle->fd != gobjfs::os::FD_INVALID);
+  }
   IOExecFileClose(fileHandle);
   return ret;
 }
@@ -559,7 +563,11 @@ int32_t IOExecFileRead(IOExecServiceHandle serviceHandle,
 
   // close fileHandle but do not close fd which is still in use
   // because the fd will be closed after FilerJob::reset
-  fileHandle->fd = gobjfs::os::FD_INVALID;
+  if (ret == 0) {
+  	fileHandle->fd = gobjfs::os::FD_INVALID;
+  } else {
+    assert(fileHandle->fd != gobjfs::os::FD_INVALID);
+  }
   IOExecFileClose(fileHandle);
   return ret;
 }
