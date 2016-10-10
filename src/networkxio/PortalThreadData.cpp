@@ -84,7 +84,7 @@ void PortalThreadData::changeNumConnections(int change) {
 
 void PortalThreadData::portal_func() {
 
-  gobjfs::os::BindThreadToCore(1 + coreId_);
+  gobjfs::os::BindThreadToCore(coreId_);
   
   // if context_params is null, max 100 connections per ctx
   // see max_conns_per_ctx in accelio code

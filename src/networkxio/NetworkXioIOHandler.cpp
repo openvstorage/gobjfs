@@ -259,8 +259,7 @@ void NetworkXioIOHandler::runTimerHandler()
         if (not smallChange) {
           incrDirection_ = (currentOps < prevOps_) ? -1 : 1;
           const size_t minSubmitSz = ioexecPtr_->minSubmitSize() + incrDirection_;
-          if ((minSubmitSz <= pt_->numConnections()) &&
-            (minSubmitSz > 0)) {
+          if (minSubmitSz > 0) {
             ioexecPtr_->setMinSubmitSize(minSubmitSz);
             minSubmitSizeStats_ = minSubmitSz;
           }
