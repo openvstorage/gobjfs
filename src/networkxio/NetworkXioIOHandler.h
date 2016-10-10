@@ -110,6 +110,12 @@ private:
   // pointer to parent 
   PortalThreadData* pt_;
 
+  float prevBatchSize_{0.0f};
+  uint64_t prevOps_{0};
+  int incrDirection_{1}; // -1 or +1
+  int timerCalled_{0}; 
+  gobjfs::stats::StatsCounter<uint32_t> minSubmitSizeStats_;
+
 public:
   IOExecutor* ioexecPtr_{nullptr};
 

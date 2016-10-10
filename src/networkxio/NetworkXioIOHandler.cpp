@@ -90,7 +90,7 @@ NetworkXioIOHandler::NetworkXioIOHandler(PortalThreadData* pt)
 
   eventFD_ = IOExecEventFdGetReadFd(eventHandle_);
 
-  uint64_t timerSec = getenv_with_default("GOBJFS_SERVER_TIMER_SEC", 60);
+  uint64_t timerSec = getenv_with_default("GOBJFS_SERVER_TIMER_SEC", 1);
   const int64_t timerNanosec = 0;
   statsTimerFD_ = gobjfs::make_unique<TimerNotifier>(timerSec, timerNanosec);
 
@@ -129,7 +129,7 @@ void NetworkXioIOHandler::startEventHandler() {
         << ",ioexecutor=" << ioexecPtr_
         << ",thread=" << gettid());
 
-    // Add periodic timer to print per-thread stats
+    // Add periodic timer to dynamically change minSubmitSize
     if (xio_context_add_ev_handler(pt_->ctx_, statsTimerFD_->getFD(),
                                 XIO_POLLIN,
                                 static_timer_event<NetworkXioIOHandler>,
@@ -206,7 +206,7 @@ int NetworkXioIOHandler::runEventHandler(gIOStatus& iostatus) {
 }
 
 void NetworkXioIOHandler::stopEventHandler() {
-  GLOG_INFO("deregistered io fd=" << eventFD_ << " for thread=" << gettid());
+  GLOG_INFO("deregistered disk fd=" << eventFD_ << " for thread=" << gettid());
   xio_context_del_ev_handler(pt_->ctx_, eventFD_);
 
   if (statsTimerFD_) {
@@ -217,18 +217,69 @@ void NetworkXioIOHandler::stopEventHandler() {
 
 void NetworkXioIOHandler::runTimerHandler()
 {
-  // print logs every 60 sec
-  // first drain the timer
+  // TODO disable timer on last conn, restart on first conn
+  // first drain the timer by reading the timerfd
   uint64_t count = 0;
   statsTimerFD_->recv(count);
 
   if (pt_->numConnections()) { 
+
+    // Dynamically vary minSubmitSize based on batch size
+    // observed in previous second
+    /*
+    const auto currentBatchSize = ioexecPtr_->stats_.numProcessedInLoop_.mean_;
+    if (currentBatchSize != 0.0f) {
+      if (prevBatchSize_ != 0.0f) { 
+
+        bool smallChange = false;
+        if (not smallChange) {
+          // TODO only change if difference is not due to jitter
+          incrDirection_ = (currentBatchSize < prevBatchSize_) ? -1 : 1;
+          const size_t minSubmitSz = ioexecPtr_->minSubmitSize() + incrDirection_;
+          if ((minSubmitSz <= pt_->numConnections()) &&
+            (minSubmitSz > 0)) {
+            ioexecPtr_->setMinSubmitSize(minSubmitSz);
+            minSubmitSizeStats_ = minSubmitSz;
+          }
+        }
+      }
+      prevBatchSize_ = currentBatchSize;
+    }
+    */
+
+    // Dynamically vary minSubmitSize based on IOPS observed 
+    // in previous second
+    const auto currentOps = ioexecPtr_->stats_.read_.numOps_;
+    if (currentOps != 0) {
+      if (prevOps_ != 0) { 
+
+        int inversePercChange = 50; // 2 perc change in iops
+        //bool smallChange = std::abs(currentOps - prevOps_) < (prevOps_/inversePercChange); // only change if difference is not due to jitter
+        bool smallChange = false; // this works better
+        if (not smallChange) {
+          incrDirection_ = (currentOps < prevOps_) ? -1 : 1;
+          const size_t minSubmitSz = ioexecPtr_->minSubmitSize() + incrDirection_;
+          if ((minSubmitSz <= pt_->numConnections()) &&
+            (minSubmitSz > 0)) {
+            ioexecPtr_->setMinSubmitSize(minSubmitSz);
+            minSubmitSizeStats_ = minSubmitSz;
+          }
+        }
+      }
+      prevOps_ = currentOps;
+    }
+
     // no need to print if no connections exist
-    GLOG_INFO("thread=" << gettid() 
-      << ",portalId=" << pt_->coreId_ 
-      << ",numConnections=" << pt_->numConnections()
-      << ",minSubmitSize=" << ioexecPtr_->minSubmitSize()
-      << ",ioexec=" << ioexecPtr_->stats_.getState());
+    if (++ timerCalled_ == 60) {
+      GLOG_INFO("thread=" << gettid() 
+        << ",portalId=" << pt_->coreId_ 
+        << ",numConnections=" << pt_->numConnections()
+        << ",current_minSubmitSize=" << ioexecPtr_->minSubmitSize()
+        << ",stats_minSubmitSize=" << minSubmitSizeStats_
+        << ",ioexec=" << ioexecPtr_->stats_.getState());
+      timerCalled_ = 0;
+      minSubmitSizeStats_.reset();
+    }
   }
 
   ioexecPtr_->stats_.clear();
