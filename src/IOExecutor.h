@@ -218,7 +218,8 @@ public:
 
   // @param minSubmitSz change minSubmitSize dynamically based on
   // number of connections
-  void setMinSubmitSize(size_t minSubmitSz);
+  // @return whether setting was successful
+  bool setMinSubmitSize(size_t minSubmitSz);
 
   size_t minSubmitSize() const {
     return minSubmitSize_;

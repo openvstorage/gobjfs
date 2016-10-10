@@ -493,7 +493,7 @@ static void doRandomRead(ThreadCtx *ctx) {
   LOG(INFO) << s.str();
 }
 
-static std::string configFileName = "bench_net_server.conf";
+static std::string configFileName = "bench_net_client.conf";
 
 int main(int argc, char *argv[]) {
   // google::InitGoogleLogging(argv[0]); TODO logging

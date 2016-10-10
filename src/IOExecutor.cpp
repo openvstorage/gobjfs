@@ -87,7 +87,7 @@ IOExecutor::Config::Config(uint32_t queueDepth) : queueDepth_(queueDepth) {
 }
 
 void IOExecutor::Config::setDerivedParam() {
-  maxRequestQueueSize_ = queueDepth_ / 5;
+  maxRequestQueueSize_ = queueDepth_;
   maxFdQueueSize_ = queueDepth_;
 }
 
@@ -214,11 +214,14 @@ void IOExecutor::stop() {
   state_ = State::TERMINATED;
 }
 
-void IOExecutor::setMinSubmitSize(size_t minSubmitSz)  {
-  if (minSubmitSz > 0) {
+bool IOExecutor::setMinSubmitSize(size_t minSubmitSz)  {
+  // bound check
+  if ((minSubmitSz > 0) && (minSubmitSz <= config_.queueDepth_)) {
     minSubmitSize_ = minSubmitSz;
     stats_.minSubmitSize_ = minSubmitSz;
+    return true;
 	}
+  return false;
 }
 
 void IOExecutor::execute() {

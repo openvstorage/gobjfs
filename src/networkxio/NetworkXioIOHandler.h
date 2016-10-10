@@ -102,8 +102,6 @@ public:
   int eventFD_{-1};
 private:
 
-  StatsCounter<uint32_t> workQueueLen_;
-
   std::unique_ptr<TimerNotifier> statsTimerFD_;
 
   // pointer to parent 
