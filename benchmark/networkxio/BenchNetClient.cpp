@@ -493,7 +493,7 @@ static void doRandomRead(ThreadCtx *ctx) {
   LOG(INFO) << s.str();
 }
 
-static constexpr const char* configFileName = "bench_net_client.conf";
+static std::string configFileName = "bench_net_server.conf";
 
 int main(int argc, char *argv[]) {
   // google::InitGoogleLogging(argv[0]); TODO logging
@@ -515,9 +515,13 @@ int main(int argc, char *argv[]) {
 
   std::cout << "logs in " << logFileName << std::endl;
 
+  if (argc > 1) {
+      configFileName = argv[1];
+  }
+
   {
     struct stat statbuf;
-    int err = stat(configFileName, &statbuf);
+    int err = stat(configFileName.c_str(), &statbuf);
     if (err != 0) {
       LOG(ERROR) << "need a config file " << configFileName << " in current dir";
       exit(1);
