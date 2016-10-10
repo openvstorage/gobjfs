@@ -513,6 +513,8 @@ int main(int argc, char *argv[]) {
     keywords::format = "[%TimeStamp%]: %Message%"
   );
 
+  logging::add_common_attributes();// puts timestamp in log
+
   std::cout << "logs in " << logFileName << std::endl;
 
   if (argc > 1) {
