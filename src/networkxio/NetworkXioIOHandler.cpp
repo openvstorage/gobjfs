@@ -284,16 +284,6 @@ void NetworkXioIOHandler::runTimerHandler()
   ioexecPtr_->stats_.clear();
 }
 
-void NetworkXioIOHandler::handle_open(NetworkXioRequest *req) {
-  GLOG_DEBUG("trying to open volume ");
-
-  req->op = NetworkXioMsgOpcode::OpenRsp;
-  req->retval = 0;
-  req->errval = 0;
-
-  pack_msg(req);
-}
-
 int NetworkXioIOHandler::handle_read(NetworkXioRequest *req,
                                      const std::string &filename, size_t size,
                                      off_t offset) {
@@ -416,11 +406,6 @@ bool NetworkXioIOHandler::process_request(NetworkXioRequest *req) {
 
   req->opaque = i_msg.opaque();
   switch (i_msg.opcode()) {
-    case NetworkXioMsgOpcode::OpenReq: {
-      GLOG_DEBUG(" Command OpenReq");
-      handle_open(req);
-      break;
-    }
     case NetworkXioMsgOpcode::ReadReq: {
       GLOG_DEBUG(" Command ReadReq");
       auto ret = handle_read(req, i_msg.filename_, i_msg.size(), i_msg.offset());

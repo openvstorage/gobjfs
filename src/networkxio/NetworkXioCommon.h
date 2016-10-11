@@ -29,8 +29,6 @@ namespace xio {
  */
 enum class NetworkXioMsgOpcode {
   Noop,
-  OpenReq,
-  OpenRsp,
   ReadReq,
   ReadRsp,
   ErrorRsp,

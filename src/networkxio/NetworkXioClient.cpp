@@ -247,7 +247,7 @@ void NetworkXioClient::run() {
 
     ctx = std::shared_ptr<xio_context>(
         xio_context_create(NULL, polling_time_usec, -1),
-        xio_destroy_ctx_shutdown);
+        destroy_ctx_shutdown);
   } catch (const std::bad_alloc &) {
     xrefcnt_shutdown();
     throw;
@@ -298,7 +298,7 @@ void NetworkXioClient::shutdown() {
 
 NetworkXioClient::~NetworkXioClient() { shutdown(); }
 
-void NetworkXioClient::xio_destroy_ctx_shutdown(xio_context *ctx) {
+void NetworkXioClient::destroy_ctx_shutdown(xio_context *ctx) {
   xio_context_destroy(ctx);
   xrefcnt_shutdown();
   XXExit();
@@ -415,19 +415,7 @@ void NetworkXioClient::send_msg(xio_msg_s *xmsg) {
   } while (0);
 }
 
-void NetworkXioClient::xio_send_open_request(const void *opaque) {
-  XXEnter();
-  xio_msg_s *xmsg = new xio_msg_s;
-  xmsg->opaque = opaque;
-  xmsg->msg.opcode(NetworkXioMsgOpcode::OpenReq);
-  xmsg->msg.opaque((uintptr_t)xmsg);
-
-  msg_prepare(xmsg);
-  send_msg(xmsg);
-  XXExit();
-}
-
-void NetworkXioClient::xio_send_read_request(const std::string &filename,
+void NetworkXioClient::send_read_request(const std::string &filename,
                                              void *buf,
                                              const uint64_t size_in_bytes,
                                              const uint64_t offset_in_bytes,

@@ -205,7 +205,7 @@ static int _submit_aio_request(client_ctx_ptr ctx, const std::string &filename,
   switch (op) {
   case RequestOp::Read: {
     try {
-      net_client->xio_send_read_request(filename, giocbp->aio_buf,
+      net_client->send_read_request(filename, giocbp->aio_buf,
                                         giocbp->aio_nbytes, giocbp->aio_offset,
                                         reinterpret_cast<void *>(request));
 

@@ -70,8 +70,6 @@ namespace xio {
 enum class RequestOp {
   Noop,
   Read,
-  Open,
-  Close,
 };
 
 enum class TransportType {

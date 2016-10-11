@@ -57,47 +57,5 @@ inline aio_request *create_new_request(RequestOp op, struct giocb *aio,
   }
 }
 
-inline int ovs_xio_open_device(client_ctx_ptr ctx) {
-  XXEnter();
-  ssize_t r;
-  struct giocb aio;
-
-  auto cvp = std::make_shared<notifier>();
-
-  aio_request *request = create_new_request(RequestOp::Open, &aio, cvp, NULL);
-  if (request == NULL) {
-    errno = ENOMEM;
-    XXExit();
-    return -1;
-  }
-
-  try {
-    ctx->net_client_->xio_send_open_request(reinterpret_cast<void *>(request));
-  } catch (const std::bad_alloc &) {
-    errno = ENOMEM;
-    XXExit();
-    return -1;
-  } catch (...) {
-    errno = EIO;
-    XXExit();
-    return -1;
-  }
-
-  if ((r = aio_suspend(ctx, &aio, NULL)) < 0) {
-    GLOG_ERROR("aio_suspend() failed with error ");
-    XXExit();
-    return r;
-  }
-  r = aio_return(ctx, &aio);
-  if (r < 0) {
-    GLOG_ERROR("gio_return() failed with error ");
-  }
-  if (aio_finish(ctx, &aio) < 0) {
-    GLOG_ERROR("aio_finish() failed with error ");
-    r = -1;
-  }
-  XXExit();
-  return r;
-}
 }
 }

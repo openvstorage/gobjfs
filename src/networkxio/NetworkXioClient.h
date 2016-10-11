@@ -44,9 +44,6 @@ MAKE_EXCEPTION(FailedRegisterEventHandler);
 extern void ovs_xio_aio_complete_request(void *request, ssize_t retval,
                                          int errval);
 
-extern void ovs_xio_complete_request_control(void *request, ssize_t retval,
-                                             int errval);
-
 class NetworkXioClient {
 public:
   NetworkXioClient(const std::string &uri, const uint64_t qd);
@@ -66,16 +63,9 @@ public:
     std::string s_msg;
   };
 
-  struct xio_ctl_s {
-    xio_msg_s xmsg;
-    session_data sdata;
-    std::vector<std::string> *vec;
-    uint64_t size{0};
-  };
+  void send_open_request(const void *opaque);
 
-  void xio_send_open_request(const void *opaque);
-
-  void xio_send_read_request(const std::string &filename, void *buf,
+  void send_read_request(const std::string &filename, void *buf,
                              const uint64_t size_in_bytes,
                              const uint64_t offset_in_bytes,
                              const void *opaque);
@@ -90,7 +80,7 @@ public:
 
   void run();
 
-  static void xio_destroy_ctx_shutdown(xio_context *ctx);
+  static void destroy_ctx_shutdown(xio_context *ctx);
 
   struct statistics {
 
