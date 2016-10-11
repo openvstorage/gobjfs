@@ -25,6 +25,31 @@ another thread runs NetworkXioClient::xio_run_loop_worker()
 
 ==========================
 
+aio_request {
+}
+
+NetworkXioMsg {
+    opaque -> ptr to xio_msg_s
+}
+
+xio_msg_s {
+    xio_msg xreq -> sent to client
+    NetworkXioMsg msg
+    std::string s_msg -> 
+    opaque -> ptr to aio_request
+}
+
+xio_msg {
+}
+
+NetworkXioRequest {
+}
+
+gIOBatch {
+}
+
+==========================
+
 SERVER SIDE 
 
 NetworkXioRequest 
