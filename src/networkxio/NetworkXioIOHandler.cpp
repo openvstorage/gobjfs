@@ -35,13 +35,12 @@ using namespace std;
 namespace gobjfs {
 namespace xio {
 
-
-static inline void pack_msg(NetworkXioRequest *req) {
-  NetworkXioMsg o_msg(req->op);
-  o_msg.retval(req->retval);
-  o_msg.errval(req->errval);
-  o_msg.opaque(req->opaque);
-  req->s_msg = o_msg.pack_msg();
+void NetworkXioRequest::pack_msg() {
+  NetworkXioMsg o_msg(this->op);
+  o_msg.retval(this->retval);
+  o_msg.errval(this->errval);
+  o_msg.opaque(this->opaque);
+  s_msg = o_msg.pack_msg();
 }
 
 /** 
@@ -192,7 +191,7 @@ int NetworkXioIOHandler::runEventHandler(gIOStatus& iostatus) {
                                           << iostatus.completionId);
     }
 
-    pack_msg(pXioReq);
+    pXioReq->pack_msg();
 
     pt_->server_->send_reply(pXioReq);
 
@@ -295,17 +294,10 @@ int NetworkXioIOHandler::handle_read(NetworkXioRequest *req,
   { 
     req->retval = size;
     req->errval = 0;
-    pack_msg(req);
+    req->pack_msg();
     return 0;
   } 
 #endif
-  if (!serviceHandle_) {
-    GLOG_ERROR("no service handle");
-    req->retval = -1;
-    req->errval = EIO;
-    pack_msg(req);
-    return -1;
-  }
 
   ret = xio_mempool_alloc(pt_->mpool_, size, &req->reg_mem);
   if (ret < 0) {
@@ -315,7 +307,7 @@ int NetworkXioIOHandler::handle_read(NetworkXioRequest *req,
       GLOG_ERROR("cannot allocate requested buffer, size: " << size);
       req->retval = -1;
       req->errval = ENOMEM;
-      pack_msg(req);
+      req->pack_msg();
       return ret;
     }
     req->from_pool = false;
@@ -373,7 +365,7 @@ int NetworkXioIOHandler::handle_read(NetworkXioRequest *req,
   }
 
   if (ret != 0) {
-    pack_msg(req);
+    req->pack_msg();
   }
   return ret;
 }
@@ -382,7 +374,7 @@ void NetworkXioIOHandler::handle_error(NetworkXioRequest *req, int errval) {
   req->op = NetworkXioMsgOpcode::ErrorRsp;
   req->retval = -1;
   req->errval = errval;
-  pack_msg(req);
+  req->pack_msg();
 }
 
 /*

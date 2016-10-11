@@ -50,14 +50,8 @@ public:
 
   ~NetworkXioClient();
 
-  struct session_data {
-    xio_context *ctx{nullptr};
-    bool disconnected{false};
-    bool disconnecting{false};
-  };
-
   struct xio_msg_s {
-    xio_msg xreq;
+    xio_msg xreq;           // stuff actually sent to server
     const void *opaque{nullptr};
     NetworkXioMsg msg;
     std::string s_msg;

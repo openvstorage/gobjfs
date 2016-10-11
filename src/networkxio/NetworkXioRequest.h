@@ -40,7 +40,7 @@ class PortalThreadData;
 struct NetworkXioClientData;
 
 /**
- * one per request
+ * allocated one per request on server-side
  */
 struct NetworkXioRequest {
   NetworkXioMsgOpcode op{NetworkXioMsgOpcode::Noop};
@@ -54,16 +54,18 @@ struct NetworkXioRequest {
   int errval{0};
   uintptr_t opaque{0};
 
-  xio_msg *xio_req{nullptr};
-  xio_msg xio_reply;
-  xio_reg_mem reg_mem;
+  xio_msg *xio_req{nullptr}; // message received from client
+  xio_msg xio_reply;         // structure send back to client
+  xio_reg_mem reg_mem;       // memory allocated from xio
   bool from_pool{false};
 
   NetworkXioClientData *pClientData{nullptr};
 
   void *private_data{nullptr};
 
-  std::string s_msg;
+  std::string s_msg;         // return codes which are sent back to client
+
+  void pack_msg();
 
   explicit NetworkXioRequest(xio_msg* req,
       NetworkXioClientData* clientData)
