@@ -35,12 +35,22 @@ using namespace std;
 namespace gobjfs {
 namespace xio {
 
+
+/**
+ * two things have to be done after disk IO is done
+ * 1. pack_msg
+ * 2. xio_send_response
+ */
 void NetworkXioRequest::pack_msg() {
-  NetworkXioMsg o_msg(this->op);
-  o_msg.retval(this->retval);
-  o_msg.errval(this->errval);
-  o_msg.opaque(this->opaque);
-  s_msg = o_msg.pack_msg();
+  GLOG_DEBUG(" packing msg for req=" << (void*)this);
+  NetworkXioMsg replyHeader(this->op);
+  const size_t numElems = opaqueVec_.size();
+  for (size_t idx = 0; idx < numElems; idx ++) {
+    replyHeader.retvalVec_.push_back(this->retvalVec_[idx]);
+    replyHeader.errvalVec_.push_back(this->errvalVec_[idx]);
+    replyHeader.opaqueVec_.push_back(this->opaqueVec_[idx]);
+  }
+  s_msg = replyHeader.pack_msg();
 }
 
 /** 
@@ -163,43 +173,48 @@ int NetworkXioIOHandler::runEventHandler(gIOStatus& iostatus) {
   gIOBatch *batch = reinterpret_cast<gIOBatch *>(iostatus.completionId);
   assert(batch != nullptr);
 
-  NetworkXioRequest *pXioReq =
+  NetworkXioRequest *req =
       static_cast<NetworkXioRequest *>(batch->opaque);
-  assert(pXioReq != nullptr);
+  assert(req != nullptr);
 
   gIOExecFragment &frag = batch->array[0];
   // reset addr otherwise BatchFree will free it
   // need to introduce ownership indicator
+  size_t fragSize = frag.size;
   frag.addr = nullptr;
   gIOBatchFree(batch);
 
-  switch (pXioReq->op) {
+  switch (req->op) {
 
   case NetworkXioMsgOpcode::ReadRsp: {
 
     if (iostatus.errorCode == 0) {
       // read must return the size which was read
-      pXioReq->retval = pXioReq->size;
-      pXioReq->errval = 0;
+      req->retvalVec_.push_back(fragSize);
+      req->errvalVec_.push_back(0);
+      // TODO_MULTI figure out which opaque to update error code for
       GLOG_DEBUG(" Read completed with completion ID"
                  << iostatus.completionId);
     } else {
-      pXioReq->retval = -1;
-      pXioReq->errval = iostatus.errorCode;
+      req->retvalVec_.push_back(-1);
+      req->errvalVec_.push_back(iostatus.errorCode);
       GLOG_ERROR("Read completion error " << iostatus.errorCode
                                           << " For completion ID "
                                           << iostatus.completionId);
     }
 
-    pXioReq->pack_msg();
-
-    pt_->server_->send_reply(pXioReq);
+    req->completeElems ++;
+    // if all in batch done, then pack and send reply
+    if (req->completeElems == req->numElems) {
+      req->pack_msg();
+      pt_->server_->send_reply(req);
+    }
 
   } break;
 
   default: 
     GLOG_ERROR("Got an event for non-read operation "
-               << (int)pXioReq->op);
+               << (int)req->op);
   }
   return 0;
 }
@@ -283,6 +298,36 @@ void NetworkXioIOHandler::runTimerHandler()
   ioexecPtr_->stats_.clear();
 }
 
+int NetworkXioIOHandler::handle_multi_read(NetworkXioRequest *req,
+                                     NetworkXioMsg& msg) {
+
+  req->op = NetworkXioMsgOpcode::ReadRsp;
+  req->numElems = msg.filenameVec_.size();
+
+  GLOG_DEBUG("ReadReq req=" << (void*)req << " numelem=" << req->numElems);
+
+  for (size_t idx = 0; idx < req->numElems; idx ++) {
+    req->opaqueVec_.push_back(msg.opaqueVec_[idx]);
+    int ret = handle_read(req, msg.filenameVec_[idx], 
+        msg.sizeVec_[idx],
+        msg.offsetVec_[idx]);
+    if (ret < 0) {
+      req->completeElems ++;
+    } else {
+#ifdef BYPASS_READ
+      req->completeElems ++;
+#endif
+    }
+  }
+  if (req->numElems == req->completeElems) {
+    // if all requests finished right now, lets pack em
+    req->pack_msg();
+    return -1;
+  }
+  return 0;
+}
+
+
 int NetworkXioIOHandler::handle_read(NetworkXioRequest *req,
                                      const std::string &filename, size_t size,
                                      off_t offset) {
@@ -292,27 +337,28 @@ int NetworkXioIOHandler::handle_read(NetworkXioRequest *req,
   req->op = NetworkXioMsgOpcode::ReadRsp;
 #ifdef BYPASS_READ
   { 
-    req->retval = size;
-    req->errval = 0;
-    req->pack_msg();
+    req->retvalVec_.push_back(size);
+    req->errvalVec_.push_back(0);
     return 0;
   } 
 #endif
 
-  ret = xio_mempool_alloc(pt_->mpool_, size, &req->reg_mem);
+  xio_reg_mem reg_mem;
+  ret = xio_mempool_alloc(pt_->mpool_, size, &reg_mem);
   if (ret < 0) {
     // could not allocate from mempool, try mem alloc
-    ret = xio_mem_alloc(size, &req->reg_mem);
+    ret = xio_mem_alloc(size, &reg_mem);
     if (ret < 0) {
       GLOG_ERROR("cannot allocate requested buffer, size: " << size);
-      req->retval = -1;
-      req->errval = ENOMEM;
-      req->pack_msg();
+      req->retvalVec_.push_back(-1);
+      req->errvalVec_.push_back(ENOMEM);
       return ret;
     }
-    req->from_pool = false;
+    req->from_pool_vec.push_back(false);
+    req->reg_mem_vec.push_back(reg_mem);
   } else {
-    req->from_pool = true;
+    req->from_pool_vec.push_back(true);
+    req->reg_mem_vec.push_back(reg_mem);
   }
 
   GLOG_DEBUG("Received read request for object "
@@ -320,20 +366,16 @@ int NetworkXioIOHandler::handle_read(NetworkXioRequest *req,
      << " at offset=" << offset 
      << " for size=" << size);
 
-  req->data = req->reg_mem.addr;
-  req->data_len = size;
-  req->size = size;
-  req->offset = offset;
   try {
 
-    memset(static_cast<char *>(req->data), 0, req->size);
+    bzero(static_cast<char *>(reg_mem.addr), size);
 
     gIOBatch *batch = gIOBatchAlloc(1);
-    batch->opaque = req;
+    batch->opaque = req; // many batches point to one req
     gIOExecFragment &frag = batch->array[0];
 
     frag.offset = offset;
-    frag.addr = reinterpret_cast<caddr_t>(req->reg_mem.addr);
+    frag.addr = reinterpret_cast<caddr_t>(reg_mem.addr);
     frag.size = size;
     frag.completionId = reinterpret_cast<uint64_t>(batch);
 
@@ -348,9 +390,9 @@ int NetworkXioIOHandler::handle_read(NetworkXioRequest *req,
                          (void*)this);
 
     if (ret != 0) {
-      GLOG_ERROR("IOExecFileRead failed with error " << ret);
-      req->retval = -1;
-      req->errval = EIO;
+      GLOG_ERROR("IOExecFileRead failed with error " << ret << " req=" << (void*)req);
+      req->retvalVec_.push_back(-1);
+      req->errvalVec_.push_back(EIO);
       frag.addr = nullptr;
       gIOBatchFree(batch);
     }
@@ -360,20 +402,17 @@ int NetworkXioIOHandler::handle_read(NetworkXioRequest *req,
     // leading to a "use-after-free" memory error
   } catch (...) {
     GLOG_ERROR("failed to read volume ");
-    req->retval = -1;
-    req->errval = EIO;
+    req->retvalVec_.push_back(-1);
+    req->errvalVec_.push_back(EIO);
   }
 
-  if (ret != 0) {
-    req->pack_msg();
-  }
   return ret;
 }
 
 void NetworkXioIOHandler::handle_error(NetworkXioRequest *req, int errval) {
   req->op = NetworkXioMsgOpcode::ErrorRsp;
-  req->retval = -1;
-  req->errval = errval;
+  req->retvalVec_.push_back(-1);
+  req->errvalVec_.push_back(errval);
   req->pack_msg();
 }
 
@@ -383,8 +422,6 @@ void NetworkXioIOHandler::handle_error(NetworkXioRequest *req, int errval) {
 bool NetworkXioIOHandler::process_request(NetworkXioRequest *req) {
   bool finishNow = true;
   xio_msg *xio_req = req->xio_req;
-  //xio_iovec_ex *isglist = vmsg_sglist(&xio_req->in);
-  //int inents = vmsg_sglist_nents(&xio_req->in);
 
   NetworkXioMsg i_msg(NetworkXioMsgOpcode::Noop);
   try {
@@ -396,11 +433,9 @@ bool NetworkXioIOHandler::process_request(NetworkXioRequest *req) {
     return finishNow;
   }
 
-  req->opaque = i_msg.opaque();
   switch (i_msg.opcode()) {
     case NetworkXioMsgOpcode::ReadReq: {
-      GLOG_DEBUG(" Command ReadReq");
-      auto ret = handle_read(req, i_msg.filename_, i_msg.size(), i_msg.offset());
+      auto ret = handle_multi_read(req, i_msg);
       if (ret == 0) {
         finishNow = false;
       }
@@ -428,6 +463,7 @@ void NetworkXioIOHandler::drainQueue() {
 void NetworkXioIOHandler::handle_request(NetworkXioRequest *req) {
   bool finishNow = process_request(req); 
   if (finishNow) {
+    // this happens when all requests in batch failed
     pt_->server_->send_reply(req);
   }
   if (numPendingRequests()) { 

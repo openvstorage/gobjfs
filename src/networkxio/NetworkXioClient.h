@@ -51,9 +51,17 @@ public:
   ~NetworkXioClient();
 
   struct xio_msg_s {
-    xio_msg xreq;           // stuff actually sent to server
+    // stuff actually sent to server
+    xio_msg xreq;           
+
+    // points to original aio_request
     const void *opaque{nullptr};
+    
+    // arguments sent to server in header
     NetworkXioMsg msg;
+
+    // msgpack buffer generated from NetworkXioMsg
+    // which is sent as header in xio_msg
     std::string s_msg;
   };
 

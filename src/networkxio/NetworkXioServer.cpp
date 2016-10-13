@@ -285,7 +285,7 @@ int NetworkXioServer::on_new_session(xio_session *session,
   const char* portal_array[ptVec_.size()];
 
   // tell xio_accept which portals are available
-  for (int i = 0; i < ptVec_.size(); i++) {
+  for (size_t i = 0; i < ptVec_.size(); i++) {
     portal_array[i] = ptVec_[i]->uri_.c_str();
   }
 
@@ -368,11 +368,16 @@ int NetworkXioServer::on_session_event(xio_session *session,
 
 void NetworkXioServer::deallocate_request(NetworkXioRequest *req) {
 
-  if ((req->op == NetworkXioMsgOpcode::ReadRsp) && req->data) {
-    if (req->from_pool) {
-      xio_mempool_free(&req->reg_mem);
-    } else {
-      xio_mem_free(&req->reg_mem);
+  if (req->op == NetworkXioMsgOpcode::ReadRsp) {
+
+    const size_t numElems = req->reg_mem_vec.size();
+
+    for (size_t idx = 0; idx < numElems; idx ++) {
+      if (req->from_pool_vec[idx]) {
+        xio_mempool_free(&req->reg_mem_vec[idx]);
+      } else {
+        xio_mem_free(&req->reg_mem_vec[idx]);
+      }
     }
   }
 
@@ -417,15 +422,29 @@ void NetworkXioServer::send_reply(NetworkXioRequest *req) {
   req->xio_reply.out.header.iov_base =
       const_cast<void *>(reinterpret_cast<const void *>(req->s_msg.c_str()));
   req->xio_reply.out.header.iov_len = req->s_msg.length();
-  if ((req->op == NetworkXioMsgOpcode::ReadRsp) && req->data) {
-    vmsg_sglist_set_nents(&req->xio_reply.out, 1);
+
+  size_t numElems = 0;
+  if (req->op == NetworkXioMsgOpcode::ReadRsp) {
+
+    // TODO_MULTI - process all requests here in loop
+    numElems = req->reg_mem_vec.size();
+    assert(numElems < XIO_IOVLEN);
+    vmsg_sglist_set_nents(&req->xio_reply.out, numElems);
     req->xio_reply.out.sgl_type = XIO_SGL_TYPE_IOV;
     req->xio_reply.out.data_iov.max_nents = XIO_IOVLEN;
-    req->xio_reply.out.data_iov.sglist[0].iov_base = req->data;
-    req->xio_reply.out.data_iov.sglist[0].iov_len = req->data_len;
-    req->xio_reply.out.data_iov.sglist[0].mr = req->reg_mem.mr;
+
+    for (size_t idx = 0; idx < numElems; idx ++) {
+      req->xio_reply.out.data_iov.sglist[idx].iov_base = req->reg_mem_vec[idx].addr;
+      req->xio_reply.out.data_iov.sglist[idx].iov_len = req->reg_mem_vec[idx].length;
+      req->xio_reply.out.data_iov.sglist[idx].mr = req->reg_mem_vec[idx].mr;
+    }
   }
   req->xio_reply.flags = XIO_MSG_FLAG_IMM_SEND_COMP;
+
+  GLOG_INFO("sent reply=" << (void*)&req->xio_reply 
+        << " for original message=" << (void*)xio_req
+        << " req=" << (void*)req
+        << " with num elem=" << numElems);
 
   int ret = xio_send_response(&req->xio_reply);
   if (ret != 0) {
@@ -445,7 +464,6 @@ int NetworkXioServer::on_request(xio_session *session ATTRIBUTE_UNUSED,
   try {
     auto clientData = static_cast<NetworkXioClientData *>(cb_user_ctx);
     NetworkXioRequest *req = new NetworkXioRequest(xio_req, clientData);
-    req->from_pool = true;
     clientData->ncd_refcnt ++;
     clientData->pt_->ioh_->handle_request(req);
   } catch (const std::bad_alloc &) {

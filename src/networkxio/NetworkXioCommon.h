@@ -31,6 +31,8 @@ enum class NetworkXioMsgOpcode {
   Noop,
   ReadReq,
   ReadRsp,
+  MultiReadReq,
+  MultiReadRsp,
   ErrorRsp,
   ShutdownRsp,
 };
