@@ -23,6 +23,7 @@ but WITHOUT ANY WARRANTY of any kind.
 #include <boost/thread/lock_guard.hpp>
 
 #include <util/os_utils.h>
+#include <util/lang_utils.h>
 
 #include <networkxio/gobjfs_client_common.h>
 #include <networkxio/gobjfs_config.h>
@@ -215,9 +216,9 @@ void NetworkXioServer::run(std::promise<void> &promise) {
   // then xio_accept() will decide which port+thread to use for a new connection
   for (int i = 0; i < numCoresForIO_; i++) {
     std::string uri = transport_ + "://" + ipaddr_ + ":" + std::to_string(port_ + i + 1);
-    auto newpt = new PortalThreadData(this, uri, startCoreForIO_ + i + 1);
-    newpt->thread_ = std::thread(std::bind(&PortalThreadData::portal_func, newpt));
-    ptVec_.push_back(newpt);
+    auto newpt = gobjfs::make_unique<PortalThreadData>(this, uri, startCoreForIO_ + i + 1);
+    newpt->thread_ = std::thread(std::bind(&PortalThreadData::portal_func, newpt.get()));
+    ptVec_.push_back(std::move(newpt));
   }
 
   promise.set_value();
@@ -230,8 +231,8 @@ void NetworkXioServer::run(std::promise<void> &promise) {
     assert(ret == 0);
   }
 
-  for (auto elem : ptVec_) {
-    elem->thread_.join();
+  for (auto& pt : ptVec_) {
+    pt->thread_.join();
   }
 
   server.reset();
@@ -467,7 +468,7 @@ void NetworkXioServer::shutdown() {
   if (not stopped) {
     stopping = true;
     // stop all portal loops 
-    for (auto elem : ptVec_) {
+    for (auto& elem : ptVec_) {
       elem->stopping = true;
       elem->stop_loop();
     }
