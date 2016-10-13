@@ -561,11 +561,12 @@ ssize_t read(client_ctx_ptr ctx, const std::string &filename, void *buf,
     return r;
   }
 
-  if ((r = aio_suspend(ctx, &aio, nullptr)) < 0) {
-    return r;
+  r = aio_suspend(ctx, &aio, nullptr);
+
+  if (r == 0) {
+    r = aio_return(ctx, &aio);
   }
 
-  r = aio_return(ctx, &aio);
   if (aio_finish(ctx, &aio) < 0) {
     r = -1;
   }
