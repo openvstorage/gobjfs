@@ -426,7 +426,6 @@ void NetworkXioServer::send_reply(NetworkXioRequest *req) {
   size_t numElems = 0;
   if (req->op == NetworkXioMsgOpcode::ReadRsp) {
 
-    // TODO_MULTI - process all requests here in loop
     numElems = req->reg_mem_vec.size();
     assert(numElems < XIO_IOVLEN);
     vmsg_sglist_set_nents(&req->xio_reply.out, numElems);

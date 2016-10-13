@@ -477,6 +477,11 @@ int NetworkXioClient::on_response(xio_session *session __attribute__((unused)),
     return 0;
   }
 
+  reply->in.header.iov_base = NULL;
+  reply->in.header.iov_len = 0;
+  vmsg_sglist_set_nents(&reply->in, 0);
+  xio_release_response(reply);
+
   const size_t numElems = imsg.opaqueVec_.size();
   {
     for (size_t idx = 0; idx < numElems; idx ++) {
@@ -487,14 +492,12 @@ int NetworkXioClient::on_response(xio_session *session __attribute__((unused)),
       ovs_xio_aio_complete_request(aio_req,
                                 imsg.retvalVec_[idx], 
                                 imsg.errvalVec_[idx]);
+      // the xmsg must be freed after xio_release_response()
+      // otherwise its a memory corruption bug
       delete xmsg;
     }
   }
  
-  reply->in.header.iov_base = NULL;
-  reply->in.header.iov_len = 0;
-  vmsg_sglist_set_nents(&reply->in, 0);
-  xio_release_response(reply);
   nr_req_queue += numElems;
   xio_context_stop_loop(ctx.get());
   XXExit();
