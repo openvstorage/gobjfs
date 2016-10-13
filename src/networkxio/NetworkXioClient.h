@@ -50,19 +50,22 @@ public:
 
   ~NetworkXioClient();
 
-  struct xio_msg_s {
-    // stuff actually sent to server
+  struct MsgHeader {
+    // header message actually sent to server
     xio_msg xreq;           
 
-    // points to original aio_request
-    const void *opaque{nullptr};
+    // points to list of original aio_requests
+    // which comprise this single server message
+    std::vector<void*> aioReqVec_;
     
-    // arguments sent to server in header
+    // arguments to be sent to server in header
     NetworkXioMsg msg;
 
     // msgpack buffer generated from NetworkXioMsg
     // which is sent as header in xio_msg
     std::string s_msg;
+
+    void prepare();
   };
 
   void send_open_request(const void *opaque);
@@ -70,7 +73,13 @@ public:
   void send_read_request(const std::string &filename, void *buf,
                              const uint64_t size_in_bytes,
                              const uint64_t offset_in_bytes,
-                             const void *opaque);
+                             void *opaque);
+
+  void send_multi_read_request(const std::vector<std::string> &filenameVec, 
+      const std::vector<void *>   &bufVec,
+      const std::vector<uint64_t> &sizeVec,
+      const std::vector<uint64_t> &offsetVec,
+      const std::vector<void *>   &opaqueVec);
 
   int on_session_event(xio_session *session,
                        xio_session_event_data *event_data);
@@ -102,7 +111,7 @@ public:
 
   const bool &is_disconnected() { return disconnected; }
 
-  void send_msg(xio_msg_s *xmsg);
+  void send_msg(MsgHeader *msgHeader);
 
   void run_loop();
 
@@ -128,7 +137,6 @@ private:
 
   void shutdown();
 
-  static void msg_prepare(xio_msg_s *xmsg);
 
 };
 

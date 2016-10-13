@@ -47,13 +47,14 @@ struct NetworkXioRequest {
 
   std::vector<ssize_t> retvalVec_;
   std::vector<int> errvalVec_;
-  std::vector<uintptr_t> opaqueVec_;
 
-  size_t numElems{0};
-  size_t completeElems{0};
+  uintptr_t headerPtr_; // header allocated on client side 
+  size_t numElems_{0};
+  size_t completeElems_{0};
 
   xio_msg *xio_req{nullptr}; // message received from client
   xio_msg xio_reply;         // structure send back to client
+
   std::vector<xio_reg_mem> reg_mem_vec;       // memory allocated from xio
   std::vector<bool> from_pool_vec;
 
@@ -61,7 +62,7 @@ struct NetworkXioRequest {
 
   void *private_data{nullptr};
 
-  std::string s_msg;         // return codes which are sent back to client
+  std::string s_msg;         // msgpack buffer which is sent back as header
 
   void pack_msg();
 

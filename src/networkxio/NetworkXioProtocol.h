@@ -24,6 +24,23 @@
 namespace gobjfs {
 namespace xio {
 
+/**
+ * Data model
+ *  n aio_request on client
+ *    map to
+ *      \
+ *       \
+ *      1 MsgHeader on client
+ *       map to
+ *         \
+ *          \
+ *          1 NetworkXioMsg on transport
+ *           map to
+ *             \
+ *              \
+ *              n NetworkXioRequest on server
+ */
+
 class NetworkXioMsg {
 public:
   explicit NetworkXioMsg(NetworkXioMsgOpcode opcode = NetworkXioMsgOpcode::Noop)
@@ -31,6 +48,8 @@ public:
 
 public:
   NetworkXioMsgOpcode opcode_;
+
+  size_t numElems_{0};
 
   // sent from client to server
   std::vector<std::string> filenameVec_;
@@ -41,9 +60,9 @@ public:
   std::vector<ssize_t> retvalVec_;
   std::vector<int> errvalVec_;
   
+  // ptr to MsgHeader allocated on client-side
   // sent from client to server and reflected back
-  // this points to xio_msg_s allocated on client
-  std::vector<uintptr_t> opaqueVec_;
+  uintptr_t headerPtr_{0};
 
 public:
   NetworkXioMsg(const NetworkXioMsg& other) = delete;
@@ -54,7 +73,6 @@ public:
   const NetworkXioMsgOpcode &opcode() const { return opcode_; }
 
   void opcode(const NetworkXioMsgOpcode &op) { opcode_ = op; }
-
 
   const std::string pack_msg() const {
     std::stringstream sbuf;
@@ -79,7 +97,8 @@ public:
   void clear() {
     opcode_ = NetworkXioMsgOpcode::Noop;
 
-    opaqueVec_.clear();
+    numElems_ = 0;
+    headerPtr_ = 0;
 
     filenameVec_.clear();
     sizeVec_.clear();
@@ -91,9 +110,10 @@ public:
 
 public:
   MSGPACK_DEFINE(opcode_, 
+      numElems_, 
       filenameVec_, sizeVec_, offsetVec_, 
       retvalVec_, errvalVec_, 
-      opaqueVec_);
+      headerPtr_);
 };
 }
 }

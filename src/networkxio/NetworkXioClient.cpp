@@ -358,25 +358,22 @@ int NetworkXioClient::on_msg_error(xio_session *session __attribute__((unused)),
     xio_release_response(msg);
   }
 
-  const size_t numElem = imsg.opaqueVec_.size();
-  if (numElem != imsg.retvalVec_.size()) {
+  const size_t numElem = imsg.numElems_;
+  if ((numElem != imsg.errvalVec_.size()) || 
+      (numElem != imsg.retvalVec_.size())) {
     return -1;
   }
-  if (numElem == imsg.errvalVec_.size()) {
-    return -1;
-  }
+  MsgHeader *headerPtr = reinterpret_cast<MsgHeader *>(imsg.headerPtr_);
   for (size_t idx = 0; idx < numElem; idx ++) {
-  
-    xio_msg_s *xmsg = reinterpret_cast<xio_msg_s *>(imsg.opaqueVec_[idx]);
-    void* aio_req = const_cast<void *>(xmsg->opaque);
-  
+
+    void* aio_req = const_cast<void *>(headerPtr->aioReqVec_[idx]);
     update_stats(aio_req, true);
     ovs_xio_aio_complete_request(aio_req,
         imsg.retvalVec_[idx], 
         imsg.errvalVec_[idx]);
-    delete xmsg;
     nr_req_queue++;
   }
+  delete headerPtr;
   return 0;
 }
 
@@ -412,25 +409,21 @@ void NetworkXioClient::run_loop() {
   assert(ret == 0);
 }
 
-void NetworkXioClient::send_msg(xio_msg_s *xmsg) {
+void NetworkXioClient::send_msg(MsgHeader *headerPtr) {
   int ret = 0;
   do {
-    ret = xio_send_request(conn, &xmsg->xreq);
+    ret = xio_send_request(conn, &headerPtr->xreq);
     // TODO resend on approp xio_errno
-    // update_stats(const_cast<void *>(req->opaque), true);
-    // ovs_xio_aio_complete_request(const_cast<void *>(req->opaque), -1, EIO)
-    // delete req;
-    //
-    NetworkXioMsg& net_msg = xmsg->msg;
-    const size_t numElem = net_msg.opaqueVec_.size();
+    NetworkXioMsg& net_msg = headerPtr->msg;
+    const size_t numElem = net_msg.numElems_;
     {
       if (ret < 0) { 
         for (size_t idx = 0; idx < numElem; idx ++) {
-          void* aio_req = const_cast<void *>(xmsg->opaque);
+          void* aio_req = const_cast<void *>(headerPtr->aioReqVec_[idx]);
           update_stats(aio_req, true);
           ovs_xio_aio_complete_request(aio_req, -1, EIO);
         }
-        delete xmsg;
+        delete headerPtr;
       } else {
         nr_req_queue -= numElem; 
         stats.num_queued += numElem;
@@ -439,28 +432,61 @@ void NetworkXioClient::send_msg(xio_msg_s *xmsg) {
   } while (0);
 }
 
+void NetworkXioClient::send_multi_read_request(const std::vector<std::string> &filenameVec, 
+    const std::vector<void *>   &bufVec,
+    const std::vector<uint64_t> &sizeVec,
+    const std::vector<uint64_t> &offsetVec,
+    const std::vector<void *>   &aioReqVec)
+{
+  MsgHeader *headerPtr = new MsgHeader;
+  headerPtr->aioReqVec_ = aioReqVec;
+
+  NetworkXioMsg& net_msg = headerPtr->msg;
+  net_msg.opcode(NetworkXioMsgOpcode::ReadReq);
+  net_msg.headerPtr_ = reinterpret_cast<uintptr_t>(headerPtr);
+
+  const size_t numElems = filenameVec.size();
+  net_msg.numElems_ = numElems;
+  assert(numElems <= XIO_IOVLEN);
+  vmsg_sglist_set_nents(&headerPtr->xreq.in, numElems);
+
+  net_msg.sizeVec_ = sizeVec;
+  net_msg.offsetVec_ = offsetVec;
+  net_msg.filenameVec_ = filenameVec;
+
+  for (size_t idx = 0; idx < numElems; idx ++) {
+    headerPtr->xreq.in.data_iov.sglist[idx].iov_base = bufVec[idx];
+    headerPtr->xreq.in.data_iov.sglist[idx].iov_len = sizeVec[idx];
+  }
+
+  headerPtr->prepare();
+  send_msg(headerPtr);
+}
+
 void NetworkXioClient::send_read_request(const std::string &filename,
                                              void *buf,
                                              const uint64_t size_in_bytes,
                                              const uint64_t offset_in_bytes,
-                                             const void *opaque) {
+                                             void *aioReqPtr) {
   XXEnter();
-  xio_msg_s *xmsg = new xio_msg_s;
-  xmsg->opaque = opaque;
-  NetworkXioMsg& net_msg = xmsg->msg;
+  MsgHeader *headerPtr = new MsgHeader;
+  headerPtr->aioReqVec_.push_back(aioReqPtr);
+
+  NetworkXioMsg& net_msg = headerPtr->msg;
   net_msg.opcode(NetworkXioMsgOpcode::ReadReq);
-  net_msg.opaqueVec_.push_back((uintptr_t)xmsg);
+  net_msg.headerPtr_ = (uintptr_t)headerPtr;
   net_msg.sizeVec_.push_back(size_in_bytes);
   net_msg.offsetVec_.push_back(offset_in_bytes);
   net_msg.filenameVec_.push_back(filename);
+  net_msg.numElems_ = 1;
 
-  msg_prepare(xmsg);
+  headerPtr->prepare();
 
   // TODO_MULTI add vector to sglist
-  vmsg_sglist_set_nents(&xmsg->xreq.in, 1);
-  xmsg->xreq.in.data_iov.sglist[0].iov_base = buf;
-  xmsg->xreq.in.data_iov.sglist[0].iov_len = size_in_bytes;
-  send_msg(xmsg);
+  vmsg_sglist_set_nents(&headerPtr->xreq.in, 1);
+  headerPtr->xreq.in.data_iov.sglist[0].iov_base = buf;
+  headerPtr->xreq.in.data_iov.sglist[0].iov_len = size_in_bytes;
+  send_msg(headerPtr);
 }
 
 int NetworkXioClient::on_response(xio_session *session __attribute__((unused)),
@@ -482,20 +508,21 @@ int NetworkXioClient::on_response(xio_session *session __attribute__((unused)),
   vmsg_sglist_set_nents(&reply->in, 0);
   xio_release_response(reply);
 
-  const size_t numElems = imsg.opaqueVec_.size();
+  const size_t numElems = imsg.numElems_;
   {
+    MsgHeader *headerPtr = reinterpret_cast<MsgHeader *>(imsg.headerPtr_);
+
     for (size_t idx = 0; idx < numElems; idx ++) {
-      xio_msg_s *xmsg = reinterpret_cast<xio_msg_s *>(imsg.opaqueVec_[idx]);
   
-      void* aio_req = const_cast<void *>(xmsg->opaque);
+      void* aio_req = headerPtr->aioReqVec_[idx];
       update_stats(aio_req, (imsg.retvalVec_[idx] < 0));
       ovs_xio_aio_complete_request(aio_req,
                                 imsg.retvalVec_[idx], 
                                 imsg.errvalVec_[idx]);
-      // the xmsg must be freed after xio_release_response()
-      // otherwise its a memory corruption bug
-      delete xmsg;
     }
+    // the headerPtr must be freed after xio_release_response()
+    // otherwise its a memory corruption bug
+    delete headerPtr;
   }
  
   nr_req_queue += numElems;
@@ -504,16 +531,17 @@ int NetworkXioClient::on_response(xio_session *session __attribute__((unused)),
   return 0;
 }
 
-void NetworkXioClient::msg_prepare(xio_msg_s *xmsg) {
+void NetworkXioClient::MsgHeader::prepare() {
   XXEnter();
-  xmsg->s_msg = xmsg->msg.pack_msg();
+  s_msg = msg.pack_msg();
 
-  memset(static_cast<void *>(&xmsg->xreq), 0, sizeof(xio_msg));
+  memset(static_cast<void *>(&xreq), 0, sizeof(xio_msg));
 
-  vmsg_sglist_set_nents(&xmsg->xreq.out, 0);
-  xmsg->xreq.out.header.iov_base = (void *)xmsg->s_msg.c_str();
-  xmsg->xreq.out.header.iov_len = xmsg->s_msg.length();
+  vmsg_sglist_set_nents(&xreq.out, 0);
+  xreq.out.header.iov_base = (void *)s_msg.c_str();
+  xreq.out.header.iov_len = s_msg.length();
   XXExit();
 }
+
 }
 } // namespace gobjfs

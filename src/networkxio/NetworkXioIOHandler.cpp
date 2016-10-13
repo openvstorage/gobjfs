@@ -44,12 +44,10 @@ namespace xio {
 void NetworkXioRequest::pack_msg() {
   GLOG_DEBUG(" packing msg for req=" << (void*)this);
   NetworkXioMsg replyHeader(this->op);
-  const size_t numElems = opaqueVec_.size();
-  for (size_t idx = 0; idx < numElems; idx ++) {
-    replyHeader.retvalVec_.push_back(this->retvalVec_[idx]);
-    replyHeader.errvalVec_.push_back(this->errvalVec_[idx]);
-    replyHeader.opaqueVec_.push_back(this->opaqueVec_[idx]);
-  }
+  replyHeader.numElems_ = this->numElems_;
+  replyHeader.retvalVec_ = this->retvalVec_;
+  replyHeader.errvalVec_ = this->errvalVec_;
+  replyHeader.headerPtr_ = this->headerPtr_;
   s_msg = replyHeader.pack_msg();
 }
 
@@ -203,9 +201,9 @@ int NetworkXioIOHandler::runEventHandler(gIOStatus& iostatus) {
                                           << iostatus.completionId);
     }
 
-    req->completeElems ++;
+    req->completeElems_ ++;
     // if all in batch done, then pack and send reply
-    if (req->completeElems == req->numElems) {
+    if (req->completeElems_ == req->numElems_) {
       req->pack_msg();
       pt_->server_->send_reply(req);
     }
@@ -302,24 +300,24 @@ int NetworkXioIOHandler::handle_multi_read(NetworkXioRequest *req,
                                      NetworkXioMsg& msg) {
 
   req->op = NetworkXioMsgOpcode::ReadRsp;
-  req->numElems = msg.filenameVec_.size();
+  req->numElems_ = msg.numElems_;
+  req->headerPtr_ = msg.headerPtr_;
 
-  GLOG_DEBUG("ReadReq req=" << (void*)req << " numelem=" << req->numElems);
+  GLOG_DEBUG("ReadReq req=" << (void*)req << " numelem=" << req->numElems_);
 
-  for (size_t idx = 0; idx < req->numElems; idx ++) {
-    req->opaqueVec_.push_back(msg.opaqueVec_[idx]);
+  for (size_t idx = 0; idx < req->numElems_; idx ++) {
     int ret = handle_read(req, msg.filenameVec_[idx], 
         msg.sizeVec_[idx],
         msg.offsetVec_[idx]);
     if (ret < 0) {
-      req->completeElems ++;
+      req->completeElems_ ++;
     } else {
 #ifdef BYPASS_READ
-      req->completeElems ++;
+      req->completeElems_ ++;
 #endif
     }
   }
-  if (req->numElems == req->completeElems) {
+  if (req->numElems_ == req->completeElems_) {
     // if all requests finished right now, lets pack em
     req->pack_msg();
     return -1;

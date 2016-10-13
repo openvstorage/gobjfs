@@ -136,6 +136,7 @@ void PortalThreadData::portal_func() {
     (void) numEvents;
   }
 
+  delete ioh_;
 
   xio_context_del_ev_handler(ctx_, evfd_);
 
@@ -150,8 +151,6 @@ void PortalThreadData::portal_func() {
 }
 
 PortalThreadData::~PortalThreadData() {
-  delete ioh_;
-  // TODO free others
 }
 
 }
