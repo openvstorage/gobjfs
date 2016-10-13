@@ -114,7 +114,7 @@ private:
   // one for each portal
   // not using smart ptrs because it will interfere with accelio shutdown logic
   // TODO : free this memory 
-  std::vector<PortalThreadData*> ptVec_;
+  std::vector<std::unique_ptr<PortalThreadData>> ptVec_;
 
   int32_t startCoreForIO_{0};
   int32_t numCoresForIO_{0};
