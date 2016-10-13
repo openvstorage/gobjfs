@@ -23,7 +23,7 @@ but WITHOUT ANY WARRANTY of any kind.
 #include <networkxio/gobjfs_client_common.h>
 #include <gobjfs_client.h>
 #include <networkxio/NetworkXioCommon.h>
-#include "context.h"
+#include "NetworkXioClient.h"
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
@@ -38,6 +38,17 @@ but WITHOUT ANY WARRANTY of any kind.
 
 namespace gobjfs {
 namespace xio {
+
+struct client_ctx {
+  TransportType transport;
+  std::string host;
+  int port{-1};
+  std::string uri;
+  gobjfs::xio::NetworkXioClientPtr net_client_;
+
+  ~client_ctx() { net_client_.reset(); }
+};
+
 
 client_ctx_attr_ptr ctx_attr_new() {
   try {
@@ -163,6 +174,31 @@ bool ctx_is_disconnected(client_ctx_ptr ctx) {
     return ctx->net_client_->is_disconnected();
   } else {
     return true;
+  }
+}
+
+static aio_request *create_new_request(RequestOp op, struct giocb *aio,
+                                       notifier_sptr cvp, completion *cptr) {
+  try {
+    aio_request *request = new aio_request;
+    request->_op = op;
+    request->giocbp = aio;
+    request->cptr = cptr;
+    /*cnanakos TODO: err handling */
+    request->_on_suspend = false;
+    request->_canceled = false;
+    request->_completed = false;
+    request->_signaled = false;
+    request->_rv = 0;
+    request->_cvp = cvp;
+    request->_rtt_nanosec = 0;
+    if (aio and op != RequestOp::Noop) {
+      aio->request_ = request;
+    }
+    return request;
+  } catch (const std::bad_alloc &) {
+    GLOG_ERROR("malloc for aio_request failed");
+    return NULL;
   }
 }
 
