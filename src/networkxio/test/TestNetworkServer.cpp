@@ -90,48 +90,20 @@ public:
 
   void createDataFile() {
 
-    gMempool_init(gobjfs::os::DirectIOSize);
+    int fd = creat(testDataFileFullName.c_str(), S_IRUSR | S_IWUSR);
+    EXPECT_GE(fd, 0);
 
-    auto serviceHandle =
-        IOExecFileServiceInit(configFile, fileTranslatorFunc, true);
-
-    ssize_t ret;
-
-    auto evHandle = IOExecEventFdOpen(serviceHandle);
-    EXPECT_NE(evHandle, nullptr);
-
-    auto readFd = IOExecEventFdGetReadFd(evHandle);
-    EXPECT_NE(fd, gobjfs::os::FD_INVALID);
-
-    auto fileHandle =
-        IOExecFileOpen(serviceHandle, testDataFileName.c_str(),
-                       testDataFileName.size(), O_CREAT | O_WRONLY);
-
-    auto batch = gIOBatchAlloc(1);
-    gIOExecFragment &frag = batch->array[0];
-    frag.offset = 0;
     const size_t bufSize = 65536 * 1024;
-    frag.size = bufSize;
-    frag.addr = (char *)gMempool_alloc(bufSize);
-    memset(frag.addr, 'a', bufSize);
-    frag.completionId = reinterpret_cast<uint64_t>(batch);
+    char* buf = (char*)malloc(bufSize);
+    memset(buf, 'a', bufSize);
 
-    ret = IOExecFileWrite(fileHandle, batch, evHandle);
+    ssize_t ret = write(fd, buf, bufSize);
+    EXPECT_EQ(ret, bufSize);
+
+    free(buf);
+
+    ret = close(fd);
     EXPECT_EQ(ret, 0);
-
-    gIOStatus ioStatus;
-    ret = ::read(readFd, &ioStatus, sizeof(ioStatus));
-    EXPECT_EQ(ret, sizeof(ioStatus));
-    EXPECT_EQ(ioStatus.errorCode, 0);
-    EXPECT_EQ(ioStatus.completionId, reinterpret_cast<uint64_t>(batch));
-
-    gIOBatchFree(batch);
-
-    IOExecFileClose(fileHandle);
-
-    IOExecEventFdClose(evHandle);
-
-    IOExecFileServiceDestroy(serviceHandle);
   }
 
   void removeDataFile(bool check = true) {
@@ -326,7 +298,8 @@ TEST_F(NetworkXioServerTest, SyncRead) {
   removeDataFile();
 
   auto stats_string = ctx_get_stats(ctx);
-  auto expected_str = "num_queued=" + std::to_string(times + 1);
+  auto expected_str = "num_queued=" + std::to_string(times);
+  std::cerr << stats_string << std::endl;
   EXPECT_NE(stats_string.find(expected_str), std::string::npos);
   EXPECT_NE(stats_string.find("num_failed=0"), std::string::npos);
 
@@ -390,7 +363,7 @@ TEST_F(NetworkXioServerTest, AsyncRead) {
   removeDataFile();
 
   auto stats_string = ctx_get_stats(ctx);
-  auto expected_str = "num_queued=" + std::to_string(times + 1);
+  auto expected_str = "num_queued=" + std::to_string(times);
   EXPECT_NE(stats_string.find(expected_str), std::string::npos);
   EXPECT_NE(stats_string.find("num_failed=0"), std::string::npos);
 
@@ -454,7 +427,7 @@ TEST_F(NetworkXioServerTest, MultiAsyncRead) {
   removeDataFile();
 
   auto stats_string = ctx_get_stats(ctx);
-  auto expected_str = "num_queued=" + std::to_string(times + 1);
+  auto expected_str = "num_queued=" + std::to_string(times);
   EXPECT_NE(stats_string.find(expected_str), std::string::npos);
   EXPECT_NE(stats_string.find("num_failed=0"), std::string::npos);
 
