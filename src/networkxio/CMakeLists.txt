@@ -21,11 +21,11 @@ set_property(TARGET ${gobjfs_client} PROPERTY POSITION_INDEPENDENT_CODE 1)
 
 add_library(gobjfs_client_shared SHARED $<TARGET_OBJECTS:gobjfs_client>)
 set_target_properties(gobjfs_client_shared PROPERTIES OUTPUT_NAME gobjfs_client)
-target_link_libraries(gobjfs_client_shared ${LIBRARY_LIST})
+target_link_libraries(gobjfs_client_shared ${LIBRARY_LIST} gobjfs_shared)
 
 add_library(gobjfs_client_static STATIC $<TARGET_OBJECTS:gobjfs_client>)
 set_target_properties(gobjfs_client_static PROPERTIES OUTPUT_NAME gobjfs_client)
-target_link_libraries(gobjfs_client_static ${LIBRARY_LIST})
+target_link_libraries(gobjfs_client_static ${LIBRARY_LIST} gobjfs_static)
 
 # install library under install_dir/lib
 install(TARGETS gobjfs_client_shared
@@ -49,11 +49,11 @@ set_property(TARGET ${gobjfs_server} PROPERTY POSITION_INDEPENDENT_CODE 1)
 
 add_library(gobjfs_server_shared SHARED $<TARGET_OBJECTS:gobjfs_server>)
 set_target_properties(gobjfs_server_shared PROPERTIES OUTPUT_NAME gobjfs_server)
-target_link_libraries(gobjfs_server_shared ${LIBRARY_LIST})
+target_link_libraries(gobjfs_server_shared ${LIBRARY_LIST} gobjfs_shared)
 
 add_library(gobjfs_server_static STATIC $<TARGET_OBJECTS:gobjfs_server>)
 set_target_properties(gobjfs_server_static PROPERTIES OUTPUT_NAME gobjfs_server)
-target_link_libraries(gobjfs_server_static ${LIBRARY_LIST})
+target_link_libraries(gobjfs_server_static ${LIBRARY_LIST} gobjfs_static)
 
 # install library under install_dir/lib
 install(TARGETS gobjfs_server_shared
