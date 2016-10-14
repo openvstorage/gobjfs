@@ -40,10 +40,8 @@ namespace gobjfs {
 namespace xio {
 
 struct client_ctx {
-  TransportType transport;
-  std::string host;
-  int port{-1};
-  std::string uri;
+  std::vector<client_ctx_attr_ptr> attr_vec;
+  std::vector<std::string> uri_vec;
   gobjfs::xio::NetworkXioClientPtr net_client_;
 
   ~client_ctx() { net_client_.reset(); }
@@ -87,8 +85,27 @@ int ctx_attr_set_transport(client_ctx_attr_ptr attr,
   return -1;
 }
 
+client_ctx_ptr ctx_new(const std::vector<client_ctx_attr_ptr> &attr_vec) {
+
+  client_ctx_ptr ctx = std::make_shared<client_ctx>();
+  ctx->attr_vec = attr_vec;
+
+  for (auto& attr: attr_vec) {
+    if (attr->transport != TransportType::TCP &&
+        attr->transport != TransportType::RDMA) {
+      errno = EINVAL;
+      ctx = nullptr;
+      break;
+    }
+
+    std::string uri = "tcp://" + attr->host + ":" + std::to_string(attr->port);
+    ctx->uri_vec.push_back(uri);
+  }
+
+  return ctx;
+}
+
 client_ctx_ptr ctx_new(const client_ctx_attr_ptr attr) {
-  client_ctx_ptr ctx = nullptr;
 
   if (not attr) {
     errno = EINVAL;
@@ -101,55 +118,59 @@ client_ctx_ptr ctx_new(const client_ctx_attr_ptr attr) {
     return nullptr;
   }
 
+  client_ctx_ptr ctx = nullptr;
+
   try {
     ctx = std::make_shared<client_ctx>();
-    ctx->transport = attr->transport;
-    ctx->host = attr->host;
-    ctx->port = attr->port;
+    ctx->attr_vec.push_back(attr);
     ctx->net_client_ = nullptr;
   } catch (const std::bad_alloc &) {
     errno = ENOMEM;
     return nullptr;
   }
 
-  switch (ctx->transport) {
-  case TransportType::TCP:
-    ctx->uri = "tcp://" + ctx->host + ":" + std::to_string(ctx->port);
-    break;
-  case TransportType::RDMA:
-    ctx->uri = "rdma://" + ctx->host + ":" + std::to_string(ctx->port);
-    break;
-  case TransportType::SharedMemory:
-  case TransportType::Error: /* already catched */
-    errno = EINVAL;
-    return nullptr;
+  switch (attr->transport) {
+    case TransportType::TCP: {
+      std::string uri = "tcp://" + attr->host + ":" + std::to_string(attr->port);
+      ctx->uri_vec.push_back(uri);
+      break;
+    }
+    case TransportType::RDMA: {
+      std::string uri = "rdma://" + attr->host + ":" + std::to_string(attr->port);
+      ctx->uri_vec.push_back(uri);
+      break;
+    }
+    default: {
+      errno = EINVAL;
+      ctx = nullptr;
+    }
   }
   return ctx;
 }
 
 int ctx_init(client_ctx_ptr ctx) {
+
   int err = 0;
-  XXEnter();
 
   if (!ctx) {
     errno = EINVAL;
     return -1;
   }
 
-  if (ctx->transport == TransportType::RDMA ||
-      ctx->transport == TransportType::TCP) {
-    try {
-      ctx->net_client_ =
-          std::make_shared<gobjfs::xio::NetworkXioClient>(256);
-      err = ctx->net_client_->connect(ctx->uri);
-    } catch (...) {
-      XXExit();
-      err = -EIO;
-      XXDone();
+  try {
+    ctx->net_client_ =
+        std::make_shared<gobjfs::xio::NetworkXioClient>(256);
+
+    for (auto& uri : ctx->uri_vec) { 
+      err = ctx->net_client_->connect(uri);
+      if (err != 0) {
+        break;
+      }
     }
+  } catch (...) {
+    err = -EIO;
   }
-done:
-  XXExit();
+
   return err;
 }
 
@@ -205,7 +226,8 @@ static aio_request *create_new_request(RequestOp op, struct giocb *aio,
 
 static int _submit_aio_request(client_ctx_ptr ctx, const std::string &filename,
                                giocb *giocbp, notifier_sptr &cvp,
-                               completion *completion, const RequestOp &op) {
+                               completion *completion, const RequestOp &op,
+                               int32_t uri_slot) {
   XXEnter();
   int r = 0;
   gobjfs::xio::NetworkXioClientPtr net_client = ctx->net_client_;
@@ -244,7 +266,8 @@ static int _submit_aio_request(client_ctx_ptr ctx, const std::string &filename,
     try {
       net_client->send_read_request(filename, giocbp->aio_buf,
                                         giocbp->aio_nbytes, giocbp->aio_offset,
-                                        reinterpret_cast<void *>(request));
+                                        reinterpret_cast<void *>(request),
+                                        uri_slot);
 
       request->_timer.reset();
     } catch (const std::bad_alloc &) {
@@ -508,15 +531,15 @@ int aio_release_completion(completion *completion) {
   return 0;
 }
 
-int aio_read(client_ctx_ptr ctx, const std::string &filename, giocb *giocbp) {
+int aio_read(client_ctx_ptr ctx, const std::string &filename, giocb *giocbp, int32_t uri_slot) {
   auto cv = std::make_shared<notifier>();
 
   return _submit_aio_request(ctx, filename, giocbp, cv, nullptr,
-                             RequestOp::Read);
+                             RequestOp::Read, uri_slot);
 }
 
 int aio_readv(client_ctx_ptr ctx, const std::vector<std::string> &filename_vec,
-              const std::vector<giocb *> &giocbp_vec) {
+              const std::vector<giocb *> &giocbp_vec, int32_t uri_slot) {
   int err = 0;
 
   if (filename_vec.size() != giocbp_vec.size()) {
@@ -532,22 +555,22 @@ int aio_readv(client_ctx_ptr ctx, const std::vector<std::string> &filename_vec,
   size_t idx = 0;
   for (auto elem : giocbp_vec) {
     err |= _submit_aio_request(ctx, filename_vec[idx++], elem, cv, nullptr,
-                               RequestOp::Read);
+                               RequestOp::Read, uri_slot);
   }
 
   return err;
 }
 
 int aio_readcb(client_ctx_ptr ctx, const std::string &filename, giocb *giocbp,
-               completion *completion) {
+               completion *completion, int32_t uri_slot) {
   auto cv = std::make_shared<notifier>();
 
   return _submit_aio_request(ctx, filename, giocbp, cv, completion,
-                             RequestOp::Read);
+                             RequestOp::Read, uri_slot);
 }
 
 ssize_t read(client_ctx_ptr ctx, const std::string &filename, void *buf,
-             size_t nbytes, off_t offset) {
+             size_t nbytes, off_t offset, int32_t uri_slot) {
   ssize_t r;
   giocb aio;
   aio.aio_buf = buf;
@@ -558,7 +581,7 @@ ssize_t read(client_ctx_ptr ctx, const std::string &filename, void *buf,
     return (r = -1);
   }
 
-  if ((r = aio_read(ctx, filename, &aio)) < 0) {
+  if ((r = aio_read(ctx, filename, &aio, uri_slot)) < 0) {
     return r;
   }
 

@@ -78,6 +78,13 @@ int ctx_attr_set_transport(client_ctx_attr_ptr attr,
 client_ctx_ptr ctx_new(const client_ctx_attr_ptr attr);
 
 /*
+ * Create gobjfs xio context
+ * @param attr_vec: Context attributes object
+ * @return: gobjfs xio context on success, or NULL on fail
+ */
+client_ctx_ptr ctx_new(const std::vector<client_ctx_attr_ptr> &attr_vec);
+
+/*
  * Initialize gobjfs xio context to talk to server
  * @param ctx: gobjfs xio context
  * @return: zero on success, or error code on fail
@@ -132,10 +139,11 @@ int gbuffer_deallocate(client_ctx_ptr ctx, gbuffer *ptr);
  * @param buf: Shared memory buffer
  * @param nbytes: Size to read in bytes
  * @param offset: Offset to read in volume
+ * @param uri_slot : which uri to send request
  * @return: Number of bytes actually read, -1 on fail
  */
 ssize_t read(client_ctx_ptr ctx, const std::string &filename, void *buf,
-             size_t nbytes, off_t offset);
+             size_t nbytes, off_t offset, int32_t uri_slot = 0);
 
 /*
  * Suspend until asynchronous I/O operation or timeout complete
@@ -193,9 +201,10 @@ int aio_finish(client_ctx_ptr ctx, giocb *giocbp);
  * @param ctx: gobjfs xio context
  * @param filename: filenames on which to read
  * @param giocb: Pointer to an AIO Control Block structure
+ * @param uri_slot : which uri to send request
  * @return: 0 on success, -1 on fail
  */
-int aio_read(client_ctx_ptr ctx, const std::string &filename, giocb *giocbp);
+int aio_read(client_ctx_ptr ctx, const std::string &filename, giocb *giocbp, int32_t uri_slot = 0);
 
 /*
  * Asynchronous readv from a volume
@@ -203,20 +212,22 @@ int aio_read(client_ctx_ptr ctx, const std::string &filename, giocb *giocbp);
  * @param filename_vec: Pointer to vector of filenames to read
  * @param giocb_vec: Pointer to vector of AIO Control Block structure
  *   this vector and filename_vec must be same size
+ * @param uri_slot : which uri to send request
  * @return: 0 on success, -1 on fail
  */
 int aio_readv(client_ctx_ptr ctx, const std::vector<std::string> &filename_vec,
-              const std::vector<giocb *> &giocbp_vec);
+              const std::vector<giocb *> &giocbp_vec, int32_t uri_slot = 0);
 
 /*
  * Asynchronous read from a volume with completion
  * @param ctx: gobjfs xio context
  * @param giocb: Pointer to an AIO Control Block structure
  * @param completion: Pointer to a completion structure
+ * @param uri_slot : which uri to send request
  * @return: 0 on success, -1 on fail
  */
 int aio_readcb(client_ctx_ptr ctx, const std::string &filename, giocb *giocbp,
-               completion *completion);
+               completion *completion, int32_t uri_slot = 0);
 
 /*
  * Create a new completion
