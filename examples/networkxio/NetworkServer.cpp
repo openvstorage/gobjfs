@@ -47,11 +47,11 @@ int main(int argc, char *argv[]) {
   // log files are in /tmp
   // google::InitGoogleLogging(argv[0]); TODO logging
 
-  std::string configFileName = "./gioexecfile.conf";
+  int port = 21321;
   bool newInstance = true;
 
   if (argc > 1) {
-    configFileName = argv[1];
+    port = atoi(argv[1]);
   }
 
   std::promise<void> _pr;
@@ -59,8 +59,7 @@ int main(int argc, char *argv[]) {
   FileTranslatorFunc fileTranslatorFunc{nullptr};
 
   NetworkXioServer *xs =
-      new NetworkXioServer("tcp", "127.0.0.1", 21321, 1, 2, 200, fileTranslatorFunc, newInstance);
-  
+      new NetworkXioServer("tcp", "127.0.0.1", port, 1, 2, 200, fileTranslatorFunc, newInstance);
 
   xs->run(_pr);
 }

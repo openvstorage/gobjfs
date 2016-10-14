@@ -73,13 +73,15 @@ public:
   void send_read_request(const std::string &filename, void *buf,
                              const uint64_t size_in_bytes,
                              const uint64_t offset_in_bytes,
-                             void *opaque);
+                             void *opaque,
+                             int32_t uri_slot = 0);
 
   void send_multi_read_request(const std::vector<std::string> &filenameVec, 
       const std::vector<void *>   &bufVec,
       const std::vector<uint64_t> &sizeVec,
       const std::vector<uint64_t> &offsetVec,
-      const std::vector<void *>   &opaqueVec);
+      const std::vector<void *>   &opaqueVec,
+      int32_t uri_slot = 0);
 
   int on_session_event(xio_session *session,
                        xio_session_event_data *event_data);
@@ -111,12 +113,11 @@ public:
 
   void update_stats(void *req, bool req_failed);
 
-  const bool &is_disconnected() { return disconnected; }
+  bool is_disconnected(int32_t uri_slot);
 
-  void send_msg(ClientMsg *msgHeader);
+  void send_msg(ClientMsg *msgHeader, int32_t uri_slot = 0);
 
   void run_loop();
-
 
 private:
   std::shared_ptr<xio_context> ctx;
@@ -133,8 +134,6 @@ private:
   std::thread xio_thread_;
 
   xio_session_ops ses_ops;
-  bool disconnected{false};
-  bool disconnecting{false};
 
   int64_t availableRequests_{0};
 

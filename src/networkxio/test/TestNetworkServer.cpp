@@ -216,7 +216,7 @@ TEST_F(NetworkXioServerTest, AsyncFileDoesntExist) {
 
   int err = ctx_init(ctx);
   EXPECT_EQ(err, 0);
-  EXPECT_EQ(ctx_is_disconnected(ctx), false);
+  EXPECT_EQ(ctx_is_disconnected(ctx, 0), false);
 
   std::vector<giocb *> iocb_vec;
   std::vector<std::string> filename_vec;
@@ -256,7 +256,7 @@ TEST_F(NetworkXioServerTest, AsyncFileDoesntExist) {
   EXPECT_NE(stats_string.find(expected_str), std::string::npos);
 
   ctx.reset();
-  EXPECT_EQ(ctx_is_disconnected(ctx), true);
+  EXPECT_EQ(ctx_is_disconnected(ctx, 0), true);
 }
 
 TEST_F(NetworkXioServerTest, SyncRead) {
@@ -325,7 +325,7 @@ TEST_F(NetworkXioServerTest, AsyncRead) {
 
   int err = ctx_init(ctx);
   EXPECT_EQ(err, 0);
-  EXPECT_EQ(ctx_is_disconnected(ctx), false);
+  EXPECT_EQ(ctx_is_disconnected(ctx, 0), false);
 
   std::vector<giocb *> vec;
 
@@ -368,7 +368,7 @@ TEST_F(NetworkXioServerTest, AsyncRead) {
   EXPECT_NE(stats_string.find("num_failed=0"), std::string::npos);
 
   ctx.reset();
-  EXPECT_EQ(ctx_is_disconnected(ctx), true);
+  EXPECT_EQ(ctx_is_disconnected(ctx, 0), true);
 }
 
 TEST_F(NetworkXioServerTest, MultiAsyncRead) {
@@ -432,7 +432,7 @@ TEST_F(NetworkXioServerTest, MultiAsyncRead) {
   EXPECT_NE(stats_string.find("num_failed=0"), std::string::npos);
 
   ctx.reset();
-  EXPECT_EQ(ctx_is_disconnected(ctx), true);
+  EXPECT_EQ(ctx_is_disconnected(ctx, 0), true);
 }
 
 TEST_F(NetworkXioServerTest, CheckConnection) {
@@ -447,9 +447,9 @@ TEST_F(NetworkXioServerTest, CheckConnection) {
   int err = ctx_init(ctx);
   EXPECT_EQ(err, 0);
 
-  EXPECT_EQ(ctx_is_disconnected(ctx), false);
+  EXPECT_EQ(ctx_is_disconnected(ctx, 0), false);
 
   ctx.reset();
 
-  EXPECT_EQ(ctx_is_disconnected(ctx), true);
+  EXPECT_EQ(ctx_is_disconnected(ctx, 0), true);
 }
