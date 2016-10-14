@@ -44,10 +44,12 @@ MAKE_EXCEPTION(FailedRegisterEventHandler);
 extern void ovs_xio_aio_complete_request(void *request, ssize_t retval,
                                          int errval);
 
+typedef std::shared_ptr<xio_session> SessionPtr;
+
 class NetworkXioClient {
 public:
-  NetworkXioClient(const std::string &uri, const uint64_t qd);
-
+  NetworkXioClient(const uint64_t qd);
+  
   ~NetworkXioClient();
 
   struct ClientMsg {
@@ -89,6 +91,8 @@ public:
 
   void run();
 
+  int connect(const std::string& uri);
+
   static void destroy_ctx_shutdown(xio_context *ctx);
 
   struct statistics {
@@ -113,14 +117,17 @@ public:
 
   void run_loop();
 
+
 private:
   std::shared_ptr<xio_context> ctx;
-  std::shared_ptr<xio_session> session;
-  xio_connection *conn{nullptr};
+
+  std::vector<SessionPtr> sessionVec;
+  std::vector<xio_connection*> connVec;
+  std::vector<std::string> uriVec;
+
   xio_session_params params;
   xio_connection_params cparams;
 
-  std::string uri_;
   bool stopping{false};
   bool stopped{false};
   std::thread xio_thread_;

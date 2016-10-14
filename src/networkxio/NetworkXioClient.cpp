@@ -192,8 +192,8 @@ std::string NetworkXioClient::statistics::ToString() const {
   return s.str();
 }
 
-NetworkXioClient::NetworkXioClient(const std::string &uri, const uint64_t qd)
-    : uri_(uri), stopping(false), stopped(false), disconnected(false),
+NetworkXioClient::NetworkXioClient(const uint64_t qd)
+    : stopping(false), stopped(false), disconnected(false),
       disconnecting(false), nr_req_queue(qd) {
   XXEnter();
 
@@ -210,7 +210,6 @@ NetworkXioClient::NetworkXioClient(const std::string &uri, const uint64_t qd)
   params.type = XIO_SESSION_CLIENT;
   params.ses_ops = &ses_ops;
   params.user_context = this;
-  params.uri = uri_.c_str();
 
   int queue_depth = 2 * nr_req_queue;
 
@@ -240,7 +239,8 @@ void NetworkXioClient::run() {
               &xopt, sizeof(xopt));
 
   /** 
-   * set env var XIO_TRACE = 4 (XIO_LOG_LEVEL_DEBUG)
+   * set environment variable XIO_TRACE = [1-6] (higher is more log)
+   * or in program
    * xopt = XIO_LOG_LEVEL_DEBUG;
    * xio_set_opt(NULL, XIO_OPTLEVEL_ACCELIO, XIO_OPTNAME_LOG_LEVEL,
    *            &xopt, sizeof(xopt));
@@ -260,12 +260,16 @@ void NetworkXioClient::run() {
   if (ctx == nullptr) {
     throw XioClientCreateException("failed to create XIO context");
   }
+}
 
+
+int NetworkXioClient::connect(const std::string& uri) {
   //session = std::shared_ptr<xio_session>(xio_session_create(&params),
                                          //xio_session_destroy);
-  session = getSession(uri_, params);
+  params.uri = uri.c_str();
+  auto session = getSession(uri, params);
   if (session == nullptr) {
-    throw XioClientCreateException("failed to create XIO client");
+    throw XioClientCreateException("failed to create session for uri=" + uri);
   }
 
   cparams.session = session.get();
@@ -281,21 +285,30 @@ void NetworkXioClient::run() {
   cparams.conn_idx = gettid() % 20;
 #endif
 
-  conn = xio_connect(&cparams);
+  auto conn = xio_connect(&cparams);
   if (conn == nullptr) {
-    throw XioClientCreateException("failed to connect");
+    throw XioClientCreateException("failed to connect to uri=" + uri);
   }
+
+  uriVec.push_back(uri);
+  sessionVec.push_back(session);
+  connVec.push_back(conn);
+
+  return 0;
 }
 
 void NetworkXioClient::shutdown() {
-  GLOG_INFO("thread=" << gettid() << " disconnecting conn=" << conn);
-  xio_disconnect(conn);
-  if (not disconnected) {
-    disconnecting = true;
-    xio_context_run_loop(ctx.get(), XIO_INFINITE);
-  } else {
-    GLOG_INFO("thread=" << gettid() << " destroying conn=" << conn);
-    xio_connection_destroy(conn);
+
+  for (auto conn : connVec) { 
+    GLOG_INFO("thread=" << gettid() << " disconnecting conn=" << conn);
+    xio_disconnect(conn);
+    if (not disconnected) {
+      disconnecting = true;
+      xio_context_run_loop(ctx.get(), XIO_INFINITE);
+    } else {
+      GLOG_INFO("thread=" << gettid() << " destroying conn=" << conn);
+      xio_connection_destroy(conn);
+    }
   }
   //session.reset();
 }
@@ -412,7 +425,7 @@ void NetworkXioClient::run_loop() {
 void NetworkXioClient::send_msg(ClientMsg *msgPtr) {
   int ret = 0;
   do {
-    ret = xio_send_request(conn, &msgPtr->xreq);
+    ret = xio_send_request(connVec[0], &msgPtr->xreq);
     // TODO resend on approp xio_errno
     NetworkXioMsg& requestHeader = msgPtr->msg;
     const size_t numElem = requestHeader.numElems_;

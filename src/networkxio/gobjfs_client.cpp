@@ -140,7 +140,8 @@ int ctx_init(client_ctx_ptr ctx) {
       ctx->transport == TransportType::TCP) {
     try {
       ctx->net_client_ =
-          std::make_shared<gobjfs::xio::NetworkXioClient>(ctx->uri, 256);
+          std::make_shared<gobjfs::xio::NetworkXioClient>(256);
+      err = ctx->net_client_->connect(ctx->uri);
     } catch (...) {
       XXExit();
       err = -EIO;
