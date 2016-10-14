@@ -48,7 +48,7 @@ struct NetworkXioRequest {
   std::vector<ssize_t> retvalVec_;
   std::vector<int> errvalVec_;
 
-  uintptr_t headerPtr_; // header allocated on client side 
+  uintptr_t clientMsgPtr_; // ClientMsg allocated on client side 
   size_t numElems_{0};
   size_t completeElems_{0};
 

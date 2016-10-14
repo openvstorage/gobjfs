@@ -47,7 +47,7 @@ void NetworkXioRequest::pack_msg() {
   replyHeader.numElems_ = this->numElems_;
   replyHeader.retvalVec_ = this->retvalVec_;
   replyHeader.errvalVec_ = this->errvalVec_;
-  replyHeader.headerPtr_ = this->headerPtr_;
+  replyHeader.clientMsgPtr_ = this->clientMsgPtr_;
   msgpackBuffer = replyHeader.pack_msg();
 }
 
@@ -301,7 +301,7 @@ int NetworkXioIOHandler::handle_multi_read(NetworkXioRequest *req,
 
   req->op = NetworkXioMsgOpcode::ReadRsp;
   req->numElems_ = requestHeader.numElems_;
-  req->headerPtr_ = requestHeader.headerPtr_;
+  req->clientMsgPtr_ = requestHeader.clientMsgPtr_;
 
   GLOG_DEBUG("ReadReq req=" << (void*)req << " numelem=" << req->numElems_);
 

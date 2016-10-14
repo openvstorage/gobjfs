@@ -31,7 +31,7 @@ namespace xio {
  *  map to
  *      \
  *       \
- *      1 MsgHeader on NetworkXioClient
+ *      1 ClientMsg on NetworkXioClient
  *      map to
  *         \
  *          \
@@ -83,9 +83,9 @@ public:
   std::vector<ssize_t> retvalVec_;
   std::vector<int> errvalVec_;
   
-  // ptr to MsgHeader allocated on client-side
+  // ptr to ClientMsg allocated on client-side
   // sent from client to server and reflected back
-  uintptr_t headerPtr_{0};
+  uintptr_t clientMsgPtr_{0};
 
 public:
   NetworkXioMsg(const NetworkXioMsg& other) = delete;
@@ -121,7 +121,7 @@ public:
     opcode_ = NetworkXioMsgOpcode::Noop;
 
     numElems_ = 0;
-    headerPtr_ = 0;
+    clientMsgPtr_ = 0;
 
     filenameVec_.clear();
     sizeVec_.clear();
@@ -136,7 +136,7 @@ public:
       numElems_, 
       filenameVec_, sizeVec_, offsetVec_, 
       retvalVec_, errvalVec_, 
-      headerPtr_);
+      clientMsgPtr_);
 };
 }
 }

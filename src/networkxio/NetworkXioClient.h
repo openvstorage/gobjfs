@@ -50,7 +50,7 @@ public:
 
   ~NetworkXioClient();
 
-  struct MsgHeader {
+  struct ClientMsg {
     // header message actually sent to server
     xio_msg xreq;           
 
@@ -67,8 +67,6 @@ public:
 
     void prepare();
   };
-
-  void send_open_request(const void *opaque);
 
   void send_read_request(const std::string &filename, void *buf,
                              const uint64_t size_in_bytes,
@@ -111,7 +109,7 @@ public:
 
   const bool &is_disconnected() { return disconnected; }
 
-  void send_msg(MsgHeader *msgHeader);
+  void send_msg(ClientMsg *msgHeader);
 
   void run_loop();
 
