@@ -136,7 +136,7 @@ private:
   bool disconnected{false};
   bool disconnecting{false};
 
-  int64_t nr_req_queue{0};
+  int64_t availableRequests_{0};
 
   void xio_run_loop_worker(void *arg);
 

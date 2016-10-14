@@ -194,7 +194,7 @@ std::string NetworkXioClient::statistics::ToString() const {
 
 NetworkXioClient::NetworkXioClient(const uint64_t qd)
     : stopping(false), stopped(false), disconnected(false),
-      disconnecting(false), nr_req_queue(qd) {
+      disconnecting(false), availableRequests_(qd) {
   XXEnter();
 
   ses_ops.on_session_event = static_on_session_event<NetworkXioClient>;
@@ -211,7 +211,7 @@ NetworkXioClient::NetworkXioClient(const uint64_t qd)
   params.ses_ops = &ses_ops;
   params.user_context = this;
 
-  int queue_depth = 2 * nr_req_queue;
+  int queue_depth = 2 * availableRequests_;
 
   xrefcnt_init();
 
@@ -227,7 +227,7 @@ void NetworkXioClient::run() {
   xio_set_opt(NULL, XIO_OPTLEVEL_ACCELIO, XIO_OPTNAME_ENABLE_KEEPALIVE,
               &xopt, sizeof(xopt));
 
-  xopt = 2 * nr_req_queue;
+  xopt = 2 * availableRequests_;
   xio_set_opt(NULL, XIO_OPTLEVEL_ACCELIO, XIO_OPTNAME_SND_QUEUE_DEPTH_MSGS,
               &xopt, sizeof(xopt));
 
@@ -384,7 +384,7 @@ int NetworkXioClient::on_msg_error(xio_session *session __attribute__((unused)),
     ovs_xio_aio_complete_request(aio_req,
         responseHeader.retvalVec_[idx], 
         responseHeader.errvalVec_[idx]);
-    nr_req_queue++;
+    availableRequests_++;
   }
   delete msgPtr;
   return 0;
@@ -438,7 +438,7 @@ void NetworkXioClient::send_msg(ClientMsg *msgPtr) {
         }
         delete msgPtr;
       } else {
-        nr_req_queue -= numElem; 
+        availableRequests_ -= numElem; 
         stats.num_queued += numElem;
       }
     } 
@@ -538,7 +538,7 @@ int NetworkXioClient::on_response(xio_session *session __attribute__((unused)),
     delete msgPtr;
   }
  
-  nr_req_queue += numElems;
+  availableRequests_ += numElems;
   xio_context_stop_loop(ctx.get());
   XXExit();
   return 0;
