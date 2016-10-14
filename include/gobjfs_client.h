@@ -71,36 +71,36 @@ int ctx_attr_set_transport(client_ctx_attr_ptr attr,
                            std::string const &host, int port);
 
 /*
- * Create Open vStorage context
+ * Create gobjfs xio context
  * param attr: Context attributes object
- * return: Open vStorage context on success, or NULL on fail
+ * return: gobjfs xio context on success, or NULL on fail
  */
 client_ctx_ptr ctx_new(const client_ctx_attr_ptr attr);
 
 /*
- * Initialize Open vStorage context to talk to server
- * param ctx: Open vStorage context
- * return: Open vStorage context on success, or NULL on fail
+ * Initialize gobjfs xio context to talk to server
+ * param ctx: gobjfs xio context
+ * return: zero on success, or error code on fail
  */
 int ctx_init(client_ctx_ptr ctx);
 
 /**
  * Get stats for this connection
- * param ctx : Open vStorage context
+ * param ctx : gobjfs xio context
  * return : statistics on read requests
  */
 std::string ctx_get_stats(client_ctx_ptr ctx);
 
 /*
  * Check connection status
- * param ctx: Open vStorage context
+ * param ctx: gobjfs xio context
  * return: True if the client has been disconnected, false otherwise
  */
 bool ctx_is_disconnected(client_ctx_ptr ctx);
 
 /*
  * Allocate buffer from the shared memory segment
- * param ctx: Open vStorage context
+ * param ctx: gobjfs xio context
  * param size: Buffer size in bytes
  * return: Buffer pointer on success, or NULL on fail
  */
@@ -120,7 +120,7 @@ size_t gbuffer_size(gbuffer *ptr);
 
 /*
  * Deallocate previously allocated buffer
- * param ctx: Open vStorage context
+ * param ctx: gobjfs xio context
  * param shptr: Buffer pointer
  * return: 0 on success, -1 on fail
  */
@@ -128,7 +128,7 @@ int gbuffer_deallocate(client_ctx_ptr ctx, gbuffer *ptr);
 
 /*
  * Read from a volume
- * param ctx: Open vStorage context
+ * param ctx: gobjfs xio context
  * param buf: Shared memory buffer
  * param nbytes: Size to read in bytes
  * param offset: Offset to read in volume
@@ -139,7 +139,7 @@ ssize_t read(client_ctx_ptr ctx, const std::string &filename, void *buf,
 
 /*
  * Suspend until asynchronous I/O operation or timeout complete
- * param ctx: Open vStorage context
+ * param ctx: gobjfs xio context
  * param giocb: Pointer to an AIO Control Block structure
  * param timeout: Pointer to a timespec structure
  * return: 0 on success, -1 on fail
@@ -148,7 +148,7 @@ int aio_suspend(client_ctx_ptr ctx, giocb *giocb, const timespec *timeout);
 
 /*
  * Suspend until asynchronous I/O operation or timeout complete
- * param ctx: Open vStorage context
+ * param ctx: gobjfs xio context
  * param giocb_vec: Pointer to vector of AIO Control Block structure
  * param timeout: Pointer to a timespec structure
  * return: 0 on success, -1 on fail
@@ -158,7 +158,7 @@ int aio_suspendv(client_ctx_ptr ctx, const std::vector<giocb *> &giocbp_vec,
                  const timespec *timeout);
 /*
  * Retrieve error status of asynchronous I/O operation
- * param ctx: Open vStorage context
+ * param ctx: gobjfs xio context
  * param giocb: Pointer to an AIO Control Block structure
  * return: 0 on success, -1 on fail
  */
@@ -166,7 +166,7 @@ int aio_error(client_ctx_ptr ctx, giocb *giocbp);
 
 /*
  * Retrieve return status of asynchronous I/O operation
- * param ctx: Open vStorage context
+ * param ctx: gobjfs xio context
  * param giocb: Pointer to an AIO Control Block structure
  * return: Number of bytes returned based on the operation, -1 on fail
  */
@@ -174,7 +174,7 @@ ssize_t aio_return(client_ctx_ptr ctx, giocb *giocbp);
 
 /*
  * Cancel an oustanding asynchronous I/O operation
- * param ctx: Open vStorage context
+ * param ctx: gobjfs xio context
  * param giocb: Pointer to an AIO Control Block structure
  * return: 0 on success, -1 on fail
  */
@@ -182,7 +182,7 @@ int aio_cancel(client_ctx_ptr ctx, giocb *giocbp);
 
 /*
  * Finish an asynchronous I/O operation
- * param ctx: Open vStorage context
+ * param ctx: gobjfs xio context
  * param giocb: Pointer to an AIO Control Block structure
  * return: 0 on success, -1 on fail
  */
@@ -190,7 +190,7 @@ int aio_finish(client_ctx_ptr ctx, giocb *giocbp);
 
 /*
  * Asynchronous read from a volume
- * param ctx: Open vStorage context
+ * param ctx: gobjfs xio context
  * param filename: filenames on which to read
  * param giocb: Pointer to an AIO Control Block structure
  * return: 0 on success, -1 on fail
@@ -199,7 +199,7 @@ int aio_read(client_ctx_ptr ctx, const std::string &filename, giocb *giocbp);
 
 /*
  * Asynchronous readv from a volume
- * param ctx: Open vStorage context
+ * param ctx: gobjfs xio context
  * param filename_vec: Pointer to vector of filenames to read
  * param giocb_vec: Pointer to vector of AIO Control Block structure
  *   this vector and filename_vec must be same size
@@ -210,7 +210,7 @@ int aio_readv(client_ctx_ptr ctx, const std::vector<std::string> &filename_vec,
 
 /*
  * Asynchronous read from a volume with completion
- * param ctx: Open vStorage context
+ * param ctx: gobjfs xio context
  * param giocb: Pointer to an AIO Control Block structure
  * param completion: Pointer to a completion structure
  * return: 0 on success, -1 on fail
