@@ -37,9 +37,9 @@ namespace xio {
 
 
 /**
- * two things have to be done after disk IO is done
- * 1. pack_msg
- * 2. xio_send_response
+ * two things have to be done to send the response to client
+ * 1. pack the header using msgpack (pack_msg)
+ * 2. xio_send_response(header + data buffer)
  */
 void NetworkXioRequest::pack_msg() {
   GLOG_DEBUG(" packing msg for req=" << (void*)this);
@@ -48,7 +48,7 @@ void NetworkXioRequest::pack_msg() {
   replyHeader.retvalVec_ = this->retvalVec_;
   replyHeader.errvalVec_ = this->errvalVec_;
   replyHeader.headerPtr_ = this->headerPtr_;
-  s_msg = replyHeader.pack_msg();
+  msgpackBuffer = replyHeader.pack_msg();
 }
 
 /** 
@@ -297,18 +297,18 @@ void NetworkXioIOHandler::runTimerHandler()
 }
 
 int NetworkXioIOHandler::handle_multi_read(NetworkXioRequest *req,
-                                     NetworkXioMsg& msg) {
+                                     NetworkXioMsg& requestHeader) {
 
   req->op = NetworkXioMsgOpcode::ReadRsp;
-  req->numElems_ = msg.numElems_;
-  req->headerPtr_ = msg.headerPtr_;
+  req->numElems_ = requestHeader.numElems_;
+  req->headerPtr_ = requestHeader.headerPtr_;
 
   GLOG_DEBUG("ReadReq req=" << (void*)req << " numelem=" << req->numElems_);
 
   for (size_t idx = 0; idx < req->numElems_; idx ++) {
-    int ret = handle_read(req, msg.filenameVec_[idx], 
-        msg.sizeVec_[idx],
-        msg.offsetVec_[idx]);
+    int ret = handle_read(req, requestHeader.filenameVec_[idx], 
+        requestHeader.sizeVec_[idx],
+        requestHeader.offsetVec_[idx]);
     if (ret < 0) {
       req->completeElems_ ++;
     } else {
@@ -421,9 +421,9 @@ bool NetworkXioIOHandler::process_request(NetworkXioRequest *req) {
   bool finishNow = true;
   xio_msg *xio_req = req->xio_req;
 
-  NetworkXioMsg i_msg(NetworkXioMsgOpcode::Noop);
+  NetworkXioMsg requestHeader(NetworkXioMsgOpcode::Noop);
   try {
-    i_msg.unpack_msg(static_cast<char *>(xio_req->in.header.iov_base),
+    requestHeader.unpack_msg(static_cast<char *>(xio_req->in.header.iov_base),
                      xio_req->in.header.iov_len);
   } catch (...) {
     GLOG_ERROR("cannot unpack message");
@@ -431,9 +431,9 @@ bool NetworkXioIOHandler::process_request(NetworkXioRequest *req) {
     return finishNow;
   }
 
-  switch (i_msg.opcode()) {
+  switch (requestHeader.opcode()) {
     case NetworkXioMsgOpcode::ReadReq: {
-      auto ret = handle_multi_read(req, i_msg);
+      auto ret = handle_multi_read(req, requestHeader);
       if (ret == 0) {
         finishNow = false;
       }
@@ -443,7 +443,7 @@ bool NetworkXioIOHandler::process_request(NetworkXioRequest *req) {
       break;
     }
     default:
-      GLOG_ERROR("Unknown command " << (int)i_msg.opcode());
+      GLOG_ERROR("Unknown command " << (int)requestHeader.opcode());
       handle_error(req, EIO);
   };
   return finishNow;

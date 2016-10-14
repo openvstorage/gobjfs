@@ -25,20 +25,43 @@ namespace gobjfs {
 namespace xio {
 
 /**
- * Data model
- *  n aio_request on client
- *    map to
+ *  DATA MODEL
+ *
+ *  N aio_request on NetworkXioClient
+ *  map to
  *      \
  *       \
- *      1 MsgHeader on client
- *       map to
+ *      1 MsgHeader on NetworkXioClient
+ *      map to
  *         \
  *          \
  *          1 NetworkXioMsg on transport
- *           map to
+ *          map to
  *             \
  *              \
- *              n NetworkXioRequest on server
+ *              N NetworkXioRequest on NetworkXioServer
+ *              map to
+ *               \
+ *                \
+ *                N gIOBatch on IOExecFile
+ *                map to
+ *                 \
+ *                  \
+ *                  N FilerJob on IOExecutor
+ */
+
+/**
+ * The header of the xio_msg is packed using msgpack
+ *   i.e. xio_msg.in.header.iov_base = (msgpack buffer)
+ * When the receiver unpack this header from an xio_msg, it does not know the opcode
+ * so it cannot tell apriori which structure is being unpacked.
+ *
+ * Therefore, all msgpack messages are unpacked into fields of one NetworkXioMsg.
+ * This is a single structure which is union of fields for all possible
+ * messages in the network protocol.
+ * While sending from client to server {filename, offset, size} are set
+ * When sending from server to client {errval, retval} are set
+ * This waste some spaces but not too much since the std::vectors are dynamically sized
  */
 
 class NetworkXioMsg {

@@ -62,7 +62,7 @@ struct NetworkXioRequest {
 
   void *private_data{nullptr};
 
-  std::string s_msg;         // msgpack buffer which is sent back as header
+  std::string msgpackBuffer;         // msgpack buffer which is sent back as header
 
   void pack_msg();
 

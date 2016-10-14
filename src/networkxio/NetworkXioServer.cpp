@@ -421,8 +421,8 @@ void NetworkXioServer::send_reply(NetworkXioRequest *req) {
   req->xio_reply.request = xio_req;
 
   req->xio_reply.out.header.iov_base =
-      const_cast<void *>(reinterpret_cast<const void *>(req->s_msg.c_str()));
-  req->xio_reply.out.header.iov_len = req->s_msg.length();
+      const_cast<void *>(reinterpret_cast<const void *>(req->msgpackBuffer.c_str()));
+  req->xio_reply.out.header.iov_len = req->msgpackBuffer.length();
 
   size_t numElems = 0;
   if (req->op == NetworkXioMsgOpcode::ReadRsp) {

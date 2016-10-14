@@ -333,10 +333,10 @@ void NetworkXioClient::update_stats(void *void_req, bool req_failed) {
 int NetworkXioClient::on_msg_error(xio_session *session __attribute__((unused)),
                                    xio_status error __attribute__((unused)),
                                    xio_msg_direction direction, xio_msg *msg) {
-  NetworkXioMsg imsg;
+  NetworkXioMsg responseHeader;
   if (direction == XIO_MSG_DIRECTION_OUT) {
     try {
-      imsg.unpack_msg(static_cast<const char *>(msg->out.header.iov_base),
+      responseHeader.unpack_msg(static_cast<const char *>(msg->out.header.iov_base),
                       msg->out.header.iov_len);
     } catch (...) {
       GLOG_ERROR("failed to unpack msg");
@@ -345,7 +345,7 @@ int NetworkXioClient::on_msg_error(xio_session *session __attribute__((unused)),
   } else /* XIO_MSG_DIRECTION_IN */
   {
     try {
-      imsg.unpack_msg(static_cast<const char *>(msg->in.header.iov_base),
+      responseHeader.unpack_msg(static_cast<const char *>(msg->in.header.iov_base),
                       msg->in.header.iov_len);
     } catch (...) {
       xio_release_response(msg);
@@ -358,19 +358,19 @@ int NetworkXioClient::on_msg_error(xio_session *session __attribute__((unused)),
     xio_release_response(msg);
   }
 
-  const size_t numElem = imsg.numElems_;
-  if ((numElem != imsg.errvalVec_.size()) || 
-      (numElem != imsg.retvalVec_.size())) {
+  const size_t numElem = responseHeader.numElems_;
+  if ((numElem != responseHeader.errvalVec_.size()) || 
+      (numElem != responseHeader.retvalVec_.size())) {
     return -1;
   }
-  MsgHeader *headerPtr = reinterpret_cast<MsgHeader *>(imsg.headerPtr_);
+  MsgHeader *headerPtr = reinterpret_cast<MsgHeader *>(responseHeader.headerPtr_);
   for (size_t idx = 0; idx < numElem; idx ++) {
 
     void* aio_req = const_cast<void *>(headerPtr->aioReqVec_[idx]);
     update_stats(aio_req, true);
     ovs_xio_aio_complete_request(aio_req,
-        imsg.retvalVec_[idx], 
-        imsg.errvalVec_[idx]);
+        responseHeader.retvalVec_[idx], 
+        responseHeader.errvalVec_[idx]);
     nr_req_queue++;
   }
   delete headerPtr;
@@ -493,9 +493,9 @@ int NetworkXioClient::on_response(xio_session *session __attribute__((unused)),
                                   xio_msg *reply,
                                   int last_in_rxq __attribute__((unused))) {
   XXEnter();
-  NetworkXioMsg imsg;
+  NetworkXioMsg responseHeader;
   try {
-    imsg.unpack_msg(static_cast<const char *>(reply->in.header.iov_base),
+    responseHeader.unpack_msg(static_cast<const char *>(reply->in.header.iov_base),
                     reply->in.header.iov_len);
   } catch (...) {
     GLOG_ERROR("failed to unpack msg");
@@ -508,17 +508,17 @@ int NetworkXioClient::on_response(xio_session *session __attribute__((unused)),
   vmsg_sglist_set_nents(&reply->in, 0);
   xio_release_response(reply);
 
-  const size_t numElems = imsg.numElems_;
+  const size_t numElems = responseHeader.numElems_;
   {
-    MsgHeader *headerPtr = reinterpret_cast<MsgHeader *>(imsg.headerPtr_);
+    MsgHeader *headerPtr = reinterpret_cast<MsgHeader *>(responseHeader.headerPtr_);
 
     for (size_t idx = 0; idx < numElems; idx ++) {
   
       void* aio_req = headerPtr->aioReqVec_[idx];
-      update_stats(aio_req, (imsg.retvalVec_[idx] < 0));
+      update_stats(aio_req, (responseHeader.retvalVec_[idx] < 0));
       ovs_xio_aio_complete_request(aio_req,
-                                imsg.retvalVec_[idx], 
-                                imsg.errvalVec_[idx]);
+                                responseHeader.retvalVec_[idx], 
+                                responseHeader.errvalVec_[idx]);
     }
     // the headerPtr must be freed after xio_release_response()
     // otherwise its a memory corruption bug
@@ -533,13 +533,13 @@ int NetworkXioClient::on_response(xio_session *session __attribute__((unused)),
 
 void NetworkXioClient::MsgHeader::prepare() {
   XXEnter();
-  s_msg = msg.pack_msg();
+  msgpackBuffer = msg.pack_msg();
 
   memset(static_cast<void *>(&xreq), 0, sizeof(xio_msg));
 
   vmsg_sglist_set_nents(&xreq.out, 0);
-  xreq.out.header.iov_base = (void *)s_msg.c_str();
-  xreq.out.header.iov_len = s_msg.length();
+  xreq.out.header.iov_base = (void *)msgpackBuffer.c_str();
+  xreq.out.header.iov_len = msgpackBuffer.length();
   XXExit();
 }
 

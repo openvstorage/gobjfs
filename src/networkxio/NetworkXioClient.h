@@ -63,7 +63,7 @@ public:
 
     // msgpack buffer generated from NetworkXioMsg
     // which is sent as header in xio_msg
-    std::string s_msg;
+    std::string msgpackBuffer;
 
     void prepare();
   };
