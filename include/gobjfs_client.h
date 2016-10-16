@@ -21,6 +21,7 @@ but WITHOUT ANY WARRANTY of any kind.
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <linux/limits.h>
 #include <stdint.h>
 #include <stdbool.h>
 #include <sys/types.h>
@@ -41,7 +42,12 @@ typedef std::shared_ptr<client_ctx_attr> client_ctx_attr_ptr;
 
 struct aio_request;
 
+/**
+ * encapsulates parameters for async IO
+ * read from this file, offset, size into buffer  
+ */
 struct giocb {
+  std::string filename;
   void *aio_buf;
   off_t aio_offset;
   size_t aio_nbytes;
@@ -200,24 +206,21 @@ int aio_finish(client_ctx_ptr ctx, giocb *giocbp);
 /**
  * Asynchronous read from a volume
  * @param ctx: gobjfs xio context
- * @param filename: filenames on which to read
  * @param giocb: Pointer to an AIO Control Block structure
  * @param uri_slot : which uri to send request
  * @return: 0 on success, -1 on fail
  */
-int aio_read(client_ctx_ptr ctx, const std::string &filename, giocb *giocbp, int32_t uri_slot = 0);
+int aio_read(client_ctx_ptr ctx, giocb *giocbp, int32_t uri_slot = 0);
 
 /**
  * Asynchronous readv from a volume
  * @param ctx: gobjfs xio context
- * @param filename_vec: Pointer to vector of filenames to read
  * @param giocb_vec: Pointer to vector of AIO Control Block structure
- *   this vector and filename_vec must be same size
  * @param uri_slot : which uri to send request
  * @return: 0 on success, -1 on fail
  */
-int aio_readv(client_ctx_ptr ctx, const std::vector<std::string> &filename_vec,
-              const std::vector<giocb *> &giocbp_vec, int32_t uri_slot = 0);
+int aio_readv(client_ctx_ptr ctx, 
+    const std::vector<giocb *> &giocbp_vec, int32_t uri_slot = 0);
 
 }
 }

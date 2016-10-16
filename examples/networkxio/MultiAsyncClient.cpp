@@ -51,7 +51,6 @@ void NetworkServerWriteReadTest() {
   for (int32_t uri_slot = 0; uri_slot < 2; uri_slot ++) {
 
     std::vector<giocb *> iocb_vec;
-    std::vector<std::string> filename_vec;
   
     for (int i = 0; i < times; i++) {
   
@@ -59,15 +58,15 @@ void NetworkServerWriteReadTest() {
       assert(rbuf != nullptr);
   
       giocb *iocb = (giocb *)malloc(sizeof(giocb));
+      iocb->filename = "abcd";
       iocb->aio_buf = rbuf;
       iocb->aio_offset = times * 4096;
       iocb->aio_nbytes = 4096;
   
       iocb_vec.push_back(iocb);
-      filename_vec.push_back("abcd");
     }
   
-    auto ret = aio_readv(ctx, filename_vec, iocb_vec, uri_slot);
+    auto ret = aio_readv(ctx, iocb_vec, uri_slot);
   
     if (ret == 0) {
       ret = aio_suspendv(ctx, iocb_vec, nullptr);

@@ -434,7 +434,7 @@ void NetworkXioClient::run_loop() {
 }
 
 bool NetworkXioClient::is_disconnected(int32_t uri_slot) {
-  return (connVec.at(uri_slot) != nullptr);
+  return (connVec.at(uri_slot) == nullptr);
 }
 
 void NetworkXioClient::send_msg(ClientMsg *msgPtr, int32_t uri_slot) {

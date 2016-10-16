@@ -205,7 +205,7 @@ TEST_F(NetworkXioServerTest, AsyncFileDoesntExist) {
   // shorten read size to test unaligned reads
   static constexpr size_t ShortenSize = 10;
 
-  size_t times = 10;
+  size_t times = 4;
 
   auto ctx_attr = ctx_attr_new();
 
@@ -219,36 +219,37 @@ TEST_F(NetworkXioServerTest, AsyncFileDoesntExist) {
   EXPECT_EQ(ctx_is_disconnected(ctx, 0), false);
 
   std::vector<giocb *> iocb_vec;
-  std::vector<std::string> filename_vec;
 
   size_t readSz = BufferSize - ShortenSize;
+
+  std::string zeroString;
 
   for (decltype(times) i = 0; i < times; i++) {
 
     auto rbuf = (char *)malloc(BufferSize);
     EXPECT_NE(rbuf, nullptr);
 
-    giocb *iocb = (giocb *)malloc(sizeof(giocb));
+    giocb *iocb = new giocb;
+    iocb->filename = testDataFileName;
     iocb->aio_buf = rbuf;
     iocb->aio_offset = i * BufferSize;
     iocb->aio_nbytes = readSz;
 
     iocb_vec.push_back(iocb);
-    filename_vec.push_back(testDataFileName);
   }
 
-  auto ret = aio_readv(ctx, filename_vec, iocb_vec);
+  auto ret = aio_readv(ctx, iocb_vec);
   EXPECT_EQ(ret, 0);
 
   ret = aio_suspendv(ctx, iocb_vec, nullptr);
   EXPECT_EQ(ret, -1);
 
-  for (auto &elem : iocb_vec) {
-    auto retcode = aio_return(ctx, elem);
+  for (auto iocb : iocb_vec) {
+    auto retcode = aio_return(ctx, iocb);
     EXPECT_EQ(retcode, -EIO);
-    aio_finish(ctx, elem);
-    free(elem->aio_buf);
-    free(elem);
+    aio_finish(ctx, iocb);
+    free(iocb->aio_buf);
+    delete iocb;
   }
 
   auto stats_string = ctx_get_stats(ctx);
@@ -336,28 +337,29 @@ TEST_F(NetworkXioServerTest, AsyncRead) {
     auto rbuf = (char *)malloc(BufferSize);
     EXPECT_NE(rbuf, nullptr);
 
-    giocb *iocb = (giocb *)malloc(sizeof(giocb));
+    giocb *iocb = new giocb;
+    iocb->filename = testDataFileName;
     iocb->aio_buf = rbuf;
     iocb->aio_offset = i * BufferSize;
     iocb->aio_nbytes = readSz;
 
-    auto ret = aio_read(ctx, testDataFileName, iocb);
+    auto ret = aio_read(ctx, iocb);
     EXPECT_EQ(ret, 0);
 
     vec.push_back(iocb);
   }
 
-  for (auto &elem : vec) {
+  for (auto &iocb : vec) {
 
-    auto ret = aio_suspend(ctx, elem, nullptr);
+    auto ret = aio_suspend(ctx, iocb, nullptr);
     EXPECT_EQ(ret, 0);
 
-    auto retcode = aio_return(ctx, elem);
+    auto retcode = aio_return(ctx, iocb);
     EXPECT_EQ(retcode, readSz);
 
-    aio_finish(ctx, elem);
-    free(elem->aio_buf);
-    free(elem);
+    aio_finish(ctx, iocb);
+    free(iocb->aio_buf);
+    delete iocb;
   }
 
   removeDataFile();
@@ -379,7 +381,7 @@ TEST_F(NetworkXioServerTest, MultiAsyncRead) {
   // shorten read size to test unaligned reads
   static constexpr size_t ShortenSize = 10;
 
-  size_t times = 100;
+  size_t times = 4;
 
   auto ctx_attr = ctx_attr_new();
 
@@ -401,27 +403,27 @@ TEST_F(NetworkXioServerTest, MultiAsyncRead) {
     auto rbuf = (char *)malloc(BufferSize);
     EXPECT_NE(rbuf, nullptr);
 
-    giocb *iocb = (giocb *)malloc(sizeof(giocb));
+    giocb *iocb = new giocb;
+    iocb->filename = testDataFileName;
     iocb->aio_buf = rbuf;
     iocb->aio_offset = i * BufferSize;
     iocb->aio_nbytes = readSz;
 
     iocb_vec.push_back(iocb);
-    filename_vec.push_back(testDataFileName);
   }
 
-  auto ret = aio_readv(ctx, filename_vec, iocb_vec);
+  auto ret = aio_readv(ctx, iocb_vec);
   EXPECT_EQ(ret, 0);
 
   ret = aio_suspendv(ctx, iocb_vec, nullptr);
   EXPECT_EQ(ret, 0);
 
-  for (auto &elem : iocb_vec) {
-    auto retcode = aio_return(ctx, elem);
+  for (auto &iocb : iocb_vec) {
+    auto retcode = aio_return(ctx, iocb);
     EXPECT_EQ(retcode, readSz);
-    aio_finish(ctx, elem);
-    free(elem->aio_buf);
-    free(elem);
+    aio_finish(ctx, iocb);
+    free(iocb->aio_buf);
+    delete iocb;
   }
 
   removeDataFile();

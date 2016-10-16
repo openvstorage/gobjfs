@@ -224,7 +224,6 @@ static aio_request *create_new_request(RequestOp op, struct giocb *aio,
 }
 
 static int _submit_aio_request(client_ctx_ptr ctx, 
-    const std::vector<std::string> &filename_vec,
     const std::vector<giocb*> &giocbp_vec, 
     notifier_sptr &cvp,
     const RequestOp &op,
@@ -243,6 +242,7 @@ static int _submit_aio_request(client_ctx_ptr ctx,
     return -1;
   }
 
+  std::vector<std::string> filename_vec;
   std::vector<void*> request_vec;
   std::vector<void *> bufVec;
   std::vector<uint64_t> sizeVec;
@@ -265,6 +265,7 @@ static int _submit_aio_request(client_ctx_ptr ctx,
     }
 
     request_vec.push_back(request);
+    filename_vec.push_back(giocbp->filename);
     bufVec.push_back(giocbp->aio_buf);
     offsetVec.push_back(giocbp->aio_offset);
     sizeVec.push_back(giocbp->aio_nbytes);
@@ -458,31 +459,22 @@ int gbuffer_deallocate(client_ctx_ptr ctx, gbuffer *ptr) {
   return 0;
 }
 
-int aio_read(client_ctx_ptr ctx, const std::string &filename, giocb *giocbp, int32_t uri_slot) {
+int aio_read(client_ctx_ptr ctx, giocb *giocbp, int32_t uri_slot) {
 
   auto cv = std::make_shared<notifier>();
 
-  std::vector<std::string> filename_vec(1, filename);
   std::vector<giocb*> giocbp_vec(1, giocbp);
-  return _submit_aio_request(ctx, filename_vec, giocbp_vec, cv, 
+  return _submit_aio_request(ctx, giocbp_vec, cv, 
                              RequestOp::Read, uri_slot);
 }
 
-int aio_readv(client_ctx_ptr ctx, const std::vector<std::string> &filename_vec,
+int aio_readv(client_ctx_ptr ctx, 
               const std::vector<giocb *> &giocbp_vec, int32_t uri_slot) {
   int err = 0;
 
-  if (filename_vec.size() != giocbp_vec.size()) {
-    GLOG_ERROR("mismatch between filename vector size="
-               << filename_vec.size()
-               << " and iocb vector size=" << giocbp_vec.size());
-    errno = EINVAL;
-    return -1;
-  }
-
   auto cv = std::make_shared<notifier>(giocbp_vec.size());
 
-  err = _submit_aio_request(ctx, filename_vec, giocbp_vec, cv, 
+  err = _submit_aio_request(ctx, giocbp_vec, cv, 
                                RequestOp::Read, uri_slot);
   return err;
 }
@@ -491,6 +483,7 @@ ssize_t read(client_ctx_ptr ctx, const std::string &filename, void *buf,
              size_t nbytes, off_t offset, int32_t uri_slot) {
   ssize_t r;
   giocb aio;
+  aio.filename = filename;
   aio.aio_buf = buf;
   aio.aio_nbytes = nbytes;
   aio.aio_offset = offset;
@@ -499,7 +492,7 @@ ssize_t read(client_ctx_ptr ctx, const std::string &filename, void *buf,
     return (r = -1);
   }
 
-  if ((r = aio_read(ctx, filename, &aio, uri_slot)) < 0) {
+  if ((r = aio_read(ctx, &aio, uri_slot)) < 0) {
     return r;
   }
 

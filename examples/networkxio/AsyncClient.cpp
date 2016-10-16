@@ -50,11 +50,12 @@ void NetworkServerWriteReadTest(bool use_completion) {
     assert(rbuf != nullptr);
 
     giocb *iocb = (giocb *)malloc(sizeof(giocb));
+    iocb->filename = "abcd";
     iocb->aio_buf = rbuf;
     iocb->aio_offset = 0;
     iocb->aio_nbytes = 4096;
 
-    auto ret = aio_read(ctx, "abcd", iocb);
+    auto ret = aio_read(ctx, iocb);
 
     if (ret != 0) {
       free(iocb);

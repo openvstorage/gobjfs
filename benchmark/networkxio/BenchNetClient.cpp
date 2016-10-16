@@ -225,9 +225,6 @@ struct ThreadCtx {
 
   Timer throughputTimer;
 
-  // used for aio_readv
-  std::vector<std::string> filename_vec; 
-
   BenchInfo benchInfo;
 
   explicit ThreadCtx(int index,
@@ -252,7 +249,6 @@ struct ThreadCtx {
   void checkTermination() {
     // check if all submitted IO is acked
     assert(iocb_vec.empty());
-    assert(filename_vec.empty());
     assert(doneCount == maxThreadIO);
   }
 
@@ -316,9 +312,9 @@ void ThreadCtx::doRandomRead() {
     char* rbuf = (char*) malloc(config.blockSize);
     assert(rbuf);
 
-    auto filename = fileMgr.getFilename(filenumGen(seedGen));
 
     giocb* iocb = (giocb *)malloc(sizeof(giocb));
+    iocb->filename = fileMgr.getFilename(filenumGen(seedGen));
     iocb->aio_buf = rbuf;
     iocb->aio_offset = blockGenerator(seedGen) * config.blockSize; 
     iocb->aio_nbytes = config.blockSize;
@@ -327,7 +323,7 @@ void ThreadCtx::doRandomRead() {
 
       Timer latencyTimer(true);
 
-      auto ret = aio_read(ctx_ptr, filename.c_str(), iocb, uriSlot);
+      auto ret = aio_read(ctx_ptr, iocb, uriSlot);
       uriSlot = (uriSlot + 1) % ctx_attr_vec.size();
 
       if (ret != 0) {
@@ -368,13 +364,12 @@ void ThreadCtx::doRandomRead() {
     auto use_readv = [&] () {
 
       iocb_vec.push_back(iocb);
-      filename_vec.emplace_back(filename);
 
       if (doneCount % config.maxOutstandingIO == 0) {
 
         Timer latencyTimer(true);
 
-        auto ret = aio_readv(ctx_ptr, filename_vec, iocb_vec, uriSlot);
+        auto ret = aio_readv(ctx_ptr, iocb_vec, uriSlot);
         uriSlot = (uriSlot + 1) % ctx_attr_vec.size();
 
         if (ret != 0) {
@@ -403,7 +398,6 @@ void ThreadCtx::doRandomRead() {
           }
         }
         iocb_vec.clear();
-        filename_vec.clear();
       }
     };
 
