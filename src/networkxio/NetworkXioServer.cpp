@@ -141,40 +141,41 @@ void NetworkXioServer::evfd_stop_loop(int /*fd*/, int /*events*/,
 
 
 void NetworkXioServer::run(std::promise<void> &promise) {
-  int xopt = 2;
 
   XXEnter();
 
   xio_init();
 
-  xio_set_opt(NULL, XIO_OPTLEVEL_ACCELIO, XIO_OPTNAME_MAX_IN_IOVLEN, &xopt,
+  int ret = 0;
+  int xopt = MAX_AIO_BATCH_SIZE;
+  ret = xio_set_opt(NULL, XIO_OPTLEVEL_ACCELIO, XIO_OPTNAME_MAX_IN_IOVLEN, &xopt,
               sizeof(xopt));
 
-  xio_set_opt(NULL, XIO_OPTLEVEL_ACCELIO, XIO_OPTNAME_MAX_OUT_IOVLEN, &xopt,
+  ret = xio_set_opt(NULL, XIO_OPTLEVEL_ACCELIO, XIO_OPTNAME_MAX_OUT_IOVLEN, &xopt,
               sizeof(xopt));
 
   xopt = 0;
-  xio_set_opt(NULL, XIO_OPTLEVEL_ACCELIO, XIO_OPTNAME_ENABLE_FLOW_CONTROL,
+  ret = xio_set_opt(NULL, XIO_OPTLEVEL_ACCELIO, XIO_OPTNAME_ENABLE_FLOW_CONTROL,
               &xopt, sizeof(xopt));
 
   xopt = queue_depth;
-  xio_set_opt(NULL, XIO_OPTLEVEL_ACCELIO, XIO_OPTNAME_SND_QUEUE_DEPTH_MSGS,
+  ret = xio_set_opt(NULL, XIO_OPTLEVEL_ACCELIO, XIO_OPTNAME_SND_QUEUE_DEPTH_MSGS,
               &xopt, sizeof(xopt));
 
-  xio_set_opt(NULL, XIO_OPTLEVEL_ACCELIO, XIO_OPTNAME_RCV_QUEUE_DEPTH_MSGS,
+  ret = xio_set_opt(NULL, XIO_OPTLEVEL_ACCELIO, XIO_OPTNAME_RCV_QUEUE_DEPTH_MSGS,
               &xopt, sizeof(xopt));
 
   xopt = 1;
-  xio_set_opt(NULL, XIO_OPTLEVEL_TCP, XIO_OPTNAME_TCP_NO_DELAY,
+  ret = xio_set_opt(NULL, XIO_OPTLEVEL_TCP, XIO_OPTNAME_TCP_NO_DELAY,
               &xopt, sizeof(xopt));
 
-  xopt = 8 * 4096;
-  xio_set_opt(NULL, XIO_OPTLEVEL_TCP, XIO_OPTNAME_MAX_INLINE_XIO_HEADER,
+  xopt = MAX_INLINE_HEADER_OR_DATA; 
+  ret = xio_set_opt(NULL, XIO_OPTLEVEL_ACCELIO, XIO_OPTNAME_MAX_INLINE_XIO_HEADER,
               &xopt, sizeof(xopt));
 
-  xopt = 8 * 4096;
-  xio_set_opt(NULL, XIO_OPTLEVEL_TCP, XIO_OPTNAME_MAX_INLINE_XIO_DATA,
+  ret = xio_set_opt(NULL, XIO_OPTLEVEL_ACCELIO, XIO_OPTNAME_MAX_INLINE_XIO_DATA,
               &xopt, sizeof(xopt));
+  // TODO print warning if ret non-zero
 
   const int polling_time_usec = getenv_with_default("GOBJFS_POLLING_TIME_USEC", POLLING_TIME_USEC_DEFAULT);
 
@@ -436,15 +437,19 @@ void NetworkXioServer::send_reply(NetworkXioRequest *req) {
   if (req->op == NetworkXioMsgOpcode::ReadRsp) {
 
     numElems = req->reg_mem_vec.size();
-    assert(numElems <= XIO_IOVLEN);
+    // Allocate the scatter-gather list upto numElems
+    // TODO check numElems does not exceed configured MAX_AIO_BATCH_SIZE
+    struct xio_iovec_ex* out_sglist = (struct xio_iovec_ex*)
+        (calloc(numElems, sizeof(struct xio_iovec_ex)));
+    req->xio_reply.out.pdata_iov.sglist = out_sglist;
+    req->xio_reply.out.sgl_type = XIO_SGL_TYPE_IOV_PTR;
     vmsg_sglist_set_nents(&req->xio_reply.out, numElems);
-    req->xio_reply.out.sgl_type = XIO_SGL_TYPE_IOV;
-    req->xio_reply.out.data_iov.max_nents = XIO_IOVLEN;
+    req->xio_reply.out.pdata_iov.max_nents = numElems;
 
     for (size_t idx = 0; idx < numElems; idx ++) {
-      req->xio_reply.out.data_iov.sglist[idx].iov_base = req->reg_mem_vec[idx].addr;
-      req->xio_reply.out.data_iov.sglist[idx].iov_len = req->reg_mem_vec[idx].length;
-      req->xio_reply.out.data_iov.sglist[idx].mr = req->reg_mem_vec[idx].mr;
+      out_sglist[idx].iov_base = req->reg_mem_vec[idx].addr;
+      out_sglist[idx].iov_len = req->reg_mem_vec[idx].length;
+      out_sglist[idx].mr = req->reg_mem_vec[idx].mr;
     }
   }
   req->xio_reply.flags = XIO_MSG_FLAG_IMM_SEND_COMP;

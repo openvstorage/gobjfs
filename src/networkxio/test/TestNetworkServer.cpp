@@ -205,7 +205,7 @@ TEST_F(NetworkXioServerTest, AsyncFileDoesntExist) {
   // shorten read size to test unaligned reads
   static constexpr size_t ShortenSize = 10;
 
-  size_t times = 4;
+  size_t times = MAX_AIO_BATCH_SIZE;
 
   auto ctx_attr = ctx_attr_new();
 
@@ -381,7 +381,7 @@ TEST_F(NetworkXioServerTest, MultiAsyncRead) {
   // shorten read size to test unaligned reads
   static constexpr size_t ShortenSize = 10;
 
-  size_t times = 4;
+  size_t times = MAX_AIO_BATCH_SIZE;
 
   auto ctx_attr = ctx_attr_new();
 

@@ -209,31 +209,39 @@ NetworkXioClient::NetworkXioClient(const uint64_t qd)
 }
 
 void NetworkXioClient::run() {
-  int xopt = 0;
-  xio_set_opt(NULL, XIO_OPTLEVEL_ACCELIO, XIO_OPTNAME_ENABLE_FLOW_CONTROL,
+  int ret = 0;
+
+  int xopt = MAX_AIO_BATCH_SIZE;
+  ret = xio_set_opt(NULL, XIO_OPTLEVEL_ACCELIO, XIO_OPTNAME_MAX_IN_IOVLEN, &xopt,
+              sizeof(xopt));
+
+  ret = xio_set_opt(NULL, XIO_OPTLEVEL_ACCELIO, XIO_OPTNAME_MAX_OUT_IOVLEN, &xopt,
+              sizeof(xopt));
+
+  xopt = 0;
+  ret = xio_set_opt(NULL, XIO_OPTLEVEL_ACCELIO, XIO_OPTNAME_ENABLE_FLOW_CONTROL,
               &xopt, sizeof(xopt));
 
   // temporary - for debugging
-  xio_set_opt(NULL, XIO_OPTLEVEL_ACCELIO, XIO_OPTNAME_ENABLE_KEEPALIVE,
+  ret = xio_set_opt(NULL, XIO_OPTLEVEL_ACCELIO, XIO_OPTNAME_ENABLE_KEEPALIVE,
               &xopt, sizeof(xopt));
 
   xopt = 2 * availableRequests_;
-  xio_set_opt(NULL, XIO_OPTLEVEL_ACCELIO, XIO_OPTNAME_SND_QUEUE_DEPTH_MSGS,
+  ret = xio_set_opt(NULL, XIO_OPTLEVEL_ACCELIO, XIO_OPTNAME_SND_QUEUE_DEPTH_MSGS,
               &xopt, sizeof(xopt));
 
-  xio_set_opt(NULL, XIO_OPTLEVEL_ACCELIO, XIO_OPTNAME_RCV_QUEUE_DEPTH_MSGS,
+  ret = xio_set_opt(NULL, XIO_OPTLEVEL_ACCELIO, XIO_OPTNAME_RCV_QUEUE_DEPTH_MSGS,
               &xopt, sizeof(xopt));
 
   xopt = 1;
-  xio_set_opt(NULL, XIO_OPTLEVEL_TCP, XIO_OPTNAME_TCP_NO_DELAY,
+  ret = xio_set_opt(NULL, XIO_OPTLEVEL_TCP, XIO_OPTNAME_TCP_NO_DELAY,
               &xopt, sizeof(xopt));
 
-  xopt = 8 * 4096;
-  xio_set_opt(NULL, XIO_OPTLEVEL_TCP, XIO_OPTNAME_MAX_INLINE_XIO_HEADER,
+  xopt = MAX_INLINE_HEADER_OR_DATA; 
+  ret = xio_set_opt(NULL, XIO_OPTLEVEL_ACCELIO, XIO_OPTNAME_MAX_INLINE_XIO_HEADER,
               &xopt, sizeof(xopt));
 
-  xopt = 8 * 4096;
-  xio_set_opt(NULL, XIO_OPTLEVEL_TCP, XIO_OPTNAME_MAX_INLINE_XIO_DATA,
+  ret = xio_set_opt(NULL, XIO_OPTLEVEL_ACCELIO, XIO_OPTNAME_MAX_INLINE_XIO_DATA,
               &xopt, sizeof(xopt));
 
   /** 
@@ -477,8 +485,6 @@ void NetworkXioClient::send_multi_read_request(const std::vector<std::string> &f
 
   const size_t numElems = filenameVec.size();
   requestHeader.numElems_ = numElems;
-  assert(numElems <= XIO_IOVLEN);
-  vmsg_sglist_set_nents(&msgPtr->xreq.in, numElems);
 
   requestHeader.sizeVec_ = sizeVec;
   requestHeader.offsetVec_ = offsetVec;
@@ -486,10 +492,17 @@ void NetworkXioClient::send_multi_read_request(const std::vector<std::string> &f
 
   msgPtr->prepare();
 
+  // Allocate the scatter-gather list upto numElems
+  // TODO check numElems does not exceed configured MAX_AIO_BATCH_SIZE
+  msgPtr->xreq.in.sgl_type = XIO_SGL_TYPE_IOV_PTR;
   vmsg_sglist_set_nents(&msgPtr->xreq.in, numElems);
+  msgPtr->xreq.in.pdata_iov.max_nents = numElems;
+  struct xio_iovec_ex* in_sglist = (struct xio_iovec_ex*)
+      (calloc(numElems, sizeof(struct xio_iovec_ex)));
+  msgPtr->xreq.in.pdata_iov.sglist = in_sglist;
   for (size_t idx = 0; idx < numElems; idx ++) {
-    msgPtr->xreq.in.data_iov.sglist[idx].iov_base = bufVec[idx];
-    msgPtr->xreq.in.data_iov.sglist[idx].iov_len = sizeVec[idx];
+    in_sglist[idx].iov_base = bufVec[idx];
+    in_sglist[idx].iov_len = sizeVec[idx];
   }
 
   send_msg(msgPtr, uri_slot);
