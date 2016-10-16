@@ -35,6 +35,7 @@ struct EventFD {
   ~EventFD() {
     if (evfd_ != -1) {
       close(evfd_);
+      evfd_ = -1;
     }
   }
 
@@ -44,6 +45,7 @@ struct EventFD {
 
   operator int() const { return evfd_; }
 
+  // made func static so it can be called when EventFD object not available
   static int readfd(int fd) {
     int ret;
     eventfd_t value = 0;
@@ -53,7 +55,7 @@ struct EventFD {
     if (ret == 0) {
       ret = value;
     } else if (errno != EAGAIN) {
-      abort();
+      throw std::runtime_error("failed to read eventfd=" + std::to_string(fd));
     }
     return ret;
   }
@@ -69,12 +71,12 @@ struct EventFD {
       ret = eventfd_write(evfd_, static_cast<eventfd_t>(u));
     } while (ret < 0 && (errno == EINTR || errno == EAGAIN));
     if (ret < 0) {
-      abort();
+      throw std::runtime_error("failed to write eventfd=" + std::to_string(evfd_));
     }
     return ret;
   }
 
 private:
-  int evfd_;
+  int evfd_{-1};
 };
 
