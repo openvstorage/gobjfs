@@ -29,6 +29,7 @@ but WITHOUT ANY WARRANTY of any kind.
 #include <sstream>       //
 #include <sys/eventfd.h> // EFD_NONBLOCk
 #include <boost/program_options.hpp>
+#include "user_io_getevents.h"
 
 using namespace gobjfs;
 using namespace gobjfs::stats;
