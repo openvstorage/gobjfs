@@ -29,11 +29,17 @@ int times = 10;
 using namespace gobjfs::xio;
 
 void NetworkServerWriteReadTest() {
-  auto ctx_attr = ctx_attr_new();
 
-  ctx_attr_set_transport(ctx_attr, "tcp", "127.0.0.1", 21321);
+  auto ctx_attr1 = ctx_attr_new();
+  ctx_attr_set_transport(ctx_attr1, "tcp", "127.0.0.1", 21321);
 
-  client_ctx_ptr ctx = ctx_new(ctx_attr);
+  auto ctx_attr2 = ctx_attr_new();
+  ctx_attr_set_transport(ctx_attr2, "tcp", "127.0.0.1", 21421);
+
+  std::vector<gobjfs::xio::client_ctx_attr_ptr> ctx_attr_vec{ctx_attr1, ctx_attr2};
+
+  // open connections to two different servers
+  client_ctx_ptr ctx = ctx_new(ctx_attr_vec);
   assert(ctx != nullptr);
 
   int err = ctx_init(ctx);
@@ -42,33 +48,36 @@ void NetworkServerWriteReadTest() {
     return;
   }
 
-  std::vector<giocb *> iocb_vec;
-  std::vector<std::string> filename_vec;
+  for (int32_t uri_slot = 0; uri_slot < 2; uri_slot ++) {
 
-  for (int i = 0; i < times; i++) {
-
-    auto rbuf = (char *)malloc(4096);
-    assert(rbuf != nullptr);
-
-    giocb *iocb = (giocb *)malloc(sizeof(giocb));
-    iocb->aio_buf = rbuf;
-    iocb->aio_offset = times * 4096;
-    iocb->aio_nbytes = 4096;
-
-    iocb_vec.push_back(iocb);
-    filename_vec.push_back("abcd");
-  }
-
-  auto ret = aio_readv(ctx, filename_vec, iocb_vec);
-
-  if (ret == 0) {
-    ret = aio_suspendv(ctx, iocb_vec, nullptr);
-  }
-
-  for (auto &elem : iocb_vec) {
-    aio_finish(ctx, elem);
-    free(elem->aio_buf);
-    free(elem);
+    std::vector<giocb *> iocb_vec;
+    std::vector<std::string> filename_vec;
+  
+    for (int i = 0; i < times; i++) {
+  
+      auto rbuf = (char *)malloc(4096);
+      assert(rbuf != nullptr);
+  
+      giocb *iocb = (giocb *)malloc(sizeof(giocb));
+      iocb->aio_buf = rbuf;
+      iocb->aio_offset = times * 4096;
+      iocb->aio_nbytes = 4096;
+  
+      iocb_vec.push_back(iocb);
+      filename_vec.push_back("abcd");
+    }
+  
+    auto ret = aio_readv(ctx, filename_vec, iocb_vec, uri_slot);
+  
+    if (ret == 0) {
+      ret = aio_suspendv(ctx, iocb_vec, nullptr);
+    }
+  
+    for (auto &elem : iocb_vec) {
+      aio_finish(ctx, elem);
+      free(elem->aio_buf);
+      free(elem);
+    }
   }
 
   GLOG_DEBUG(

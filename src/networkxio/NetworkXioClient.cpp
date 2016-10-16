@@ -238,6 +238,14 @@ void NetworkXioClient::run() {
   xio_set_opt(NULL, XIO_OPTLEVEL_TCP, XIO_OPTNAME_TCP_NO_DELAY,
               &xopt, sizeof(xopt));
 
+  xopt = 8 * 4096;
+  xio_set_opt(NULL, XIO_OPTLEVEL_TCP, XIO_OPTNAME_MAX_INLINE_XIO_HEADER,
+              &xopt, sizeof(xopt));
+
+  xopt = 8 * 4096;
+  xio_set_opt(NULL, XIO_OPTLEVEL_TCP, XIO_OPTNAME_MAX_INLINE_XIO_DATA,
+              &xopt, sizeof(xopt));
+
   /** 
    * set environment variable XIO_TRACE = [1-6] (higher is more log)
    * or in program
@@ -486,12 +494,14 @@ void NetworkXioClient::send_multi_read_request(const std::vector<std::string> &f
   requestHeader.offsetVec_ = offsetVec;
   requestHeader.filenameVec_ = filenameVec;
 
+  msgPtr->prepare();
+
+  vmsg_sglist_set_nents(&msgPtr->xreq.in, numElems);
   for (size_t idx = 0; idx < numElems; idx ++) {
     msgPtr->xreq.in.data_iov.sglist[idx].iov_base = bufVec[idx];
     msgPtr->xreq.in.data_iov.sglist[idx].iov_len = sizeVec[idx];
   }
 
-  msgPtr->prepare();
   send_msg(msgPtr, uri_slot);
 }
 

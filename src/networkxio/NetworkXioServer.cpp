@@ -168,6 +168,14 @@ void NetworkXioServer::run(std::promise<void> &promise) {
   xio_set_opt(NULL, XIO_OPTLEVEL_TCP, XIO_OPTNAME_TCP_NO_DELAY,
               &xopt, sizeof(xopt));
 
+  xopt = 8 * 4096;
+  xio_set_opt(NULL, XIO_OPTLEVEL_TCP, XIO_OPTNAME_MAX_INLINE_XIO_HEADER,
+              &xopt, sizeof(xopt));
+
+  xopt = 8 * 4096;
+  xio_set_opt(NULL, XIO_OPTLEVEL_TCP, XIO_OPTNAME_MAX_INLINE_XIO_DATA,
+              &xopt, sizeof(xopt));
+
   const int polling_time_usec = getenv_with_default("GOBJFS_POLLING_TIME_USEC", POLLING_TIME_USEC_DEFAULT);
 
   ctx = std::shared_ptr<xio_context>(
@@ -428,7 +436,7 @@ void NetworkXioServer::send_reply(NetworkXioRequest *req) {
   if (req->op == NetworkXioMsgOpcode::ReadRsp) {
 
     numElems = req->reg_mem_vec.size();
-    assert(numElems < XIO_IOVLEN);
+    assert(numElems <= XIO_IOVLEN);
     vmsg_sglist_set_nents(&req->xio_reply.out, numElems);
     req->xio_reply.out.sgl_type = XIO_SGL_TYPE_IOV;
     req->xio_reply.out.data_iov.max_nents = XIO_IOVLEN;
