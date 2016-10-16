@@ -341,7 +341,7 @@ TEST_F(NetworkXioServerTest, AsyncRead) {
     iocb->aio_offset = i * BufferSize;
     iocb->aio_nbytes = readSz;
 
-    auto ret = aio_readcb(ctx, testDataFileName, iocb, nullptr);
+    auto ret = aio_read(ctx, testDataFileName, iocb);
     EXPECT_EQ(ret, 0);
 
     vec.push_back(iocb);

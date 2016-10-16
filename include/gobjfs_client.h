@@ -40,8 +40,6 @@ class client_ctx_attr;
 typedef std::shared_ptr<client_ctx_attr> client_ctx_attr_ptr;
 
 struct aio_request;
-struct completion;
-typedef void (*gcallback)(completion *cb, void *arg);
 
 struct giocb {
   void *aio_buf;
@@ -221,53 +219,5 @@ int aio_read(client_ctx_ptr ctx, const std::string &filename, giocb *giocbp, int
 int aio_readv(client_ctx_ptr ctx, const std::vector<std::string> &filename_vec,
               const std::vector<giocb *> &giocbp_vec, int32_t uri_slot = 0);
 
-/**
- * Asynchronous read from a volume with completion
- * @param ctx: gobjfs xio context
- * @param giocb: Pointer to an AIO Control Block structure
- * @param completion: Pointer to a completion structure
- * @param uri_slot : which uri to send request
- * @return: 0 on success, -1 on fail
- */
-int aio_readcb(client_ctx_ptr ctx, const std::string &filename, giocb *giocbp,
-               completion *completion, int32_t uri_slot = 0);
-
-/**
- * Create a new completion
- * @param complete_cb: Pointer to an gcallback structure
- * @param arg: Pointer to an argument passed to complete_cb
- * @return: Completion pointer on success, or NULL on fail
- */
-completion *aio_create_completion(gcallback complete_cb, void *arg);
-
-/**
- * Retrieve return status of a completion
- * @param completion: Pointer to a completion structure
- * @return: Number of bytes returned based on the operation and the completion,
- * -1 on fail
- */
-ssize_t aio_return_completion(completion *completion);
-
-/**
- * Suspend until completion or timeout complete
- * @param completion: Pointer to completion structure
- * @param timeout: Pointer to a timespec structure
- * @return: 0 on success, -1 on fail
- */
-int aio_wait_completion(client_ctx_ptr& ctx, completion *completion, const timespec *timeout);
-
-/**
- * Signal a suspended completion
- * @param completion: Pointer to completion structure
- * @return: 0 on success, -1 on fail
- */
-int aio_signal_completion(completion *completion);
-
-/**
- * Release completion
- * @param completion: Pointer to completion structure
- * @return: 0 on success, -1 on fail
- */
-int aio_release_completion(completion *completion);
 }
 }

@@ -90,18 +90,6 @@ struct gbuffer {
   size_t size{0};
 };
 
-struct completion {
-  gcallback complete_cb;
-  void *cb_arg{nullptr};
-  bool _on_wait{false};
-  bool _calling{false};
-  bool _signaled{false};
-  bool _failed{false};
-  ssize_t _rv{0};
-  std::condition_variable _cond;
-  std::mutex _mutex;
-};
-
 struct notifier {
 private:
   int _count{0};
@@ -154,7 +142,6 @@ typedef std::shared_ptr<notifier> notifier_sptr;
 
 struct aio_request {
   struct giocb *giocbp{nullptr};
-  completion *cptr{nullptr};
   RequestOp _op{RequestOp::Noop};
   bool _on_suspend{false};
   bool _canceled{false};

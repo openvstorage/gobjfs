@@ -200,12 +200,11 @@ bool ctx_is_disconnected(client_ctx_ptr ctx, int32_t uri_slot) {
 }
 
 static aio_request *create_new_request(RequestOp op, struct giocb *aio,
-                                       notifier_sptr cvp, completion *cptr) {
+                                       notifier_sptr cvp) {
   try {
     aio_request *request = new aio_request;
     request->_op = op;
     request->giocbp = aio;
-    request->cptr = cptr;
     /*cnanakos TODO: err handling */
     request->_on_suspend = false;
     request->_canceled = false;
@@ -228,7 +227,6 @@ static int _submit_aio_request(client_ctx_ptr ctx,
     const std::vector<std::string> &filename_vec,
     const std::vector<giocb*> &giocbp_vec, 
     notifier_sptr &cvp,
-    completion *completion, 
     const RequestOp &op,
     int32_t uri_slot) {
 
@@ -258,7 +256,7 @@ static int _submit_aio_request(client_ctx_ptr ctx,
       break;
     }
   
-    aio_request *request = create_new_request(op, giocbp, cvp, completion);
+    aio_request *request = create_new_request(op, giocbp, cvp);
     if (request == nullptr) {
       GLOG_ERROR("create_new_request() failed \n");
       errno = ENOMEM;
@@ -460,91 +458,13 @@ int gbuffer_deallocate(client_ctx_ptr ctx, gbuffer *ptr) {
   return 0;
 }
 
-completion *aio_create_completion(gcallback complete_cb, void *arg) {
-  completion *cptr = nullptr;
-
-  if (complete_cb == nullptr) {
-    errno = EINVAL;
-    return nullptr;
-  }
-  try {
-    cptr = new completion;
-    cptr->complete_cb = complete_cb;
-    cptr->cb_arg = arg;
-    cptr->_calling = false;
-    cptr->_on_wait = false;
-    cptr->_signaled = false;
-    cptr->_failed = false;
-    return cptr;
-  } catch (const std::bad_alloc &) {
-    errno = ENOMEM;
-    return nullptr;
-  }
-}
-
-ssize_t aio_return_completion(completion *completion) {
-
-  if (completion == nullptr) {
-    errno = EINVAL;
-    return -1;
-  }
-
-  assert(completion->_signaled == true);
-  if (not completion->_calling) {
-    return -1;
-  } else {
-    if (not completion->_failed) {
-      return completion->_rv;
-    } else {
-      errno = EIO;
-      return -1;
-    }
-  }
-}
-
-int aio_wait_completion(client_ctx_ptr& ctx, completion *completion, const timespec *timeout) {
-  int r = 0;
-
-  if (completion == nullptr) {
-    errno = EINVAL;
-    return (r = -1);
-  }
-
-  do {
-    // TODO pass timespec here
-    ctx->net_client_->run_loop();
-  } while (not completion->_signaled);
-
-  return r;
-}
-
-int aio_signal_completion(completion *completion) {
-
-  if (completion == nullptr) {
-    errno = EINVAL;
-    return -1;
-  }
-  completion->_signaled = true;
-  return 0;
-}
-
-int aio_release_completion(completion *completion) {
-
-  if (completion == nullptr) {
-    errno = EINVAL;
-    return -1;
-  }
-  delete completion;
-  return 0;
-}
-
 int aio_read(client_ctx_ptr ctx, const std::string &filename, giocb *giocbp, int32_t uri_slot) {
 
   auto cv = std::make_shared<notifier>();
 
   std::vector<std::string> filename_vec(1, filename);
   std::vector<giocb*> giocbp_vec(1, giocbp);
-  return _submit_aio_request(ctx, filename_vec, giocbp_vec, cv, nullptr,
+  return _submit_aio_request(ctx, filename_vec, giocbp_vec, cv, 
                              RequestOp::Read, uri_slot);
 }
 
@@ -562,19 +482,9 @@ int aio_readv(client_ctx_ptr ctx, const std::vector<std::string> &filename_vec,
 
   auto cv = std::make_shared<notifier>(giocbp_vec.size());
 
-  err = _submit_aio_request(ctx, filename_vec, giocbp_vec, cv, nullptr,
+  err = _submit_aio_request(ctx, filename_vec, giocbp_vec, cv, 
                                RequestOp::Read, uri_slot);
   return err;
-}
-
-int aio_readcb(client_ctx_ptr ctx, const std::string &filename, giocb *giocbp,
-               completion *completion, int32_t uri_slot) {
-  auto cv = std::make_shared<notifier>();
-
-  std::vector<std::string> filename_vec(1, filename);
-  std::vector<giocb*> giocbp_vec(1, giocbp);
-  return _submit_aio_request(ctx, filename_vec, giocbp_vec, cv, completion,
-                             RequestOp::Read, uri_slot);
 }
 
 ssize_t read(client_ctx_ptr ctx, const std::string &filename, void *buf,

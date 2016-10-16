@@ -28,10 +28,6 @@ int times = 10;
 
 using namespace gobjfs::xio;
 
-void callback_func(completion *cb, void *arg) {
-  GLOG_DEBUG("callback with " << (void *)cb << ":" << (void *)arg);
-}
-
 void NetworkServerWriteReadTest(bool use_completion) {
   auto ctx_attr = ctx_attr_new();
 
@@ -47,7 +43,6 @@ void NetworkServerWriteReadTest(bool use_completion) {
   }
 
   std::vector<giocb *> vec;
-  std::vector<completion *> cvec;
 
   for (int i = 0; i < times; i++) {
 
@@ -59,36 +54,19 @@ void NetworkServerWriteReadTest(bool use_completion) {
     iocb->aio_offset = 0;
     iocb->aio_nbytes = 4096;
 
-    completion *comp = nullptr;
-
-    if (use_completion) {
-      comp = aio_create_completion(callback_func, iocb);
-    }
-
-    auto ret = aio_readcb(ctx, "abcd", iocb, comp);
+    auto ret = aio_read(ctx, "abcd", iocb);
 
     if (ret != 0) {
       free(iocb);
       free(rbuf);
-      if (comp)
-        aio_release_completion(comp);
     } else {
-      if (comp)
-        cvec.push_back(comp);
       vec.push_back(iocb);
     }
   }
 
-  // if completions are in use, wait for them
-  for (auto &elem : cvec) {
-    aio_wait_completion(ctx, elem, nullptr);
-    aio_release_completion(elem);
-  }
-
   for (auto &elem : vec) {
     // if completions not used, call suspend
-    if (!use_completion)
-      aio_suspend(ctx, elem, nullptr);
+    aio_suspend(ctx, elem, nullptr);
     aio_finish(ctx, elem);
     free(elem->aio_buf);
     free(elem);

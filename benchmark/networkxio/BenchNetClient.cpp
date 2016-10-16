@@ -96,7 +96,7 @@ struct Config {
         ("run_time_sec", value<uint32_t>(&runTimeSec)->required(), "number of secs to run")
         ("max_outstanding_io", value<uint64_t>(&maxOutstandingIO)->required(), "max outstanding io")
         ("shared_ctx_between_threads", value<bool>(&sharedCtxBetweenThreads)->required(), "should all threads share same accelio ctx")
-        ("read_style", value<std::string>(&readStyle)->required(), "aio_read or aio_readv or aio_readcb")
+        ("read_style", value<std::string>(&readStyle)->required(), "aio_read or aio_readv")
         ("max_threads", value<uint32_t>(&maxThr)->required(), "max threads")
         ("shorten_file_size", value<uint32_t>(&shortenFileSize), "shorten the size by this much to test nonaliged reads")
         ("mountpoint", value<std::vector<std::string>>(&dirPrefixVec)->required()->multitoken(), "ssd mount point")
@@ -121,8 +121,6 @@ struct Config {
       readStyleAsInt = 0;
     } else if (readStyle == "aio_readv") {
       readStyleAsInt = 1;
-    } else if (readStyle == "aio_readcb") {
-      readStyleAsInt = 2;
     } else {
       LOG(ERROR) << "read_style is invalid";
       return -1;
@@ -221,10 +219,6 @@ struct ThreadCtx {
 
   bool mustExit = false;
 
-  // used for aio_readcb
-  SemaphoreWrapper semaphore;
-  std::deque<completion*> queue;
-
   std::vector<giocb *> iocb_vec;
 
   Timer throughputTimer;
@@ -246,8 +240,6 @@ struct ThreadCtx {
     maxBlocks = conf.maxBlocks;
 
     maxThreadIO = conf.maxThreadIO;
-
-    semaphore.init(conf.maxOutstandingIO, -1);
   }
 
   ~ThreadCtx() {
@@ -255,22 +247,10 @@ struct ThreadCtx {
     ctx_attr_vec.clear();
   }
 
-  void waitForOutstandingCompletions(size_t maxAllowed) {
-
-    while (queue.size() > maxAllowed) {
-      auto free_comp = queue.front();
-      aio_wait_completion(ctx_ptr, free_comp, nullptr);
-      aio_release_completion(free_comp);
-      queue.pop_front();
-    }
-  }
-
   void checkTermination() {
-    waitForOutstandingCompletions(0);
     // check if all submitted IO is acked
     assert(iocb_vec.empty());
     assert(filename_vec.empty());
-    assert(queue.empty());
     assert(doneCount == maxThreadIO);
   }
 
@@ -427,69 +407,9 @@ void ThreadCtx::doRandomRead() {
       }
     };
 
-    struct CompletionArg {
-      ThreadCtx *ctx;
-      giocb *iocb;
-      Timer latencyTimer;
-
-      explicit CompletionArg(ThreadCtx* in_ctx, giocb* in_iocb)
-        : ctx(in_ctx), iocb(in_iocb), latencyTimer() {}
-    };
-
-    auto cb_callback_func = [] (completion *comp, void *arg) {
-
-      CompletionArg* ca = (CompletionArg*)arg;
-
-      ssize_t ret = aio_return(ca->ctx->ctx_ptr, ca->iocb);
-      if (ret != config.blockSize) {
-        ca->ctx->benchInfo.failedReads ++;
-        //LOG(ERROR) << "failed4";
-      }
-
-      ca->ctx->benchInfo.readLatency = ca->latencyTimer.elapsedMicroseconds();
-
-      aio_finish(ca->ctx->ctx_ptr, ca->iocb);
-      std::free(ca->iocb->aio_buf);
-      std::free(ca->iocb);
-
-      ca->ctx->semaphore.wakeup();
-
-      //do not release completion here - SEGV!
-      //aio_release_completion(comp);
-      delete ca;
-    };
-
-    auto use_readcb = [&] () {
-
-      // use counting semaphore to limit outstanding IO
-      semaphore.pause();
-
-      auto ca = new CompletionArg(this, iocb);
-
-      completion* comp = aio_create_completion(cb_callback_func, ca);
-
-      ca->latencyTimer.reset();
-
-      auto ret = aio_readcb(ctx_ptr, filename, iocb, comp, uriSlot);
-
-      if (ret != 0) {
-        benchInfo.failedReads ++;
-        //LOG(ERROR) << "failed5";
-        aio_release_completion(comp);
-        aio_finish(ctx_ptr, iocb);
-        std::free(iocb->aio_buf);
-        std::free(iocb);
-      } else {
-
-        queue.push_back(comp);
-
-        waitForOutstandingCompletions(config.maxOutstandingIO);
-      }
-    };
-
     // variety of ways to call async read are encoded as lambda func
     typedef std::function<void(void)> ReadFunc;
-    ReadFunc funcs[] = { use_read, use_readv, use_readcb };
+    ReadFunc funcs[] = { use_read, use_readv};
 
     // increment doneCount before ReadFunc call because it does batch 
     // ops internally when doneCount is multiple of maxOutstandingIO

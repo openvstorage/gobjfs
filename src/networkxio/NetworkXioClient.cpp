@@ -111,7 +111,6 @@ inline void _xio_aio_wake_up_suspended_aiocb(aio_request *request) {
 void ovs_xio_aio_complete_request(void *opaque, ssize_t retval, int errval) {
   XXEnter();
   aio_request *request = reinterpret_cast<aio_request *>(opaque);
-  completion *cptr = request->cptr;
   request->_errno = errval;
   request->_rv = retval;
   request->_failed = (retval < 0 ? true : false);
@@ -119,15 +118,6 @@ void ovs_xio_aio_complete_request(void *opaque, ssize_t retval, int errval) {
 
   //_xio_aio_wake_up_suspended_aiocb(request); 
 
-  if (cptr) {
-    cptr->_rv = retval;
-    cptr->_failed = (retval == -1 ? true : false);
-    GLOG_DEBUG("signalling completion for request=" << (void*)request);
-    // first invoke the callback, then signal completion
-    // caller must free the completion in main loop - not in callback!
-    cptr->complete_cb(cptr, cptr->cb_arg);
-    aio_signal_completion(cptr);
-  }
   XXExit();
 }
 
