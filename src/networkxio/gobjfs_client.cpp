@@ -286,7 +286,6 @@ static int _submit_aio_request(client_ctx_ptr ctx,
       for (auto request : request_vec) {
         ((aio_request*)request)->_timer.reset();
       }
-
     } catch (const std::bad_alloc &) {
       errno = ENOMEM;
       r = -1;
@@ -565,7 +564,6 @@ int aio_readv(client_ctx_ptr ctx, const std::vector<std::string> &filename_vec,
 
   err = _submit_aio_request(ctx, filename_vec, giocbp_vec, cv, nullptr,
                                RequestOp::Read, uri_slot);
-
   return err;
 }
 
