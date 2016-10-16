@@ -1,37 +1,34 @@
 #include <gobjfs_log.h>
 #include <gtest/gtest.h>
 
-#include <util/ShutdownNotifier.h>
+#include <util/EventFD.h>
+#include <util/lang_utils.h>
 
 #include <sys/epoll.h>
 
-using gobjfs::os::ShutdownNotifier;
 
-TEST(ShutdownNotifier, ReadWrite) {
+TEST(EventFD, ReadWrite) {
   int epollFD = epoll_create1(0);
 
-  ShutdownNotifier f;
-  f.init();
+  auto evptr = gobjfs::make_unique<EventFD>();
 
   epoll_event epollEvent;
   bzero(&epollEvent, sizeof(epollEvent));
   epollEvent.data.ptr = this;
    
   epollEvent.events = EPOLLIN | EPOLLPRI;
-  int ret = epoll_ctl(epollFD, EPOLL_CTL_ADD, f.getFD(), &epollEvent);
+  int ret = epoll_ctl(epollFD, EPOLL_CTL_ADD, (int)(*evptr), &epollEvent);
   EXPECT_EQ(ret, 0);
 
   for (int i = 0; i < 10; i++) {
-    f.send();
+    evptr->writefd();
   }
 
-  uint64_t counter;
-  f.recv(counter);
+  int counter = evptr->readfd();
 
-  EXPECT_EQ(counter, 1);
+  EXPECT_EQ(counter, 10);
 
-  ret = f.destroy();
+  evptr.reset();
+  ret = close(epollFD);
   EXPECT_EQ(ret, 0);
-
-  close(epollFD);
 }

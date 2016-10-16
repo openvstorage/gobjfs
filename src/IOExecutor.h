@@ -29,7 +29,6 @@ but WITHOUT ANY WARRANTY of any kind.
 
 #include <util/ConditionWrapper.h>
 #include <util/SemaphoreWrapper.h>
-#include <util/ShutdownNotifier.h>
 #include <util/TimerNotifier.h>
 
 #include <util/CpuStats.h>
@@ -51,7 +50,6 @@ class IOExecutor;
 using gobjfs::os::ConditionWrapper;
 using gobjfs::os::TimerNotifier;
 using gobjfs::stats::Timer;
-using gobjfs::os::ShutdownNotifier;
 using gobjfs::os::SemaphoreWrapper;
 using gobjfs::os::FD_INVALID;
 using gobjfs::os::CpuStats;

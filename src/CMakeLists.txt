@@ -7,7 +7,6 @@ set(SOURCES
   FilerJob.cpp
   gIOExecFile.cpp
   util/os_utils.cpp
-  util/ShutdownNotifier.cpp
   util/CpuStats.cpp
   util/SemaphoreWrapper.cpp
   util/TimerNotifier.cpp

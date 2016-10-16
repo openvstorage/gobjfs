@@ -20,9 +20,9 @@ but WITHOUT ANY WARRANTY of any kind.
 #include <gIOExecFile.h>
 #include <gMempool.h>
 #include <util/CpuStats.h>
-#include <util/ShutdownNotifier.h>
 #include <util/Stats.h>
 #include <util/Timer.h>
+#include <util/EventFD.h>
 #include <util/os_utils.h>
 
 #include <gobjfs_log.h>
@@ -335,7 +335,7 @@ struct ThreadCtx {
   uint64_t failedReads{0};
   uint64_t failedWrites{0};
 
-  gobjfs::os::ShutdownNotifier ioCompletionThreadShutdown;
+  EventFD ioCompletionThreadShutdown;
 
   int writePercent{0}; // between 0 -100
 };
@@ -472,8 +472,7 @@ static int wait_for_iocompletion(int epollfd, int efd, ThreadCtx *ctx) {
         }
       } else if (thisEvent.data.ptr == &ctx->ioCompletionThreadShutdown) {
         LOG(INFO) << "got shutdown request ";
-        uint64_t ctr;
-        ctx->ioCompletionThreadShutdown.recv(ctr);
+        uint64_t ctr = ctx->ioCompletionThreadShutdown.readfd();
         terminate = true;
       }
     }
@@ -524,12 +523,10 @@ static void doRandomReadWrite(ThreadCtx *ctx) {
     (void)capture_errno;
   }
 
-  ctx->ioCompletionThreadShutdown.init();
-
   {
   {
     epoll_event event;
-    event.data.fd = ctx->ioCompletionThreadShutdown.getFD();
+    event.data.fd = (int)ctx->ioCompletionThreadShutdown;
     event.events = EPOLLIN | EPOLLONESHOT;
     int s = epoll_ctl(epollfd, EPOLL_CTL_ADD, event.data.fd, &event);
     int capture_errno = errno;
@@ -709,7 +706,7 @@ static void doRandomReadWrite(ThreadCtx *ctx) {
     } while (ret == -EAGAIN);
   }
 
-  ctx->ioCompletionThreadShutdown.send();
+  ctx->ioCompletionThreadShutdown.writefd();
   ioCompletionThread.join();
 
   int64_t timeMilli = timer.elapsedMilliseconds();

@@ -1,7 +1,7 @@
 
 ADD_EXECUTABLE(UtilTester
   StatsTest.cpp
-  ShutdownNotifierTest.cpp
+  EventFDTest.cpp
   SemaphoreWrapperTest.cpp
   OSUtilsTest.cpp
   TestMain.cpp)
