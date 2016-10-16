@@ -213,6 +213,8 @@ struct ThreadCtx {
   std::vector<client_ctx_attr_ptr> ctx_attr_vec;
   client_ctx_ptr ctx_ptr;
 
+  int32_t uriSlot = 0;
+
   uint64_t maxThreadIO = 0;
   uint64_t doneCount = 0;
   uint64_t progressCount = 0;
@@ -321,15 +323,12 @@ void ThreadCtx::doRandomRead() {
     iocb->aio_offset = blockGenerator(seedGen) * config.blockSize; 
     iocb->aio_nbytes = config.blockSize;
 
-    // round-robin read requests to each server
-    // put in other policies later
-    int32_t uriSlot = doneCount % config.portVec.size();
-
     auto use_read = [&] () {
 
       Timer latencyTimer(true);
 
       auto ret = aio_read(ctx_ptr, filename.c_str(), iocb, uriSlot);
+      uriSlot = (uriSlot + 1) % ctx_attr_vec.size();
 
       if (ret != 0) {
         std::free(iocb->aio_buf);
@@ -376,7 +375,8 @@ void ThreadCtx::doRandomRead() {
         Timer latencyTimer(true);
 
         auto ret = aio_readv(ctx_ptr, filename_vec, iocb_vec, uriSlot);
-        
+        uriSlot = (uriSlot + 1) % ctx_attr_vec.size();
+
         if (ret != 0) {
           benchInfo.failedReads += iocb_vec.size();
           //LOG(ERROR) << "failed2";
