@@ -830,9 +830,9 @@ void IOExecutor::ProcessCompletions() {
 
             int numEventsGot = 0;
             do {
-              numEventsGot = io_getevents(
-                  ctxPtr->ioCtx_, 1, (numEvents - numProcessedEvents),
-                  &readyIOEvents[numProcessedEvents], nullptr);
+              numEventsGot = user_io_getevents(
+                  ctxPtr->ioCtx_, (numEvents - numProcessedEvents),
+                  &readyIOEvents[numProcessedEvents]);
             } while ((numEventsGot == -EINTR) || (numEventsGot == -EAGAIN));
 
             if (numEventsGot >= 0) {
