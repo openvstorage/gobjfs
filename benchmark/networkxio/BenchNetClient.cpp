@@ -70,17 +70,17 @@ struct Config {
 
   uint32_t maxFiles = 1000;
   uint32_t maxBlocks = 10000;
-  uint64_t perThreadIO = 10000;
+  uint64_t maxThreadIO = 10000;
   uint32_t runTimeSec = 1;
   bool sharedCtxBetweenThreads = false;
   uint64_t maxOutstandingIO = 1;
   bool doMemCheck = false;
   uint32_t maxThr = 1;
   uint32_t shortenFileSize = 0;
-  std::vector<std::string> dirPrefix;
-  std::string ipAddress;
-  std::string transport;
-  int port = 0;
+  std::vector<std::string> dirPrefixVec;
+  std::vector<std::string> ipAddressVec;
+  std::vector<std::string> transportVec;
+  std::vector<int> portVec;
 
   std::string readStyle;
   int readStyleAsInt = -1;
@@ -92,17 +92,17 @@ struct Config {
         ("align_size", value<uint32_t>(&alignSize)->required(), "size that memory is aligned to ")
         ("num_files", value<uint32_t>(&maxFiles)->required(), "number of files") 
         ("max_file_blocks", value<uint32_t>(&maxBlocks)->required(), "number of [blocksize] blocks in file")
-        ("per_thread_max_io", value<uint64_t>(&perThreadIO)->required(), "number of ops to execute")
+        ("per_thread_max_io", value<uint64_t>(&maxThreadIO)->required(), "number of ops to execute")
         ("run_time_sec", value<uint32_t>(&runTimeSec)->required(), "number of secs to run")
         ("max_outstanding_io", value<uint64_t>(&maxOutstandingIO)->required(), "max outstanding io")
         ("shared_ctx_between_threads", value<bool>(&sharedCtxBetweenThreads)->required(), "should all threads share same accelio ctx")
         ("read_style", value<std::string>(&readStyle)->required(), "aio_read or aio_readv or aio_readcb")
         ("max_threads", value<uint32_t>(&maxThr)->required(), "max threads")
         ("shorten_file_size", value<uint32_t>(&shortenFileSize), "shorten the size by this much to test nonaliged reads")
-        ("mountpoint", value<std::vector<std::string>>(&dirPrefix)->required()->multitoken(), "ssd mount point")
-        ("ipaddress", value<std::string>(&ipAddress)->required(), "ip address")
-        ("port", value<int>(&port)->required(), "port on which xio server running")
-        ("transport", value<std::string>(&transport)->required(), "tcp or rdma")
+        ("mountpoint", value<std::vector<std::string>>(&dirPrefixVec)->required()->multitoken(), "ssd mount point")
+        ("ipaddress", value<std::vector<std::string>>(&ipAddressVec)->required(), "ip address")
+        ("port", value<std::vector<int>>(&portVec)->required(), "port on which xio server running")
+        ("transport", value<std::vector<std::string>>(&transportVec)->required(), "tcp or rdma")
         ("do_mem_check", value<bool>(&doMemCheck)->required(), "compare read buffer")
           ;
 
@@ -111,6 +111,11 @@ struct Config {
     store(parse_config_file(configFile, desc), vm);
     notify(vm);
 
+    if ((transportVec.size() != portVec.size()) &&
+      (ipAddressVec.size() != portVec.size())) {
+      LOG(ERROR) << "number of transport, port and ipadddress fields in config file should be same";
+      return -1;
+    }
 
     if (readStyle == "aio_read") {
       readStyleAsInt = 0;
@@ -125,13 +130,13 @@ struct Config {
 
     if (runTimeSec) {
       LOG(INFO) << "run_time_sec and per_thread_io both defined.  Benchmark will be run based on run_time_sec";
-      perThreadIO = 0;
+      maxThreadIO = 0;
     }
 
-    if (perThreadIO % maxOutstandingIO != 0) {
+    if (maxThreadIO % maxOutstandingIO != 0) {
       // truncate it so that aio_read and readv do not terminate with outstanding IO
-      perThreadIO -= (perThreadIO % maxOutstandingIO);
-      LOG(INFO) << "reduced perThreadIO to " << perThreadIO << " to keep it multiple of " << maxOutstandingIO;
+      maxThreadIO -= (maxThreadIO % maxOutstandingIO);
+      LOG(INFO) << "reduced maxThreadIO to " << maxThreadIO << " to keep it multiple of " << maxOutstandingIO;
     }
 
 
@@ -182,8 +187,8 @@ struct FixedSizeFileManager {
   }
 
   std::string getFilename(uint64_t fileNum) {
-    static const auto numDir = config.dirPrefix.size();
-    return config.dirPrefix[fileNum % numDir] + buildFileName(fileNum);
+    static const auto numDir = config.dirPrefixVec.size();
+    return config.dirPrefixVec[fileNum % numDir] + buildFileName(fileNum);
   }
 };
 
@@ -207,10 +212,10 @@ struct ThreadCtx {
   uint32_t maxFiles;
   uint32_t maxBlocks;
 
-  client_ctx_attr_ptr ctx_attr_ptr;
+  std::vector<client_ctx_attr_ptr> ctx_attr_vec;
   client_ctx_ptr ctx_ptr;
 
-  uint64_t perThreadIO = 0;
+  uint64_t maxThreadIO = 0;
   uint64_t doneCount = 0;
   uint64_t progressCount = 0;
 
@@ -231,23 +236,23 @@ struct ThreadCtx {
 
   explicit ThreadCtx(int index,
     const Config& conf,
-    client_ctx_attr_ptr in_ctx_attr_ptr,
+    std::vector<client_ctx_attr_ptr>& in_ctx_attr_vec,
     client_ctx_ptr in_ctx_ptr) 
     : index_(index)
-    , ctx_attr_ptr(in_ctx_attr_ptr)
+    , ctx_attr_vec(in_ctx_attr_vec)
     , ctx_ptr(in_ctx_ptr) {
     minFiles = 0;
     maxFiles = conf.maxFiles;
     maxBlocks = conf.maxBlocks;
 
-    perThreadIO = conf.perThreadIO;
+    maxThreadIO = conf.maxThreadIO;
 
     semaphore.init(conf.maxOutstandingIO, -1);
   }
 
   ~ThreadCtx() {
     //ctx_ptr.reset();
-    ctx_attr_ptr.reset();
+    ctx_attr_vec.clear();
   }
 
   void waitForOutstandingCompletions(size_t maxAllowed) {
@@ -266,16 +271,19 @@ struct ThreadCtx {
     assert(iocb_vec.empty());
     assert(filename_vec.empty());
     assert(queue.empty());
-    assert(doneCount == perThreadIO);
+    assert(doneCount == maxThreadIO);
   }
 
   bool isFinished() {
-    if (perThreadIO) {
-      if (doneCount == perThreadIO) {
+    if (!config.runTimeSec) {
+      // if count-based run, check if io count reached
+      if (doneCount == maxThreadIO) {
         mustExit = true;
       }
     } else {
-      perThreadIO = doneCount;
+      // if time-based run, just set maxCount to curCount
+      // so final assert does not fail
+      maxThreadIO = doneCount;
     }
     return mustExit;
   }
@@ -292,15 +300,21 @@ void ThreadCtx::doRandomRead() {
       0, maxBlocks - 1);
 
   if (config.sharedCtxBetweenThreads) {
-    assert(ctx_attr_ptr.use_count());
+    // check main thread must have initialized ctx already
+    assert(ctx_attr_vec.size());
     assert(ctx_ptr.use_count());
   } else {
-    assert(ctx_attr_ptr.use_count() == 0);
+    // initialize ctx here for per-thread
+    assert(ctx_attr_vec.size() == 0);
 
-    ctx_attr_ptr = ctx_attr_new();
-    ctx_attr_set_transport(ctx_attr_ptr, config.transport, config.ipAddress, config.port);
-  
-    ctx_ptr = ctx_new(ctx_attr_ptr);
+    for (size_t idx = 0; idx < config.transportVec.size(); idx ++) {
+      auto ctx_attr_ptr = ctx_attr_new();
+      ctx_attr_set_transport(ctx_attr_ptr, 
+          config.transportVec[idx], config.ipAddressVec[idx], config.portVec[idx]);
+      ctx_attr_vec.push_back(ctx_attr_ptr);
+    }
+
+    ctx_ptr = ctx_new(ctx_attr_vec);
     assert(ctx_ptr);
 
     int err = ctx_init(ctx_ptr);
@@ -327,11 +341,15 @@ void ThreadCtx::doRandomRead() {
     iocb->aio_offset = blockGenerator(seedGen) * config.blockSize; 
     iocb->aio_nbytes = config.blockSize;
 
+    // round-robin read requests to each server
+    // put in other policies later
+    int32_t uriSlot = doneCount % config.portVec.size();
+
     auto use_read = [&] () {
 
       Timer latencyTimer(true);
 
-      auto ret = aio_read(ctx_ptr, filename.c_str(), iocb);
+      auto ret = aio_read(ctx_ptr, filename.c_str(), iocb, uriSlot);
 
       if (ret != 0) {
         std::free(iocb->aio_buf);
@@ -377,7 +395,7 @@ void ThreadCtx::doRandomRead() {
 
         Timer latencyTimer(true);
 
-        auto ret = aio_readv(ctx_ptr, filename_vec, iocb_vec);
+        auto ret = aio_readv(ctx_ptr, filename_vec, iocb_vec, uriSlot);
         
         if (ret != 0) {
           benchInfo.failedReads += iocb_vec.size();
@@ -452,7 +470,7 @@ void ThreadCtx::doRandomRead() {
 
       ca->latencyTimer.reset();
 
-      auto ret = aio_readcb(ctx_ptr, filename, iocb, comp);
+      auto ret = aio_readcb(ctx_ptr, filename, iocb, comp, uriSlot);
 
       if (ret != 0) {
         benchInfo.failedReads ++;
@@ -481,10 +499,10 @@ void ThreadCtx::doRandomRead() {
 
     progressCount ++;
 
-    if (progressCount == perThreadIO/10) {
+    if (progressCount == maxThreadIO/10) {
       LOG(INFO) << "thread=" << gettid() 
         << " index=" << index_ 
-        << " work done percent=" << ((doneCount * 100)/perThreadIO);
+        << " work done percent=" << ((doneCount * 100)/maxThreadIO);
       progressCount = 0;
     }
   }
@@ -556,14 +574,19 @@ int main(int argc, char *argv[]) {
     exit(1);
   }
 
-  client_ctx_attr_ptr ctx_attr_ptr; 
+  std::vector<client_ctx_attr_ptr> ctx_attr_vec; 
   client_ctx_ptr ctx_ptr; 
 
   if (config.sharedCtxBetweenThreads) {
-    ctx_attr_ptr = ctx_attr_new();
-    ctx_attr_set_transport(ctx_attr_ptr, config.transport, config.ipAddress, config.port);
+
+    for (size_t idx = 0; idx < config.transportVec.size(); idx ++) {
+      auto ctx_attr_ptr = ctx_attr_new();
+      ctx_attr_set_transport(ctx_attr_ptr, 
+          config.transportVec[idx], config.ipAddressVec[idx], config.portVec[idx]);
+      ctx_attr_vec.push_back(ctx_attr_ptr);
+    }
   
-    ctx_ptr = ctx_new(ctx_attr_ptr);
+    ctx_ptr = ctx_new(ctx_attr_vec);
     assert(ctx_ptr);
 
     int err = ctx_init(ctx_ptr);
@@ -582,7 +605,7 @@ int main(int argc, char *argv[]) {
   startTogether.init(config.maxThr, -1);
 
   for (decltype(config.maxThr) thr = 0; thr < config.maxThr; thr++) {
-    ThreadCtx *ctx = new ThreadCtx(thr, config, ctx_attr_ptr, ctx_ptr);
+    ThreadCtx *ctx = new ThreadCtx(thr, config, ctx_attr_vec, ctx_ptr);
     auto f = std::async(std::launch::async, std::bind(&ThreadCtx::doRandomRead, ctx));
 
     futVec.emplace_back(std::move(f));
