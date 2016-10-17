@@ -28,7 +28,7 @@ int times = 10;
 
 using namespace gobjfs::xio;
 
-void NetworkServerWriteReadTest(bool use_completion) {
+void NetworkServerWriteReadTest() {
   auto ctx_attr = ctx_attr_new();
 
   ctx_attr_set_transport(ctx_attr, "tcp", "127.0.0.1", 21321);
@@ -49,7 +49,7 @@ void NetworkServerWriteReadTest(bool use_completion) {
     auto rbuf = (char *)malloc(4096);
     assert(rbuf != nullptr);
 
-    giocb *iocb = (giocb *)malloc(sizeof(giocb));
+    giocb *iocb = new giocb;
     iocb->filename = "abcd";
     iocb->aio_buf = rbuf;
     iocb->aio_offset = 0;
@@ -58,7 +58,7 @@ void NetworkServerWriteReadTest(bool use_completion) {
     auto ret = aio_read(ctx, iocb);
 
     if (ret != 0) {
-      free(iocb);
+      delete iocb;
       free(rbuf);
     } else {
       vec.push_back(iocb);
@@ -70,7 +70,7 @@ void NetworkServerWriteReadTest(bool use_completion) {
     aio_suspend(ctx, elem, nullptr);
     aio_finish(ctx, elem);
     free(elem->aio_buf);
-    free(elem);
+    delete elem;
   }
 
   GLOG_DEBUG(
@@ -81,8 +81,5 @@ int main(int argc, char *argv[]) {
 
   times = atoi(argv[1]);
 
-  // To use completions, pass non-zero 2nd arg
-  bool use_completion = (atoi(argv[2]) > 0) ? true : false;
-
-  NetworkServerWriteReadTest(use_completion);
+  NetworkServerWriteReadTest();
 }

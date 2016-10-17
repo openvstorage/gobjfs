@@ -57,7 +57,7 @@ void NetworkServerWriteReadTest() {
       auto rbuf = (char *)malloc(4096);
       assert(rbuf != nullptr);
   
-      giocb *iocb = (giocb *)malloc(sizeof(giocb));
+      giocb *iocb = new giocb;
       iocb->filename = "abcd";
       iocb->aio_buf = rbuf;
       iocb->aio_offset = times * 4096;
@@ -75,7 +75,7 @@ void NetworkServerWriteReadTest() {
     for (auto &elem : iocb_vec) {
       aio_finish(ctx, elem);
       free(elem->aio_buf);
-      free(elem);
+      delete elem;
     }
   }
 

@@ -50,6 +50,8 @@ void NetworkServerWriteReadTest(void) {
     return;
   }
 
+  int32_t uriSlot = 0;
+
   for (int i = 0; i < times; i++) {
 
     auto rbuf = (char *)malloc(BufferSize);
@@ -57,7 +59,7 @@ void NetworkServerWriteReadTest(void) {
 
     size_t readSz = BufferSize - ShortenSize;
 
-    auto sz = gobjfs::xio::read(ctx, "abcd", rbuf, readSz, i * BufferSize, i % 2);
+    auto sz = gobjfs::xio::read(ctx, "abcd", rbuf, readSz, i * BufferSize, uriSlot);
 
     if (sz < 0) {
       GLOG_ERROR("OMG!!read failure with error  : " << sz);

@@ -29,6 +29,7 @@ but WITHOUT ANY WARRANTY of any kind.
 #include <exception>
 #include <util/Spinlock.h>
 #include <util/Stats.h>
+#include <util/EventFD.h>
 #include "NetworkXioProtocol.h"
 #include "gobjfs_config.h"
 
@@ -51,6 +52,10 @@ public:
   ~NetworkXioClient();
 
   struct ClientMsg {
+
+    // which connection was used
+    int32_t uriSlot;
+
     // header message actually sent to server
     xio_msg xreq;           
 
@@ -64,6 +69,8 @@ public:
     // msgpack buffer generated from NetworkXioMsg
     // which is sent as header in xio_msg
     std::string msgpackBuffer;
+
+    ClientMsg(int32_t uri_slot) : uriSlot(uri_slot) {}
 
     void prepare();
   };
@@ -89,7 +96,17 @@ public:
   int on_msg_error(xio_session *session, xio_status error,
                    xio_msg_direction direction, xio_msg *msg);
 
-  void run();
+  void evfd_stop_loop(int fd, int events, void* data);
+
+  void run(std::promise<bool>& promise);
+
+  bool is_queue_empty();
+
+  ClientMsg* pop_request();
+  
+  void push_request(ClientMsg* req);
+
+  void xstop_loop();
 
   int connect(const std::string& uri);
 
@@ -113,9 +130,7 @@ public:
 
   bool is_disconnected(int32_t uri_slot);
 
-  void send_msg(ClientMsg *msgHeader, int32_t uri_slot = 0);
-
-  void run_loop();
+  void send_msg(ClientMsg *msgHeader);
 
 private:
   std::shared_ptr<xio_context> ctx;
@@ -135,15 +150,25 @@ public:
   size_t maxBatchSize_ = MAX_AIO_BATCH_SIZE;
 private:
 
+  gobjfs::os::Spinlock inflight_lock;
+
+  std::queue<ClientMsg*> inflight_reqs;
+
   xio_session_ops ses_ops;
 
   int64_t availableRequests_{0};
+  std::mutex req_queue_lock;
+  std::condition_variable req_queue_cond;
 
-  void xio_run_loop_worker(void *arg);
+  EventFD evfd;
+
+  void run_loop_worker();
+
+  void req_queue_wait_until(ClientMsg *xmsg);
+
+  void req_queue_release();
 
   void shutdown();
-
-
 };
 
 typedef std::shared_ptr<NetworkXioClient> NetworkXioClientPtr;

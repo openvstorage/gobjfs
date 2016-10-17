@@ -353,11 +353,9 @@ int aio_error(client_ctx_ptr ctx, giocb *giocbp) {
 
 ssize_t aio_return(client_ctx_ptr ctx, giocb *giocbp) {
   int r = 0;
-  XXEnter();
   if (ctx == nullptr || giocbp == nullptr) {
     GLOG_ERROR("ctx or giocbp NULL");
     r = -EINVAL;
-    XXExit();
     return r;
   }
 
@@ -368,12 +366,10 @@ ssize_t aio_return(client_ctx_ptr ctx, giocb *giocbp) {
     r = GetNegative(errno);
     GLOG_ERROR("giocbp->request_->_failed is true. Error is " << r);
   }
-  XXExit();
   return r;
 }
 
 int aio_finish(client_ctx_ptr ctx, giocb *giocbp) {
-  XXEnter();
   if (ctx == nullptr || giocbp == nullptr) {
     errno = EINVAL;
     GLOG_ERROR("ctx or giocbp NULL ");
@@ -381,7 +377,6 @@ int aio_finish(client_ctx_ptr ctx, giocb *giocbp) {
   }
 
   delete giocbp->request_;
-  XXExit();
   return 0;
 }
 
@@ -390,32 +385,37 @@ int aio_suspendv(client_ctx_ptr ctx, const std::vector<giocb *> &giocbp_vec,
   int r = 0;
   if (ctx == nullptr || giocbp_vec.size() == 0) {
     errno = EINVAL;
-    XXExit();
     return (r = -1);
   }
 
-  bool more_work = false;
-  do {
+  auto cvp = giocbp_vec[0]->request_->_cvp;
 
-    more_work = false;
-
-    for (auto& elem : giocbp_vec) {
-      if (not elem->request_->_completed) {
-        more_work = true;
-      } else if (elem->request_->_failed) {
-        // wait until all requests are complete
-        // otherwise proper error codes are not propagated
-        errno = elem->request_->_errno;
-        r = -1;
+  {
+    if (timeout) {
+      // TODO add func
+      if (cvp->wait_for(timeout) == std::cv_status::timeout) {
+        r = ETIMEDOUT;
       }
+    } else {
+      cvp->wait();
     }
+  }
 
-    if (more_work) {
-      ctx->net_client_->run_loop();
+  if (r == ETIMEDOUT) {
+    r = -1;
+    errno = EAGAIN;
+    GLOG_DEBUG("TimeOut");
+  }
+
+  for (auto& elem : giocbp_vec) {
+    if (elem->request_->_failed) {
+      // break out on first error
+      // let caller check individual error codes using aio_return
+      errno = elem->request_->_errno;
+      r = -1;
+      break;
     }
-
-  } while (more_work);
-
+  }
   return r;
 }
 
@@ -425,26 +425,25 @@ int aio_suspend(client_ctx_ptr ctx, giocb *giocbp, const timespec *timeout) {
     errno = EINVAL;
     return (r = -1);
   }
-  bool more_work = false;
-  do {
-
-    more_work = false;
-
-    if (not giocbp->request_->_completed) {
-      more_work = true;
-    } else if (giocbp->request_->_failed) {
-      // break out on first error
-      // let caller check individual error codes using aio_return
-      errno = giocbp->request_->_errno;
-      r = -1;
-      break;
+  {
+    if (timeout) {
+      auto func = [&]() { return giocbp->request_->_signaled; };
+      // TODO add func
+      if (giocbp->request_->_cvp->wait_for(timeout) == std::cv_status::timeout) {
+        r = ETIMEDOUT;
+      }
+    } else {
+      giocbp->request_->_cvp->wait();
     }
-
-    if (more_work) {
-      ctx->net_client_->run_loop();
-    }
-  } while (more_work);
-
+  }
+  if (r == ETIMEDOUT) {
+    r = -1;
+    errno = EAGAIN;
+    GLOG_DEBUG("TimeOut");
+  } else if (giocbp->request_->_failed) {
+    errno = giocbp->request_->_errno;
+    r = -1;
+  }
   return r;
 }
 
@@ -535,27 +534,23 @@ ssize_t read(client_ctx_ptr ctx, const std::string &filename, void *buf,
 }
 
 inline void aio_wake_up_suspended_aiocb(aio_request *request) {
-  XXEnter();
   {
     request->_signaled = true;
     GLOG_DEBUG("waking up the suspended thread for request=" << (void*)request);
     request->_cvp->signal();
   }
-  XXExit();
 }
 
 /* called when response is received by NetworkXioClient */
 void aio_complete_request(void *opaque, ssize_t retval, int errval) {
-  XXEnter();
   aio_request *request = reinterpret_cast<aio_request *>(opaque);
   request->_errno = errval;
   request->_rv = retval;
   request->_failed = (retval < 0 ? true : false);
   request->_completed = true;
 
-  //aio_wake_up_suspended_aiocb(request); 
+  aio_wake_up_suspended_aiocb(request); 
 
-  XXExit();
 }
 
 }

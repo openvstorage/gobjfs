@@ -303,7 +303,6 @@ TEST_F(NetworkXioServerTest, SyncRead) {
 
   auto stats_string = ctx_get_stats(ctx);
   auto expected_str = "num_queued=" + std::to_string(times);
-  std::cerr << stats_string << std::endl;
   EXPECT_NE(stats_string.find(expected_str), std::string::npos);
   EXPECT_NE(stats_string.find("num_failed=0"), std::string::npos);
 
@@ -384,7 +383,7 @@ TEST_F(NetworkXioServerTest, MultiAsyncRead) {
   // shorten read size to test unaligned reads
   static constexpr size_t ShortenSize = 10;
 
-  size_t times = MAX_AIO_BATCH_SIZE;
+  size_t times = 100 * MAX_AIO_BATCH_SIZE;
 
   auto ctx_attr = ctx_attr_new();
 
@@ -432,7 +431,7 @@ TEST_F(NetworkXioServerTest, MultiAsyncRead) {
   removeDataFile();
 
   auto stats_string = ctx_get_stats(ctx);
-  auto expected_str = "num_queued=" + std::to_string(times);
+  auto expected_str = "num_queued=" + std::to_string(times/MAX_AIO_BATCH_SIZE);
   EXPECT_NE(stats_string.find(expected_str), std::string::npos);
   EXPECT_NE(stats_string.find("num_failed=0"), std::string::npos);
 
