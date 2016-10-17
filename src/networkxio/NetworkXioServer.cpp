@@ -396,8 +396,14 @@ void NetworkXioServer::deallocate_request(NetworkXioRequest *req) {
 
 int NetworkXioServer::on_msg_send_complete(xio_session *session
                                                ATTRIBUTE_UNUSED,
-                                           xio_msg *msg ATTRIBUTE_UNUSED,
+                                           xio_msg *msg,
                                            void *cb_user_ctx) {
+  
+  // free memory allocated to sglist
+  if (msg->out.sgl_type == XIO_SGL_TYPE_IOV_PTR) {
+    free(vmsg_sglist(&msg->out));
+  }
+
   NetworkXioClientData *cd =
       static_cast<NetworkXioClientData *>(cb_user_ctx);
   NetworkXioRequest *req = cd->ncd_done_reqs.front();

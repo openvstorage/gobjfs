@@ -378,6 +378,11 @@ int NetworkXioClient::on_msg_error(xio_session *session __attribute__((unused)),
     msg->in.header.iov_len = 0;
     vmsg_sglist_set_nents(&msg->in, 0);
     xio_release_response(msg);
+
+    // free memory allocated to sglist
+    if (msg->in.sgl_type == XIO_SGL_TYPE_IOV_PTR) {
+      free(vmsg_sglist(&msg->in));
+    }
   }
 
   const size_t numElem = responseHeader.numElems_;
@@ -395,6 +400,7 @@ int NetworkXioClient::on_msg_error(xio_session *session __attribute__((unused)),
         responseHeader.errvalVec_[idx]);
     availableRequests_++;
   }
+
   delete msgPtr;
   return 0;
 }
@@ -566,9 +572,16 @@ int NetworkXioClient::on_response(xio_session *session __attribute__((unused)),
                                 responseHeader.retvalVec_[idx], 
                                 responseHeader.errvalVec_[idx]);
     }
+
+    // free memory allocated to sglist
+    if (msgPtr->xreq.in.sgl_type == XIO_SGL_TYPE_IOV_PTR) {
+      free(vmsg_sglist(&msgPtr->xreq.in));
+    }
+
     // the msgPtr must be freed after xio_release_response()
     // otherwise its a memory corruption bug
     delete msgPtr;
+
   }
  
   availableRequests_ += numElems;
