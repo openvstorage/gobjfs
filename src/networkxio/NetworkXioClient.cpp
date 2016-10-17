@@ -97,29 +97,6 @@ static inline void xrefcnt_shutdown() {
   }
 }
 
-inline void _xio_aio_wake_up_suspended_aiocb(aio_request *request) {
-  XXEnter();
-  {
-    request->_signaled = true;
-    GLOG_DEBUG("waking up the suspended thread for request=" << (void*)request);
-    request->_cvp->signal();
-  }
-  XXExit();
-}
-
-/* called when response is received by NetworkXioClient */
-void ovs_xio_aio_complete_request(void *opaque, ssize_t retval, int errval) {
-  XXEnter();
-  aio_request *request = reinterpret_cast<aio_request *>(opaque);
-  request->_errno = errval;
-  request->_rv = retval;
-  request->_failed = (retval < 0 ? true : false);
-  request->_completed = true;
-
-  //_xio_aio_wake_up_suspended_aiocb(request); 
-
-  XXExit();
-}
 
 template <class T>
 static int static_on_session_event(xio_session *session,
@@ -349,7 +326,7 @@ void NetworkXioClient::destroy_ctx_shutdown(xio_context *ctx) {
 
 /**
  * the request can get freed after signaling completion in
- * ovs_xio_aio_complete_request
+ * aio_complete_request
  * therefore, update_stats must be called before this function
  * otherwise its a use-after-free error
  */
@@ -412,7 +389,7 @@ int NetworkXioClient::on_msg_error(xio_session *session __attribute__((unused)),
 
     void* aio_req = const_cast<void *>(msgPtr->aioReqVec_[idx]);
     update_stats(aio_req, true);
-    ovs_xio_aio_complete_request(aio_req,
+    aio_complete_request(aio_req,
         responseHeader.retvalVec_[idx], 
         responseHeader.errvalVec_[idx]);
     availableRequests_++;
@@ -481,7 +458,7 @@ void NetworkXioClient::send_msg(ClientMsg *msgPtr, int32_t uri_slot) {
         for (size_t idx = 0; idx < numElem; idx ++) {
           void* aio_req = const_cast<void *>(msgPtr->aioReqVec_[idx]);
           update_stats(aio_req, true);
-          ovs_xio_aio_complete_request(aio_req, -1, EIO);
+          aio_complete_request(aio_req, -1, EIO);
         }
         delete msgPtr;
       } else {
@@ -586,7 +563,7 @@ int NetworkXioClient::on_response(xio_session *session __attribute__((unused)),
   
       void* aio_req = msgPtr->aioReqVec_[idx];
       update_stats(aio_req, (responseHeader.retvalVec_[idx] < 0));
-      ovs_xio_aio_complete_request(aio_req,
+      aio_complete_request(aio_req,
                                 responseHeader.retvalVec_[idx], 
                                 responseHeader.errvalVec_[idx]);
     }

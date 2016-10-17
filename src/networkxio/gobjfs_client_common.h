@@ -156,5 +156,8 @@ struct aio_request {
   int64_t _rtt_nanosec{0};
   gobjfs::stats::Timer _timer;
 };
+
+void aio_complete_request(void *opaque, ssize_t retval, int errval);
+
 }
 }

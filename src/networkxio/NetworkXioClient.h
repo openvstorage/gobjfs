@@ -42,9 +42,6 @@ MAKE_EXCEPTION(XioClientRegHandlerException);
 MAKE_EXCEPTION(XioClientQueueIsBusyException);
 MAKE_EXCEPTION(FailedRegisterEventHandler);
 
-extern void ovs_xio_aio_complete_request(void *request, ssize_t retval,
-                                         int errval);
-
 typedef std::shared_ptr<xio_session> SessionPtr;
 
 class NetworkXioClient {

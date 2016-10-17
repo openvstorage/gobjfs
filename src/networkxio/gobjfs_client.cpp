@@ -507,5 +507,30 @@ ssize_t read(client_ctx_ptr ctx, const std::string &filename, void *buf,
   }
   return r;
 }
+
+inline void aio_wake_up_suspended_aiocb(aio_request *request) {
+  XXEnter();
+  {
+    request->_signaled = true;
+    GLOG_DEBUG("waking up the suspended thread for request=" << (void*)request);
+    request->_cvp->signal();
+  }
+  XXExit();
+}
+
+/* called when response is received by NetworkXioClient */
+void aio_complete_request(void *opaque, ssize_t retval, int errval) {
+  XXEnter();
+  aio_request *request = reinterpret_cast<aio_request *>(opaque);
+  request->_errno = errval;
+  request->_rv = retval;
+  request->_failed = (retval < 0 ? true : false);
+  request->_completed = true;
+
+  //aio_wake_up_suspended_aiocb(request); 
+
+  XXExit();
+}
+
 }
 }
