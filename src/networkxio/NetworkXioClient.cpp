@@ -178,8 +178,6 @@ NetworkXioClient::NetworkXioClient(const uint64_t qd)
   params.ses_ops = &ses_ops;
   params.user_context = this;
 
-  int queue_depth = 2 * availableRequests_;
-
   xrefcnt_init();
 
   run();
@@ -212,6 +210,8 @@ void NetworkXioClient::run() {
     }
   }
 
+  GLOG_INFO("max number of aio_readv requests packed in one accelio transport request=" << maxBatchSize_);
+
   xopt = 0;
   ret = xio_set_opt(NULL, XIO_OPTLEVEL_ACCELIO, XIO_OPTNAME_ENABLE_FLOW_CONTROL,
               &xopt, sizeof(xopt));
@@ -231,7 +231,8 @@ void NetworkXioClient::run() {
   ret = xio_set_opt(NULL, XIO_OPTLEVEL_TCP, XIO_OPTNAME_TCP_NO_DELAY,
               &xopt, sizeof(xopt));
 
-  xopt = MAX_INLINE_HEADER_OR_DATA; 
+  // assume each request takes 1024 byte header
+  xopt = maxBatchSize_ * MAX_INLINE_HEADER_OR_DATA; 
   ret = xio_set_opt(NULL, XIO_OPTLEVEL_ACCELIO, XIO_OPTNAME_MAX_INLINE_XIO_HEADER,
               &xopt, sizeof(xopt));
 
@@ -316,7 +317,9 @@ void NetworkXioClient::shutdown() {
   }
 }
 
-NetworkXioClient::~NetworkXioClient() { shutdown(); }
+NetworkXioClient::~NetworkXioClient() { 
+  shutdown(); 
+}
 
 void NetworkXioClient::destroy_ctx_shutdown(xio_context *ctx) {
   xio_context_destroy(ctx);
@@ -469,13 +472,13 @@ void NetworkXioClient::send_msg(ClientMsg *msgPtr, int32_t uri_slot) {
   } while (0);
 }
 
-void NetworkXioClient::send_multi_read_request(const std::vector<std::string> &filenameVec, 
-    const std::vector<void *>   &bufVec,
-    const std::vector<uint64_t> &sizeVec,
-    const std::vector<uint64_t> &offsetVec,
+int NetworkXioClient::send_multi_read_request(std::vector<std::string> &&filenameVec, 
+    std::vector<void *>   &&bufVec,
+    std::vector<uint64_t> &&sizeVec,
+    std::vector<uint64_t> &&offsetVec,
     const std::vector<void *>   &aioReqVec,
     int uri_slot) {
-  //size_t numBatches = (numElems/maxBatchSize_) + (numElems % maxBatchSize_ > 0 ? 1 : 0);
+
 
   ClientMsg *msgPtr = new ClientMsg;
   msgPtr->aioReqVec_ = aioReqVec;
@@ -487,9 +490,18 @@ void NetworkXioClient::send_multi_read_request(const std::vector<std::string> &f
   const size_t numElems = filenameVec.size();
   requestHeader.numElems_ = numElems;
 
-  requestHeader.sizeVec_ = sizeVec;
-  requestHeader.offsetVec_ = offsetVec;
-  requestHeader.filenameVec_ = filenameVec;
+  // Caller must ensure
+  // all vectors have same size
+  // AND batch size less than max configured
+  assert(numElems <= maxBatchSize_); 
+  assert(bufVec.size() == numElems); 
+  assert(sizeVec.size() == numElems);
+  assert(offsetVec.size() == numElems);
+  assert(aioReqVec.size() == numElems);
+
+  requestHeader.sizeVec_ = std::move(sizeVec);
+  requestHeader.offsetVec_ = std::move(offsetVec);
+  requestHeader.filenameVec_ = std::move(filenameVec);
 
   msgPtr->prepare();
 
@@ -503,13 +515,21 @@ void NetworkXioClient::send_multi_read_request(const std::vector<std::string> &f
   msgPtr->xreq.in.pdata_iov.sglist = in_sglist;
   for (size_t idx = 0; idx < numElems; idx ++) {
     in_sglist[idx].iov_base = bufVec[idx];
-    in_sglist[idx].iov_len = sizeVec[idx];
+    in_sglist[idx].iov_len = requestHeader.sizeVec_[idx];
   }
 
+  bufVec.clear();
+  // check the vectors have been "std::move" and emptied 
+  assert(filenameVec.empty());
+  assert(sizeVec.empty());
+  assert(offsetVec.empty());
+
   send_msg(msgPtr, uri_slot);
+
+  return 0;
 }
 
-void NetworkXioClient::send_read_request(const std::string &filename,
+int NetworkXioClient::send_read_request(const std::string &filename,
                                              void *buf,
                                              const uint64_t size_in_bytes,
                                              const uint64_t offset_in_bytes,
@@ -534,6 +554,8 @@ void NetworkXioClient::send_read_request(const std::string &filename,
   msgPtr->xreq.in.data_iov.sglist[0].iov_base = buf;
   msgPtr->xreq.in.data_iov.sglist[0].iov_len = size_in_bytes;
   send_msg(msgPtr, uri_slot);
+
+  return 0;
 }
 
 int NetworkXioClient::on_response(xio_session *session __attribute__((unused)),

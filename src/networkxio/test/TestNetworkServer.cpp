@@ -205,7 +205,10 @@ TEST_F(NetworkXioServerTest, AsyncFileDoesntExist) {
   // shorten read size to test unaligned reads
   static constexpr size_t ShortenSize = 10;
 
-  size_t times = MAX_AIO_BATCH_SIZE;
+  // set batchSize larger than max possible in order
+  // to verify that batching logic kicks in inside
+  // NetworkXioClient
+  size_t batchSize = 100 * MAX_AIO_BATCH_SIZE;
 
   auto ctx_attr = ctx_attr_new();
 
@@ -224,7 +227,7 @@ TEST_F(NetworkXioServerTest, AsyncFileDoesntExist) {
 
   std::string zeroString;
 
-  for (decltype(times) i = 0; i < times; i++) {
+  for (decltype(batchSize) i = 0; i < batchSize; i++) {
 
     auto rbuf = (char *)malloc(BufferSize);
     EXPECT_NE(rbuf, nullptr);
@@ -253,7 +256,7 @@ TEST_F(NetworkXioServerTest, AsyncFileDoesntExist) {
   }
 
   auto stats_string = ctx_get_stats(ctx);
-  auto expected_str = "num_failed=" + std::to_string(times);
+  auto expected_str = "num_failed=" + std::to_string(batchSize);
   EXPECT_NE(stats_string.find(expected_str), std::string::npos);
 
   ctx.reset();

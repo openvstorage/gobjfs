@@ -248,6 +248,39 @@ static int _submit_aio_request(client_ctx_ptr ctx,
   std::vector<uint64_t> sizeVec;
   std::vector<uint64_t> offsetVec;
 
+  const size_t batchSize = net_client->maxBatchSize_;
+
+  auto invokeNetClientSend = [&] () -> int {
+
+    int r = 0;
+
+    try {
+      r = net_client->send_multi_read_request(std::move(filename_vec), 
+                                        std::move(bufVec),
+                                        std::move(sizeVec), 
+                                        std::move(offsetVec),
+                                        request_vec,
+                                        uri_slot);
+
+      for (auto request : request_vec) {
+        ((aio_request*)request)->_timer.reset();
+      }
+      request_vec.clear();
+
+    } catch (const std::bad_alloc &) {
+      errno = ENOMEM;
+      r = -1;
+      GLOG_ERROR("xio_send_read_request() failed \n");
+    } catch (...) {
+      errno = EIO;
+      r = -1;
+      GLOG_ERROR("xio_send_read_request() failed \n");
+    }
+
+    return r;
+
+  };
+
   for (auto giocbp : giocbp_vec) {
 
     if ((giocbp->aio_nbytes <= 0 || giocbp->aio_offset < 0)) {
@@ -264,41 +297,34 @@ static int _submit_aio_request(client_ctx_ptr ctx,
       break;
     }
 
-    request_vec.push_back(request);
     filename_vec.push_back(giocbp->filename);
     bufVec.push_back(giocbp->aio_buf);
-    offsetVec.push_back(giocbp->aio_offset);
     sizeVec.push_back(giocbp->aio_nbytes);
-  }
+    offsetVec.push_back(giocbp->aio_offset);
+    request_vec.push_back(request);
 
-  if (r != 0) {
-    // TODO clear request_vec
-    return r;
-  }
-
-  {
-    try {
-      net_client->send_multi_read_request(filename_vec, bufVec,
-                                        sizeVec, offsetVec,
-                                        request_vec,
-                                        uri_slot);
-      for (auto request : request_vec) {
-        ((aio_request*)request)->_timer.reset();
+    if (request_vec.size() == batchSize) {
+      r = invokeNetClientSend();
+      if (r != 0) { 
+        break;
       }
-    } catch (const std::bad_alloc &) {
-      errno = ENOMEM;
-      r = -1;
-      GLOG_ERROR("xio_send_read_request() failed \n");
-    } catch (...) {
-      errno = EIO;
-      r = -1;
-      GLOG_ERROR("xio_send_read_request() failed \n");
     }
-  } 
+  }
+
+  if ((r == 0) && request_vec.size()) {
+    // cannot be greater if previous processing was successful
+    assert(request_vec.size() <= batchSize);
+    r = invokeNetClientSend();
+  }
 
   if (r != 0) {
     GLOG_ERROR(" Remove request send failed with error " << r);
-    // TODO clear request_vec
+    for (auto req : request_vec) {
+      delete reinterpret_cast<aio_request*>(req);
+    }
+    request_vec.clear();
+  } else {
+    assert(request_vec.empty());
   }
   return r;
 }

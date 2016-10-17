@@ -172,6 +172,8 @@ void NetworkXioServer::run(std::promise<void> &promise) {
     }
   }
 
+  GLOG_INFO("max number of aio_readv requests packed in one accelio transport request=" << maxBatchSize_);
+
   xopt = 0;
   ret = xio_set_opt(NULL, XIO_OPTLEVEL_ACCELIO, XIO_OPTNAME_ENABLE_FLOW_CONTROL,
               &xopt, sizeof(xopt));
@@ -187,7 +189,8 @@ void NetworkXioServer::run(std::promise<void> &promise) {
   ret = xio_set_opt(NULL, XIO_OPTLEVEL_TCP, XIO_OPTNAME_TCP_NO_DELAY,
               &xopt, sizeof(xopt));
 
-  xopt = MAX_INLINE_HEADER_OR_DATA; 
+  // assume each request takes 1024 byte header
+  xopt = maxBatchSize_ * MAX_INLINE_HEADER_OR_DATA; 
   ret = xio_set_opt(NULL, XIO_OPTLEVEL_ACCELIO, XIO_OPTNAME_MAX_INLINE_XIO_HEADER,
               &xopt, sizeof(xopt));
 

@@ -68,16 +68,16 @@ public:
     void prepare();
   };
 
-  void send_read_request(const std::string &filename, void *buf,
+  int send_read_request(const std::string &filename, void *buf,
                              const uint64_t size_in_bytes,
                              const uint64_t offset_in_bytes,
                              void *opaque,
                              int32_t uri_slot = 0);
 
-  void send_multi_read_request(const std::vector<std::string> &filenameVec, 
-      const std::vector<void *>   &bufVec,
-      const std::vector<uint64_t> &sizeVec,
-      const std::vector<uint64_t> &offsetVec,
+  int send_multi_read_request(std::vector<std::string> &&filenameVec, 
+      std::vector<void *>   &&bufVec,
+      std::vector<uint64_t> &&sizeVec,
+      std::vector<uint64_t> &&offsetVec,
       const std::vector<void *>   &opaqueVec,
       int32_t uri_slot = 0);
 
@@ -131,7 +131,9 @@ private:
   bool stopped{false};
   std::thread xio_thread_;
 
+public:
   size_t maxBatchSize_ = MAX_AIO_BATCH_SIZE;
+private:
 
   xio_session_ops ses_ops;
 
