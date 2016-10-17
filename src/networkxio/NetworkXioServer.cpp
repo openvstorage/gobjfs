@@ -147,12 +147,30 @@ void NetworkXioServer::run(std::promise<void> &promise) {
   xio_init();
 
   int ret = 0;
-  int xopt = MAX_AIO_BATCH_SIZE;
+
+  int xopt = maxBatchSize_;
+
   ret = xio_set_opt(NULL, XIO_OPTLEVEL_ACCELIO, XIO_OPTNAME_MAX_IN_IOVLEN, &xopt,
               sizeof(xopt));
+  if (ret != 0) {
+    int xopt_len = 0;
+    ret = xio_get_opt(NULL, XIO_OPTLEVEL_ACCELIO, XIO_OPTNAME_MAX_IN_IOVLEN, &xopt,
+              &xopt_len);
+    if (ret == 0) {
+      maxBatchSize_ = std::min(maxBatchSize_, (size_t)xopt);
+    }
+  }
 
   ret = xio_set_opt(NULL, XIO_OPTLEVEL_ACCELIO, XIO_OPTNAME_MAX_OUT_IOVLEN, &xopt,
               sizeof(xopt));
+  if (ret != 0) {
+    int xopt_len = 0;
+    ret = xio_get_opt(NULL, XIO_OPTLEVEL_ACCELIO, XIO_OPTNAME_MAX_IN_IOVLEN, &xopt,
+              &xopt_len);
+    if (ret == 0) {
+      maxBatchSize_ = std::min(maxBatchSize_, (size_t)xopt);
+    }
+  }
 
   xopt = 0;
   ret = xio_set_opt(NULL, XIO_OPTLEVEL_ACCELIO, XIO_OPTNAME_ENABLE_FLOW_CONTROL,

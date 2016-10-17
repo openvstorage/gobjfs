@@ -211,12 +211,29 @@ NetworkXioClient::NetworkXioClient(const uint64_t qd)
 void NetworkXioClient::run() {
   int ret = 0;
 
-  int xopt = MAX_AIO_BATCH_SIZE;
+  int xopt = maxBatchSize_;
+
   ret = xio_set_opt(NULL, XIO_OPTLEVEL_ACCELIO, XIO_OPTNAME_MAX_IN_IOVLEN, &xopt,
               sizeof(xopt));
+  if (ret != 0) {
+    int xopt_len = 0;
+    ret = xio_get_opt(NULL, XIO_OPTLEVEL_ACCELIO, XIO_OPTNAME_MAX_IN_IOVLEN, &xopt,
+              &xopt_len);
+    if (ret == 0) {
+      maxBatchSize_ = std::min(maxBatchSize_, (size_t)xopt);
+    }
+  }
 
   ret = xio_set_opt(NULL, XIO_OPTLEVEL_ACCELIO, XIO_OPTNAME_MAX_OUT_IOVLEN, &xopt,
               sizeof(xopt));
+  if (ret != 0) {
+    int xopt_len = 0;
+    ret = xio_get_opt(NULL, XIO_OPTLEVEL_ACCELIO, XIO_OPTNAME_MAX_IN_IOVLEN, &xopt,
+              &xopt_len);
+    if (ret == 0) {
+      maxBatchSize_ = std::min(maxBatchSize_, (size_t)xopt);
+    }
+  }
 
   xopt = 0;
   ret = xio_set_opt(NULL, XIO_OPTLEVEL_ACCELIO, XIO_OPTNAME_ENABLE_FLOW_CONTROL,
@@ -481,6 +498,7 @@ void NetworkXioClient::send_multi_read_request(const std::vector<std::string> &f
     const std::vector<uint64_t> &offsetVec,
     const std::vector<void *>   &aioReqVec,
     int uri_slot) {
+  //size_t numBatches = (numElems/maxBatchSize_) + (numElems % maxBatchSize_ > 0 ? 1 : 0);
 
   ClientMsg *msgPtr = new ClientMsg;
   msgPtr->aioReqVec_ = aioReqVec;

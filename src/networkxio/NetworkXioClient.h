@@ -30,6 +30,7 @@ but WITHOUT ANY WARRANTY of any kind.
 #include <util/Spinlock.h>
 #include <util/Stats.h>
 #include "NetworkXioProtocol.h"
+#include "gobjfs_config.h"
 
 namespace gobjfs {
 namespace xio {
@@ -132,6 +133,8 @@ private:
   bool stopping{false};
   bool stopped{false};
   std::thread xio_thread_;
+
+  size_t maxBatchSize_ = MAX_AIO_BATCH_SIZE;
 
   xio_session_ops ses_ops;
 

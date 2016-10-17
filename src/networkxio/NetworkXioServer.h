@@ -120,6 +120,8 @@ private:
   int32_t numCoresForIO_{0};
   int32_t queueDepthForIO_{0};
 
+  size_t maxBatchSize_ = MAX_AIO_BATCH_SIZE;
+
   FileTranslatorFunc fileTranslatorFunc_{nullptr};
 
   bool newInstance_{false};
