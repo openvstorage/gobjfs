@@ -149,6 +149,10 @@ static int static_on_msg_error(xio_session *session, xio_status error,
   return obj->on_msg_error(session, error, direction, msg);
 }
 
+/**
+ * event handler for evfd
+ * gets called by accelio 
+ */
 template <class T>
 static void static_evfd_stop_loop(int fd, int events, void *data) {
   T *obj = reinterpret_cast<T *>(data);
@@ -157,6 +161,30 @@ static void static_evfd_stop_loop(int fd, int events, void *data) {
   }
   obj->evfd_stop_loop(fd, events, data);
 }
+
+
+/**
+ * the request itself could get freed after signaling completion in
+ * aio_complete_request
+ * therefore, update_stats MUST be called before this function
+ * otherwise its a use-after-free error
+ */
+void NetworkXioClient::update_stats(void *void_req, bool req_failed) {
+  aio_request *req = static_cast<aio_request *>(void_req);
+  if (!req) {
+    stats.num_failed++;
+    return;
+  }
+
+  req->_rtt_nanosec = req->_timer.elapsedNanoseconds();
+  if (req_failed) {
+    stats.num_failed++;
+  }
+  stats.num_completed++;
+  stats.rtt_hist = req->_rtt_nanosec;
+  stats.rtt_stats = req->_rtt_nanosec;
+}
+
 
 std::string NetworkXioClient::statistics::ToString() const {
   std::ostringstream s;
@@ -299,7 +327,7 @@ void NetworkXioClient::run(std::promise<bool>& promise) {
     throw FailedRegisterEventHandler("failed to register event handler");
   }
 
-  auto fp = std::bind(&NetworkXioClient::_run_loop_worker, this);
+  auto fp = std::bind(&NetworkXioClient::run_loop_worker, this);
   pthread_setname_np(pthread_self(), "run_loop_worker");
   promise.set_value(true);
   fp(this);
@@ -365,6 +393,13 @@ void NetworkXioClient::destroy_ctx_shutdown(xio_context *ctx) {
   xrefcnt_shutdown();
 }
 
+bool NetworkXioClient::is_disconnected(int32_t uri_slot) {
+  return (connVec.at(uri_slot) == nullptr);
+}
+
+/**
+ * called by internal thread to check for new requests
+ */
 bool NetworkXioClient::is_queue_empty() {
   boost::lock_guard<decltype(inflight_lock)> lock_(inflight_lock);
   return inflight_reqs.empty();
@@ -377,34 +412,29 @@ NetworkXioClient::ClientMsg *NetworkXioClient::pop_request() {
   return req;
 }
 
+/**
+ * called by external user thread to insert new requests
+ */
 void NetworkXioClient::push_request(ClientMsg *req) {
   boost::lock_guard<decltype(inflight_lock)> lock_(inflight_lock);
   inflight_reqs.push(req);
   stats.num_queued++;
 }
 
-void NetworkXioClient::xstop_loop() { evfd.writefd(); }
+/**
+ * wakeup the thread running the event loop
+ * called by external user threads
+ */
+void NetworkXioClient::xstop_loop() { 
+  evfd.writefd(); 
+}
 
 /**
- * the request can get freed after signaling completion in
- * aio_complete_request
- * therefore, update_stats must be called before this function
- * otherwise its a use-after-free error
+ * event handler for evfd
  */
-void NetworkXioClient::update_stats(void *void_req, bool req_failed) {
-  aio_request *req = static_cast<aio_request *>(void_req);
-  if (!req) {
-    stats.num_failed++;
-    return;
-  }
-
-  req->_rtt_nanosec = req->_timer.elapsedNanoseconds();
-  if (req_failed) {
-    stats.num_failed++;
-  }
-  stats.num_completed++;
-  stats.rtt_hist = req->_rtt_nanosec;
-  stats.rtt_stats = req->_rtt_nanosec;
+void NetworkXioClient::evfd_stop_loop(int fd, int /*events*/, void * /*data*/) {
+  evfd.readfd();
+  xio_context_stop_loop(ctx.get());
 }
 
 void NetworkXioClient::run_loop_worker() {
@@ -418,15 +448,19 @@ void NetworkXioClient::run_loop_worker() {
     }
   }
 
+  // do the final shutdown 
   for (auto conn : connVec) { 
     if (!conn) {
+      // if conn already shutdown, entry will be zero
       continue;
     }
     GLOG_INFO("thread=" << gettid() << " disconnecting conn=" << conn);
     xio_disconnect(conn);
     auto iter = std::find(connVec.begin(), connVec.end(), conn);
     if (*iter != nullptr) {
-      // if conn found in vector, then on_session_event already received
+      // if conn found in vector, 
+      // then connection teardown event not received yet
+      // so keep looping
       xio_context_run_loop(ctx.get(), XIO_INFINITE);
     } else {
       GLOG_INFO("thread=" << gettid() << " destroying conn=" << conn);
@@ -438,15 +472,14 @@ void NetworkXioClient::run_loop_worker() {
   }
 }
 
-void NetworkXioClient::evfd_stop_loop(int fd, int /*events*/, void * /*data*/) {
-  evfd.readfd();
-  xio_context_stop_loop(ctx.get());
-}
 
 int NetworkXioClient::on_msg_error(xio_session *session __attribute__((unused)),
                                    xio_status error __attribute__((unused)),
                                    xio_msg_direction direction, xio_msg *msg) {
+  int ret = 0;
+
   NetworkXioMsg responseHeader;
+
   if (direction == XIO_MSG_DIRECTION_OUT) {
     try {
       responseHeader.unpack_msg(static_cast<const char *>(msg->out.header.iov_base),
@@ -455,6 +488,11 @@ int NetworkXioClient::on_msg_error(xio_session *session __attribute__((unused)),
       GLOG_ERROR("failed to unpack msg");
       return 0;
     }
+    // free memory allocated to sglist
+    if (msg->out.sgl_type == XIO_SGL_TYPE_IOV_PTR) {
+      free(vmsg_sglist(&msg->out));
+    }
+
   } else /* XIO_MSG_DIRECTION_IN */
   {
     try {
@@ -479,21 +517,29 @@ int NetworkXioClient::on_msg_error(xio_session *session __attribute__((unused)),
   const size_t numElem = responseHeader.numElems_;
   if ((numElem != responseHeader.errvalVec_.size()) || 
       (numElem != responseHeader.retvalVec_.size())) {
-    return -1;
+    GLOG_ERROR("num elements in header=" << numElem << " not matching "
+        << "num elements in retval=" << responseHeader.retvalVec_.size() 
+        << " or num elements in errval=" << responseHeader.errvalVec_.size());
+    ret = -1;
   }
-  ClientMsg *msgPtr = reinterpret_cast<ClientMsg *>(responseHeader.clientMsgPtr_);
-  for (size_t idx = 0; idx < numElem; idx ++) {
 
-    void* aio_req = const_cast<void *>(msgPtr->aioReqVec_[idx]);
-    update_stats(aio_req, true);
-    aio_complete_request(aio_req,
-        responseHeader.retvalVec_[idx], 
-        responseHeader.errvalVec_[idx]);
-    req_queue_release();
+  ClientMsg *msgPtr = reinterpret_cast<ClientMsg *>(responseHeader.clientMsgPtr_);
+
+  if (ret == 0) {
+
+    for (size_t idx = 0; idx < numElem; idx ++) {
+  
+      void* aio_req = const_cast<void *>(msgPtr->aioReqVec_[idx]);
+      update_stats(aio_req, true);
+      aio_complete_request(aio_req,
+          responseHeader.retvalVec_[idx], 
+          responseHeader.errvalVec_[idx]);
+      req_queue_release();
+    }
   }
 
   delete msgPtr;
-  return 0;
+  return ret;
 }
 
 int NetworkXioClient::on_session_event(xio_session *session
@@ -531,6 +577,9 @@ int NetworkXioClient::on_session_event(xio_session *session
   return 0;
 }
 
+/**
+ * Wait for outgoing queue to be have a free slot
+ */
 void NetworkXioClient::req_queue_wait_until(ClientMsg *xmsg) {
   std::unique_lock<std::mutex> l_(req_queue_lock);
   if (--availableRequests_ <= 0) {
@@ -543,15 +592,15 @@ void NetworkXioClient::req_queue_wait_until(ClientMsg *xmsg) {
   }
 }
 
+/**
+ * Called when callback is received 
+ */
 void NetworkXioClient::req_queue_release() {
   std::unique_lock<std::mutex> l_(req_queue_lock);
   availableRequests_ ++;
   req_queue_cond.notify_one();
 }
 
-bool NetworkXioClient::is_disconnected(int32_t uri_slot) {
-  return (connVec.at(uri_slot) == nullptr);
-}
 
 void NetworkXioClient::send_msg(ClientMsg *msgPtr) {
   int ret = 0;
@@ -609,7 +658,6 @@ int NetworkXioClient::send_multi_read_request(std::vector<std::string> &&filenam
   msgPtr->prepare();
 
   // Allocate the scatter-gather list upto numElems
-  // TODO check numElems does not exceed configured MAX_AIO_BATCH_SIZE
   msgPtr->xreq.in.sgl_type = XIO_SGL_TYPE_IOV_PTR;
   vmsg_sglist_set_nents(&msgPtr->xreq.in, numElems);
   msgPtr->xreq.in.pdata_iov.max_nents = numElems;
