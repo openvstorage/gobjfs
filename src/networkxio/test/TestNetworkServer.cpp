@@ -131,13 +131,18 @@ int fileTranslatorFunc(const char *old_name, size_t old_length,
 
 TEST_F(NetworkXioServerTest, MultipleClients) {
 
+  // reduce flush timer since we dont exercise IO in this test
+  setenv("GOBJFS_CLIENT_TIMER_USEC", "10000", 1);
+
   auto ctx_attr = ctx_attr_new();
 
   ctx_attr_set_transport(ctx_attr, "tcp", "127.0.0.1", portNumber);
 
   std::vector<client_ctx_ptr> ptr_vec;
 
-  for (int i = 0; i < 100; i++) {
+  const int NumClients = 100; 
+
+  for (int i = 0; i < NumClients; i++) {
     auto ctx = ctx_new(ctx_attr);
     EXPECT_NE(ctx, nullptr);
 
