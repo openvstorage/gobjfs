@@ -48,7 +48,8 @@ static std::mutex mutex;
 
 static int dbg_xio_session_destroy(xio_session* s)
 {
-    return xio_session_destroy(s);
+  GLOG_INFO("destroying session=" << (void*)s);
+  return xio_session_destroy(s);
 }
 
 static inline std::shared_ptr<xio_session> getSession(const std::string& uri, 
@@ -67,11 +68,11 @@ static inline std::shared_ptr<xio_session> getSession(const std::string& uri,
     auto insertIter = sessionMap.insert(std::make_pair(uri, session));
     assert(insertIter.second == true); // insert succeded
 #endif
-    GLOG_INFO("session=" << (void*)session.get() << " created for " << uri);
+    GLOG_INFO("session=" << (void*)session.get() << " created for " << uri << " by thread=" << gettid());
     retptr = session;
   } else {
     retptr = iter->second;
-    GLOG_INFO("session=" << (void*)retptr.get() << " found for " << uri);
+    GLOG_INFO("session=" << (void*)retptr.get() << " found for " << uri << " by thread=" << gettid());
   }
   return retptr;
 }
@@ -482,6 +483,7 @@ void NetworkXioClient::evfd_stop_loop(int fd, int /*events*/, void * /*data*/) {
 
 void NetworkXioClient::run_loop_worker() {
 
+  GLOG_INFO("thread=" << gettid() << " running loop on ctx=" << (void*)this->ctx.get());
   while (not stopping) {
     int ret = xio_context_run_loop(this->ctx.get(), XIO_INFINITE);
     assert(ret == 0);
@@ -507,16 +509,19 @@ void NetworkXioClient::run_loop_worker() {
     }
     GLOG_INFO("thread=" << gettid() << " disconnecting conn=" << conn);
     xio_disconnect(conn);
-    auto iter = std::find(connVec.begin(), connVec.end(), conn);
-    if (*iter != nullptr) {
-      // if conn found in vector, 
-      // then connection teardown event not received yet
-      // so keep looping
-      xio_context_run_loop(ctx.get(), XIO_INFINITE);
-    } else {
-      GLOG_INFO("thread=" << gettid() << " destroying conn=" << conn);
-      xio_connection_destroy(conn);
-    }
+
+    decltype(connVec.begin()) iter;
+    do {
+      iter = std::find(connVec.begin(), connVec.end(), conn);
+      if (*iter != nullptr) {
+        // if conn found in vector, 
+        // then connection teardown event not received yet
+        // so keep looping
+        xio_context_run_loop(ctx.get(), 1);
+      } else {
+        break;
+      }
+    } while (*iter != nullptr);
   }
 
   const size_t unsentReq = inflight_reqs.size();
@@ -529,8 +534,10 @@ void NetworkXioClient::run_loop_worker() {
   }
 
   for (auto& session : sessionVec) { 
+    GLOG_INFO("session=" << session.get() << " use_count=" << session.use_count());
     session.reset();
   }
+  sessionVec.clear();
 }
 
 
@@ -622,6 +629,7 @@ int NetworkXioClient::on_session_event(xio_session *session
     } else {
       GLOG_ERROR("conn=" << event_data->conn << " not found");
     }
+    GLOG_INFO("thread=" << gettid() << " destroying conn=" << event_data->conn);
     xio_connection_destroy(event_data->conn);
     break;
 
