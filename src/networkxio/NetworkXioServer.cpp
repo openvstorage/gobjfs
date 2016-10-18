@@ -282,11 +282,18 @@ NetworkXioServer::create_session_connection(xio_session *session,
 int NetworkXioServer::on_new_session(xio_session *session,
                                      xio_new_session_req *req) {
 
-  const char* portal_array[ptVec_.size()];
+  const size_t numPortals = ptVec_.size();
+  const char* portal_array[numPortals];
+
+  // Use startingPortalIndex to rotate the list of portals sent to each new client
+  // so as to distribute the load.  
+  // Ideally, should be returning list of portals in order of increasing load 
+  // so that client picks the least loaded
+  startingPortalIndex ++;
 
   // tell xio_accept which portals are available
-  for (int i = 0; i < ptVec_.size(); i++) {
-    portal_array[i] = ptVec_[i]->uri_.c_str();
+  for (size_t idx = 0; idx < ptVec_.size(); idx++) {
+    portal_array[(startingPortalIndex + idx) % numPortals] = ptVec_[idx]->uri_.c_str();
   }
 
   if (xio_accept(session, portal_array, ptVec_.size(), NULL, 0) < 0) {

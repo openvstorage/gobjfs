@@ -116,6 +116,8 @@ private:
   // TODO : free this memory 
   std::vector<PortalThreadData*> ptVec_;
 
+  size_t startingPortalIndex{0};
+
   int32_t startCoreForIO_{0};
   int32_t numCoresForIO_{0};
   int32_t queueDepthForIO_{0};
