@@ -38,6 +38,7 @@ TimerNotifier::TimerNotifier(int timeoutSec, int timeoutNanosec) {
     fd_ = -1;
     ret = -errno;
     LOG(ERROR) << "Failed to create timerfd errno=" << ret;
+    throw std::runtime_error("failed to create timerfd errno=" + std::to_string(ret));
   }
 
   struct itimerspec new_value;
@@ -50,7 +51,13 @@ TimerNotifier::TimerNotifier(int timeoutSec, int timeoutNanosec) {
   ret = timerfd_settime(fd_, 0, &new_value, NULL);
   if (ret < 0) {
     ret = -errno;
-    LOG(ERROR) << "Failed to set time timerfd errno=" << ret;
+    LOG(ERROR) << "Timer disabled. Failed to set timer "
+      << " fd=" << fd_ 
+      << " timeout sec=" << timeoutSec 
+      << " timeout nsec=" << timeoutNanosec 
+      << " errno=" << ret;
+    destroy();
+    throw std::runtime_error("failed to set timerfd errno=" + std::to_string(ret));
   }
 
   (void) ret;
@@ -62,6 +69,8 @@ int TimerNotifier::getFD() {
 
 int32_t TimerNotifier::recv(uint64_t& count) {
   int ret = 0;
+
+  assert (fd_ != -1);
 
   ssize_t readSize = read(fd_, &count, sizeof(count));
 
