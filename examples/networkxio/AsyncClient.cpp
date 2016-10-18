@@ -20,6 +20,8 @@ but WITHOUT ANY WARRANTY of any kind.
 #include <fcntl.h>
 #include <string.h>
 #include <vector>
+#include <future>
+#include <thread>
 
 #include <gobjfs_client.h>
 #include <networkxio/gobjfs_client_common.h> // GLOG_DEBUG
@@ -80,5 +82,16 @@ int main(int argc, char *argv[]) {
 
   times = atoi(argv[1]);
 
-  NetworkServerWriteReadTest();
+  std::vector<std::future<void>> futVec;
+
+  const size_t numThreads = 2;
+
+  for (size_t idx = 0; idx < numThreads; idx ++) { 
+    auto fut = std::async(std::launch::async, NetworkServerWriteReadTest);
+    futVec.push_back(std::move(fut));
+  }
+
+  for (auto& fut : futVec) {
+    fut.wait();
+  }
 }
