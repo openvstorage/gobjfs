@@ -56,18 +56,6 @@ static void static_disk_event(int fd, int events, void *data) {
   obj->ioexecPtr_->handleDiskCompletion(numExpected);
 }
 
-/** 
- * called from accelio event loop
- */
-template <class T> 
-static void static_timer_event(int fd, int events, void *data) {
-  T *obj = reinterpret_cast<T *>(data);
-  if (obj == NULL) {
-    return;
-  }
-  obj->runTimerHandler();
-}
-
 
 NetworkXioIOHandler::NetworkXioIOHandler(PortalThreadData* pt)
   : pt_(pt) {
@@ -88,10 +76,6 @@ NetworkXioIOHandler::NetworkXioIOHandler(PortalThreadData* pt)
   eventHandle_ = IOExecEventFdOpen(serviceHandle_);
 
   eventFD_ = IOExecEventFdGetReadFd(eventHandle_);
-
-  uint64_t timerSec = getenv_with_default("GOBJFS_SERVER_TIMER_SEC", 1);
-  const int64_t timerNanosec = 0;
-  statsTimerFD_ = gobjfs::make_unique<TimerNotifier>(timerSec, timerNanosec);
 
   startEventHandler();
 }
@@ -128,18 +112,6 @@ void NetworkXioIOHandler::startEventHandler() {
         << ",ioexecutor=" << ioexecPtr_
         << ",thread=" << gettid());
 
-    // Add periodic timer to dynamically change minSubmitSize
-    if (xio_context_add_ev_handler(pt_->ctx_, statsTimerFD_->getFD(),
-                                XIO_POLLIN,
-                                static_timer_event<NetworkXioIOHandler>,
-                                this)) {
-
-      throw FailedRegisterEventHandler("failed to register event handler");
-
-    }
-
-    GLOG_INFO("registered timer event fd=" << statsTimerFD_->getFD()
-        << ",thread=" << gettid());
 
   } catch (std::exception& e) {
     GLOG_ERROR("failed to init handler " << e.what());
@@ -207,20 +179,13 @@ int NetworkXioIOHandler::runEventHandler(gIOStatus& iostatus) {
 void NetworkXioIOHandler::stopEventHandler() {
   GLOG_INFO("deregistered disk fd=" << eventFD_ << " for thread=" << gettid());
   xio_context_del_ev_handler(pt_->ctx_, eventFD_);
-
-  if (statsTimerFD_) {
-    GLOG_INFO("deregistered timer fd=" << statsTimerFD_->getFD() << " for thread=" << gettid());
-    xio_context_del_ev_handler(pt_->ctx_, statsTimerFD_->getFD());
-  }
 }
 
+/**
+ * Called from NetworkXioServer's timer handler
+ */
 void NetworkXioIOHandler::runTimerHandler()
 {
-  // TODO disable timer on last conn, restart on first conn
-  // first drain the timer by reading the timerfd
-  uint64_t count = 0;
-  statsTimerFD_->recv(count);
-
   if (pt_->numConnections()) { 
 
     // Dynamically vary minSubmitSize based on batch size

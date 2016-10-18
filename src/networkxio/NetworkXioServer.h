@@ -103,6 +103,12 @@ public:
 
   static void destroy_ctx_shutdown(xio_context *ctx);
 
+  /**
+   * handler called from accelio event loop
+   * to print periodic stats and adjust minSubmitSize
+   */
+  void runTimerHandler();
+
 private:
   //    DECLARE_LOGGER("NetworkXioServer");
   //
@@ -140,6 +146,8 @@ private:
   EventFD evfd;
 
   int queue_depth{0};
+
+  std::unique_ptr<TimerNotifier> statsTimerFD_;
 
   std::shared_ptr<xio_context> ctx;
   std::shared_ptr<xio_server> server;
