@@ -97,9 +97,15 @@ NetworkXioIOHandler::NetworkXioIOHandler(PortalThreadData* pt)
 
   eventFD_ = IOExecEventFdGetReadFd(eventHandle_);
 
-  uint64_t timerSec = getenv_with_default("GOBJFS_SERVER_TIMER_SEC", 1);
-  const int64_t timerNanosec = 0;
-  statsTimerFD_ = gobjfs::make_unique<TimerNotifier>(timerSec, timerNanosec);
+  try {
+
+    uint64_t timerSec = getenv_with_default("GOBJFS_SERVER_TIMER_SEC", 1);
+    const int64_t timerNanosec = 0;
+    statsTimerFD_ = gobjfs::make_unique<TimerNotifier>(timerSec, timerNanosec);
+
+  } catch (const std::exception& e) {
+    throw e;
+  }
 
   startEventHandler();
 }

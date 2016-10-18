@@ -35,6 +35,8 @@ but WITHOUT ANY WARRANTY of any kind.
 namespace gobjfs {
 namespace xio {
 
+//#define SHARED_SESSION
+
 /**
  * keep one session per uri for portals
  */
@@ -46,7 +48,6 @@ static std::mutex mutex;
 
 static int dbg_xio_session_destroy(xio_session* s)
 {
-    GLOG_INFO("destroying session=" << (void*)s << " for uri="  << getURI(s));
     return xio_session_destroy(s);
 }
 
@@ -355,14 +356,20 @@ void NetworkXioClient::run(std::promise<bool>& promise) {
     throw FailedRegisterEventHandler("failed to register event handler");
   }
 
-  uint64_t timerSec = 0;
-  uint64_t timerMicrosec = getenv_with_default("GOBJFS_CLIENT_TIMER_USEC", 50);
-  flushTimerFD_ = gobjfs::make_unique<gobjfs::os::TimerNotifier>(timerSec, timerMicrosec * 1000);
+  try {
+    const uint64_t timerSec = 0;
+    const uint64_t timerMicrosec = getenv_with_default("GOBJFS_CLIENT_TIMER_USEC", 50);
+    flushTimerFD_ = gobjfs::make_unique<gobjfs::os::TimerNotifier>(timerSec, timerMicrosec * 1000);
 
-  if (xio_context_add_ev_handler(ctx.get(), flushTimerFD_->getFD(), XIO_POLLIN,
-                                 static_timer_event<NetworkXioClient>,
-                                 this)) {
-    throw FailedRegisterEventHandler("failed to register timer handler");
+    const int timerfd = flushTimerFD_->getFD();
+    assert (timerfd >= 0);
+    if (xio_context_add_ev_handler(ctx.get(), flushTimerFD_->getFD(), XIO_POLLIN,
+                               static_timer_event<NetworkXioClient>,
+                               this)) {
+      throw FailedRegisterEventHandler("failed to register timer handler");
+    }
+  } catch (const std::exception& e) {
+    throw e;
   }
 
   auto fp = std::bind(&NetworkXioClient::run_loop_worker, this);
@@ -406,26 +413,17 @@ int NetworkXioClient::connect(const std::string& uri) {
   return 0;
 }
 
+/**
+ * called by external thread
+ */
 void NetworkXioClient::shutdown() {
 
   if (not stopped) {
     stopping = true;
 
-    xio_context_del_ev_handler(ctx.get(), evfd);
-    xio_context_del_ev_handler(ctx.get(), flushTimerFD_->getFD());
-
-    xio_context_stop_loop(ctx.get());
+    xstop_loop();
 
     xio_thread_.join();
-
-    const size_t unsentReq = inflight_reqs.size();
-    if (unsentReq) {
-      GLOG_ERROR("queue had unsent requests=" << unsentReq);
-      while (inflight_queue_size() > 0) {
-        ClientMsg *req = pop_request();
-        delete req;
-      }
-    }
 
     stopped = true;
   }
@@ -495,6 +493,13 @@ void NetworkXioClient::run_loop_worker() {
   }
 
   // do the final shutdown 
+  xio_context_del_ev_handler(ctx.get(), evfd);
+
+  const int timerfd = flushTimerFD_->getFD();
+  if (timerfd >= 0) {
+    xio_context_del_ev_handler(ctx.get(), timerfd);
+  }
+
   for (auto conn : connVec) { 
     if (!conn) {
       // if conn already shutdown, entry will be zero
@@ -513,6 +518,16 @@ void NetworkXioClient::run_loop_worker() {
       xio_connection_destroy(conn);
     }
   }
+
+  const size_t unsentReq = inflight_reqs.size();
+  if (unsentReq) {
+    GLOG_ERROR("queue had unsent requests=" << unsentReq);
+    while (inflight_queue_size() > 0) {
+      ClientMsg *req = pop_request();
+      delete req;
+    }
+  }
+
   for (auto& session : sessionVec) { 
     session.reset();
   }
