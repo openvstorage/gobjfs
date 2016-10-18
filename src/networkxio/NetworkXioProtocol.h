@@ -27,27 +27,31 @@ namespace xio {
 /**
  *  DATA MODEL
  *
+ *  N giocb in user thread
+ *  map to
+ *    |
+ *    |
  *  N aio_request on NetworkXioClient
  *  map to
- *      \
- *       \
- *      1 ClientMsg on NetworkXioClient
- *      map to
- *         \
- *          \
- *          1 NetworkXioMsg on transport
- *          map to
- *             \
- *              \
- *              N NetworkXioRequest on NetworkXioServer
- *              map to
- *               \
- *                \
- *                N gIOBatch on IOExecFile
- *                map to
- *                 \
- *                  \
- *                  N FilerJob on IOExecutor
+ *    |
+ *    |
+ *  1 ClientMsg on NetworkXioClient
+ *  map to
+ *    |
+ *    | 
+ *  1 NetworkXioMsg on accelio transport
+ *  map to
+ *    |
+ *    | 
+ *  N NetworkXioRequest on NetworkXioServer
+ *  map to
+ *    |
+ *    | 
+ *  N gIOBatch on IOExecFile
+ *  map to
+ *    |
+ *    | 
+ *  N FilerJob on IOExecutor
  */
 
 /**
