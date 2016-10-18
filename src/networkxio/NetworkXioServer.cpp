@@ -481,7 +481,7 @@ void NetworkXioServer::send_reply(NetworkXioRequest *req) {
   }
   req->xio_reply.flags = XIO_MSG_FLAG_IMM_SEND_COMP;
 
-  GLOG_INFO("sent reply=" << (void*)&req->xio_reply 
+  GLOG_DEBUG("sent reply=" << (void*)&req->xio_reply 
         << " for original message=" << (void*)xio_req
         << " req=" << (void*)req
         << " with num elem=" << numElems);
