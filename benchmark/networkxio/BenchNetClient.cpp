@@ -313,7 +313,7 @@ void ThreadCtx::doRandomRead() {
     assert(rbuf);
 
 
-    giocb* iocb = (giocb *)malloc(sizeof(giocb));
+    giocb* iocb = new giocb;
     iocb->filename = fileMgr.getFilename(filenumGen(seedGen));
     iocb->aio_buf = rbuf;
     iocb->aio_offset = blockGenerator(seedGen) * config.blockSize; 
@@ -328,7 +328,7 @@ void ThreadCtx::doRandomRead() {
 
       if (ret != 0) {
         std::free(iocb->aio_buf);
-        std::free(iocb);
+        delete iocb;
         benchInfo.failedReads ++;
         //LOG(ERROR) << "failed0";
       } else {
@@ -355,7 +355,7 @@ void ThreadCtx::doRandomRead() {
           }
           aio_finish(ctx_ptr, elem);
           std::free(elem->aio_buf);
-          std::free(elem);
+          delete elem;
         }
         iocb_vec.clear();
       }
@@ -378,7 +378,7 @@ void ThreadCtx::doRandomRead() {
           for (auto &elem : iocb_vec) {
             aio_finish(ctx_ptr, elem);
             std::free(elem->aio_buf);
-            std::free(elem);
+            delete elem;
           }
         } else {
 
@@ -394,7 +394,7 @@ void ThreadCtx::doRandomRead() {
             }
             aio_finish(ctx_ptr, elem);
             std::free(elem->aio_buf);
-            std::free(elem);
+            delete elem;
           }
         }
         iocb_vec.clear();
