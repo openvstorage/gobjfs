@@ -62,7 +62,7 @@ public:
 
   /**
    * handler called from accelio event loop
-   * to print periodic stats
+   * to print periodic stats and adjust minSubmitSize
    */
   void runTimerHandler();
 
@@ -105,8 +105,6 @@ private:
 public:
   int eventFD_{-1};
 private:
-
-  std::unique_ptr<TimerNotifier> statsTimerFD_;
 
   // pointer to parent 
   PortalThreadData* pt_;

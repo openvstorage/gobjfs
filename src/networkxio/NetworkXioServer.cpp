@@ -107,6 +107,31 @@ static int static_on_new_session(xio_session *session, xio_new_session_req *req,
   return obj->on_new_session(session, req);
 }
 
+/** 
+ * called from accelio event loop
+ */
+template <class T> 
+static void static_timer_event(int fd, int events, void *data) {
+  T *obj = reinterpret_cast<T *>(data);
+  if (obj == NULL) {
+    return;
+  }
+  obj->runTimerHandler();
+}
+
+void NetworkXioServer::runTimerHandler()
+{
+  // first drain the timer by reading the timerfd
+  uint64_t count = 0;
+  statsTimerFD_->recv(count);
+
+  for (auto& pt : ptVec_) {
+    if (pt->ioh_) {
+      pt->ioh_->runTimerHandler();
+    }
+  }
+}
+
 NetworkXioServer::NetworkXioServer(const std::string &transport,
                                     const std::string &ipaddr,
                                     int port,
@@ -256,9 +281,37 @@ void NetworkXioServer::run(std::promise<void> &promise) {
   // bind this thread to core different than the portal threads
   gobjfs::os::BindThreadToCore(startCoreForIO_);
 
+  try {
+
+    uint64_t timerSec = getenv_with_default("GOBJFS_SERVER_TIMER_SEC", 1);
+    const int64_t timerNanosec = 0;
+    statsTimerFD_ = gobjfs::make_unique<TimerNotifier>(timerSec, timerNanosec);
+
+  } catch (const std::exception& e) {
+    throw e;
+  }
+
+  // Add periodic timer to dynamically change minSubmitSize
+  if (xio_context_add_ev_handler(ctx.get(), statsTimerFD_->getFD(),
+                              XIO_POLLIN,
+                              static_timer_event<NetworkXioServer>,
+                              this)) {
+
+    throw FailedRegisterEventHandler("failed to register event handler");
+
+  }
+
+  GLOG_INFO("registered timer event fd=" << statsTimerFD_->getFD()
+      << ",thread=" << gettid());
+
   while (not stopping) {
     int ret = xio_context_run_loop(ctx.get(), XIO_INFINITE);
     assert(ret == 0);
+  }
+
+  if (statsTimerFD_) {
+    GLOG_INFO("deregistered timer fd=" << statsTimerFD_->getFD() << " for thread=" << gettid());
+    xio_context_del_ev_handler(ctx.get(), statsTimerFD_->getFD());
   }
 
   for (auto& pt : ptVec_) {
