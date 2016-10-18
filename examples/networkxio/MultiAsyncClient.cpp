@@ -25,20 +25,21 @@ but WITHOUT ANY WARRANTY of any kind.
 #include <networkxio/gobjfs_client_common.h> // GLOG_DEBUG
 
 int times = 10;
+int numports = 1;
 
 using namespace gobjfs::xio;
 
 void NetworkServerWriteReadTest() {
 
-  auto ctx_attr1 = ctx_attr_new();
-  ctx_attr_set_transport(ctx_attr1, "tcp", "127.0.0.1", 21321);
+  std::vector<gobjfs::xio::client_ctx_attr_ptr> ctx_attr_vec;
 
-  auto ctx_attr2 = ctx_attr_new();
-  ctx_attr_set_transport(ctx_attr2, "tcp", "127.0.0.1", 21421);
+  for (int idx = 0; idx < numports; idx ++) {
+    auto ctx_attr = ctx_attr_new();
+    ctx_attr_set_transport(ctx_attr, "tcp", "127.0.0.1", 21321 + (100 * idx));
+    ctx_attr_vec.push_back(ctx_attr);
+  }
 
-  std::vector<gobjfs::xio::client_ctx_attr_ptr> ctx_attr_vec{ctx_attr1, ctx_attr2};
-
-  // open connections to two different servers
+  // open connections 
   client_ctx_ptr ctx = ctx_new(ctx_attr_vec);
   assert(ctx != nullptr);
 
@@ -48,7 +49,7 @@ void NetworkServerWriteReadTest() {
     return;
   }
 
-  for (int32_t uri_slot = 0; uri_slot < 2; uri_slot ++) {
+  for (int32_t uri_slot = 0; uri_slot < ctx_attr_vec.size(); uri_slot ++) {
 
     std::vector<giocb *> iocb_vec;
   
@@ -79,8 +80,7 @@ void NetworkServerWriteReadTest() {
     }
   }
 
-  GLOG_DEBUG(
-      "\n\n------------------- ctx_destroy Successful -------------- \n\n");
+  std::cout << ctx_get_stats(ctx) << std::endl;
 }
 
 int main(int argc, char *argv[]) {
