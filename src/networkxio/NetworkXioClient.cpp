@@ -97,6 +97,10 @@ static inline void xrefcnt_shutdown() {
   }
 }
 
+static void destroy_ctx_shutdown(xio_context *ctx) {
+  xio_context_destroy(ctx);
+  xrefcnt_shutdown();
+}
 
 template <class T>
 static int static_on_session_event(xio_session *session,
@@ -162,6 +166,28 @@ static void static_evfd_stop_loop(int fd, int events, void *data) {
   obj->evfd_stop_loop(fd, events, data);
 }
 
+/** 
+ * called from accelio event loop
+ */
+template <class T> 
+static void static_timer_event(int fd, int events, void *data) {
+  T *obj = reinterpret_cast<T *>(data);
+  if (obj == NULL) {
+    return;
+  }
+  obj->runTimerHandler();
+}
+
+void NetworkXioClient::runTimerHandler() {
+  uint64_t count = 0;
+  flushTimerFD_->recv(count);
+
+  size_t qsz = 0;
+  if ((qsz = inflight_queue_size()) > 0) { 
+    stats.timeout_queue_len = qsz;
+    xstop_loop();
+  }
+}
 
 /**
  * the request itself could get freed after signaling completion in
@@ -189,7 +215,9 @@ void NetworkXioClient::update_stats(void *void_req, bool req_failed) {
 std::string NetworkXioClient::statistics::ToString() const {
   std::ostringstream s;
 
-  s << " num_queued=" << num_queued << ",num_failed=" << num_failed
+  s 
+    << " direct_queue_len=" << direct_queue_len << ",timeout_queue_len=" << timeout_queue_len
+    << " num_queued=" << num_queued << ",num_failed=" << num_failed
     << ",num_completed(incl. failed)=" << num_completed
     << ",rtt_hist=" << rtt_hist << ",rtt_stats=" << rtt_stats;
 
@@ -327,6 +355,16 @@ void NetworkXioClient::run(std::promise<bool>& promise) {
     throw FailedRegisterEventHandler("failed to register event handler");
   }
 
+  uint64_t timerSec = 0;
+  uint64_t timerMicrosec = getenv_with_default("GOBJFS_CLIENT_TIMER_USEC", 50);
+  flushTimerFD_ = gobjfs::make_unique<gobjfs::os::TimerNotifier>(timerSec, timerMicrosec * 1000);
+
+  if (xio_context_add_ev_handler(ctx.get(), flushTimerFD_->getFD(), XIO_POLLIN,
+                                 static_timer_event<NetworkXioClient>,
+                                 this)) {
+    throw FailedRegisterEventHandler("failed to register timer handler");
+  }
+
   auto fp = std::bind(&NetworkXioClient::run_loop_worker, this);
   pthread_setname_np(pthread_self(), "run_loop_worker");
   promise.set_value(true);
@@ -372,13 +410,23 @@ void NetworkXioClient::shutdown() {
 
   if (not stopped) {
     stopping = true;
+
     xio_context_del_ev_handler(ctx.get(), evfd);
+    xio_context_del_ev_handler(ctx.get(), flushTimerFD_->getFD());
+
     xio_context_stop_loop(ctx.get());
+
     xio_thread_.join();
-    while (not is_queue_empty()) {
-      ClientMsg *req = pop_request();
-      delete req;
+
+    const size_t unsentReq = inflight_reqs.size();
+    if (unsentReq) {
+      GLOG_ERROR("queue had unsent requests=" << unsentReq);
+      while (inflight_queue_size() > 0) {
+        ClientMsg *req = pop_request();
+        delete req;
+      }
     }
+
     stopped = true;
   }
 
@@ -388,11 +436,6 @@ NetworkXioClient::~NetworkXioClient() {
   shutdown(); 
 }
 
-void NetworkXioClient::destroy_ctx_shutdown(xio_context *ctx) {
-  xio_context_destroy(ctx);
-  xrefcnt_shutdown();
-}
-
 bool NetworkXioClient::is_disconnected(int32_t uri_slot) {
   return (connVec.at(uri_slot) == nullptr);
 }
@@ -400,9 +443,9 @@ bool NetworkXioClient::is_disconnected(int32_t uri_slot) {
 /**
  * called by internal thread to check for new requests
  */
-bool NetworkXioClient::is_queue_empty() {
+int32_t NetworkXioClient::inflight_queue_size() {
   boost::lock_guard<decltype(inflight_lock)> lock_(inflight_lock);
-  return inflight_reqs.empty();
+  return inflight_reqs.size();
 }
 
 NetworkXioClient::ClientMsg *NetworkXioClient::pop_request() {
@@ -415,10 +458,12 @@ NetworkXioClient::ClientMsg *NetworkXioClient::pop_request() {
 /**
  * called by external user thread to insert new requests
  */
-void NetworkXioClient::push_request(ClientMsg *req) {
+int32_t NetworkXioClient::push_request(ClientMsg *req) {
   boost::lock_guard<decltype(inflight_lock)> lock_(inflight_lock);
   inflight_reqs.push(req);
   stats.num_queued++;
+  return inflight_reqs.size();
+
 }
 
 /**
@@ -442,8 +487,9 @@ void NetworkXioClient::run_loop_worker() {
   while (not stopping) {
     int ret = xio_context_run_loop(this->ctx.get(), XIO_INFINITE);
     assert(ret == 0);
-    while (not this->is_queue_empty()) {
-      ClientMsg *req = this->pop_request();
+
+    while (inflight_queue_size() > 0) {
+      ClientMsg *req = pop_request();
       send_msg(req);
     }
   }
@@ -581,13 +627,15 @@ int NetworkXioClient::on_session_event(xio_session *session
  * Wait for outgoing queue to be have a free slot
  */
 void NetworkXioClient::req_queue_wait_until(ClientMsg *xmsg) {
-  std::unique_lock<std::mutex> l_(req_queue_lock);
   if (--availableRequests_ <= 0) {
-    // TODO("export cv timeout")
-    if (not req_queue_cond.wait_for(l_, std::chrono::seconds(60),
-                                    [&] { return availableRequests_ >= 0; })) {
-      delete xmsg;
-      throw XioClientQueueIsBusyException("request queue is busy");
+    std::unique_lock<std::mutex> l_(req_queue_lock);
+    // check condition inside mutex again
+    if (availableRequests_ <= 0) { 
+      if (not req_queue_cond.wait_for(l_, std::chrono::seconds(60),
+                                      [&] { return availableRequests_ >= 0; })) {
+        delete xmsg;
+        throw XioClientQueueIsBusyException("request queue is busy");
+      }
     }
   }
 }
@@ -597,8 +645,11 @@ void NetworkXioClient::req_queue_wait_until(ClientMsg *xmsg) {
  */
 void NetworkXioClient::req_queue_release() {
   std::unique_lock<std::mutex> l_(req_queue_lock);
+  if (availableRequests_ == 0) {
+    // free slots now available
+    req_queue_cond.notify_one();
+  }
   availableRequests_ ++;
-  req_queue_cond.notify_one();
 }
 
 
@@ -676,8 +727,11 @@ int NetworkXioClient::send_multi_read_request(std::vector<std::string> &&filenam
   assert(offsetVec.empty());
 
   req_queue_wait_until(msgPtr);
-  push_request(msgPtr);
-  xstop_loop();
+  auto numRequests = push_request(msgPtr);
+  if (numRequests >= maxBatchSize_) {
+    stats.direct_queue_len = numRequests;
+    xstop_loop();
+  }
 
   return 0;
 }
@@ -708,8 +762,11 @@ int NetworkXioClient::send_read_request(const std::string &filename,
   msgPtr->xreq.in.data_iov.sglist[0].iov_len = size_in_bytes;
 
   req_queue_wait_until(msgPtr);
-  push_request(msgPtr);
-  xstop_loop();
+  auto numRequests = push_request(msgPtr);
+  if (numRequests >= maxBatchSize_) {
+    stats.direct_queue_len = numRequests;
+    xstop_loop();
+  }
 
   return 0;
 }

@@ -30,6 +30,7 @@ but WITHOUT ANY WARRANTY of any kind.
 #include <util/Spinlock.h>
 #include <util/Stats.h>
 #include <util/EventFD.h>
+#include <util/TimerNotifier.h>
 #include "NetworkXioProtocol.h"
 #include "gobjfs_config.h"
 
@@ -88,6 +89,8 @@ public:
       const std::vector<void *>   &opaqueVec,
       int32_t uri_slot = 0);
 
+  void send_msg(ClientMsg *msgHeader);
+
   int on_session_event(xio_session *session,
                        xio_session_event_data *event_data);
 
@@ -96,23 +99,16 @@ public:
   int on_msg_error(xio_session *session, xio_status error,
                    xio_msg_direction direction, xio_msg *msg);
 
-  void evfd_stop_loop(int fd, int events, void* data);
-
   void run(std::promise<bool>& promise);
-
-  bool is_queue_empty();
-
-  ClientMsg* pop_request();
-  
-  void push_request(ClientMsg* req);
-
-  void xstop_loop();
 
   int connect(const std::string& uri);
 
-  static void destroy_ctx_shutdown(xio_context *ctx);
-
   struct statistics {
+
+    // queue length seen by timer
+    gobjfs::stats::StatsCounter<int64_t> timeout_queue_len;
+    // queue length seen during direct sends
+    gobjfs::stats::StatsCounter<int64_t> direct_queue_len;
 
     std::atomic<uint64_t> num_queued{0};
     // num_completed includes num_failed
@@ -130,7 +126,6 @@ public:
 
   bool is_disconnected(int32_t uri_slot);
 
-  void send_msg(ClientMsg *msgHeader);
 
 private:
   std::shared_ptr<xio_context> ctx;
@@ -151,24 +146,39 @@ public:
 private:
 
   gobjfs::os::Spinlock inflight_lock;
-
   std::queue<ClientMsg*> inflight_reqs;
+public:
+  int32_t inflight_queue_size();
+  ClientMsg* pop_request();
+  int32_t push_request(ClientMsg* req);
+
+private:
 
   xio_session_ops ses_ops;
 
-  int64_t availableRequests_{0};
-  std::mutex req_queue_lock;
-  std::condition_variable req_queue_cond;
-
   EventFD evfd;
+public:
+  void evfd_stop_loop(int fd, int events, void* data);
+  void xstop_loop();
+
+private:
 
   void run_loop_worker();
 
-  void req_queue_wait_until(ClientMsg *xmsg);
+  std::atomic<int64_t> availableRequests_{0};
+  std::mutex req_queue_lock;
+  std::condition_variable req_queue_cond;
 
+  void req_queue_wait_until(ClientMsg *xmsg);
   void req_queue_release();
 
   void shutdown();
+
+  std::unique_ptr<gobjfs::os::TimerNotifier> flushTimerFD_;
+
+public:
+  void runTimerHandler();
+
 };
 
 typedef std::shared_ptr<NetworkXioClient> NetworkXioClientPtr;
