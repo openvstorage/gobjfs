@@ -46,16 +46,19 @@ MAKE_EXCEPTION(FailedRegisterEventHandler);
 
 typedef std::shared_ptr<xio_session> SessionPtr;
 
+/**
+ * One Client can only connect to one URI (i.e. NetworkXioServer)
+ */
 class NetworkXioClient {
 public:
-  NetworkXioClient(const uint64_t qd);
+  NetworkXioClient(const uint64_t qd, const std::string& uri);
   
   ~NetworkXioClient();
 
   struct ClientMsg {
 
     // which connection was used
-    int32_t uriSlot;
+    int32_t connSlot;
 
     // header message actually sent to server
     xio_msg xreq;           
@@ -71,7 +74,7 @@ public:
     // which is sent as header in xio_msg
     std::string msgpackBuffer;
 
-    ClientMsg(int32_t uri_slot) : uriSlot(uri_slot) {}
+    ClientMsg(int32_t conn_slot) : connSlot(conn_slot) {}
 
     void prepare();
   };
@@ -79,8 +82,7 @@ public:
   int append_read_request(const std::string &filename, void *buf,
                              const uint64_t size_in_bytes,
                              const uint64_t offset_in_bytes,
-                             void *opaque,
-                             int32_t uri_slot = 0);
+                             void *opaque);
 
   void send_msg(ClientMsg *msgHeader);
 
@@ -94,7 +96,7 @@ public:
 
   void run(std::promise<bool>& promise);
 
-  int connect(const std::string& uri);
+  int connect();
 
   struct statistics {
 
@@ -117,20 +119,20 @@ public:
 
   void update_stats(void *req, bool req_failed);
 
-  bool is_disconnected(int32_t uri_slot);
+  bool is_disconnected(int32_t conn_slot);
 
 
 private:
   std::shared_ptr<xio_context> ctx;
 
-  std::vector<SessionPtr> sessionVec;
+  SessionPtr session_;
+  std::string uri_;
   std::vector<xio_connection*> connVec;
-  std::vector<std::string> uriVec;
 
   std::mutex currentMsgMutex;
   ClientMsg *currentMsgPtr = nullptr;
 
-  xio_session_params params;
+  xio_session_params sparams;
   xio_connection_params cparams;
 
   bool stopping{false};
@@ -157,7 +159,7 @@ public:
   ClientMsg* pop_request();
   void push_request(ClientMsg* req);
 
-  ClientMsg* allocClientMsg(int32_t uri_slot);
+  ClientMsg* allocClientMsg(int32_t conn_slot);
   int flush(ClientMsg* sendMsgPtr);
 
 private:

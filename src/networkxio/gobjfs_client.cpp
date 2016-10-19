@@ -40,8 +40,8 @@ namespace gobjfs {
 namespace xio {
 
 struct client_ctx {
-  std::vector<client_ctx_attr_ptr> attr_vec;
-  std::vector<std::string> uri_vec;
+  client_ctx_attr_ptr attr;
+  std::string uri;
   gobjfs::xio::NetworkXioClientPtr net_client_;
 
   ~client_ctx() { net_client_.reset(); }
@@ -85,26 +85,6 @@ int ctx_attr_set_transport(client_ctx_attr_ptr attr,
   return -1;
 }
 
-client_ctx_ptr ctx_new(const std::vector<client_ctx_attr_ptr> &attr_vec) {
-
-  client_ctx_ptr ctx = std::make_shared<client_ctx>();
-  ctx->attr_vec = attr_vec;
-
-  for (auto& attr: attr_vec) {
-    if (attr->transport != TransportType::TCP &&
-        attr->transport != TransportType::RDMA) {
-      errno = EINVAL;
-      ctx = nullptr;
-      break;
-    }
-
-    std::string uri = "tcp://" + attr->host + ":" + std::to_string(attr->port);
-    ctx->uri_vec.push_back(uri);
-  }
-
-  return ctx;
-}
-
 client_ctx_ptr ctx_new(const client_ctx_attr_ptr attr) {
 
   if (not attr) {
@@ -122,7 +102,7 @@ client_ctx_ptr ctx_new(const client_ctx_attr_ptr attr) {
 
   try {
     ctx = std::make_shared<client_ctx>();
-    ctx->attr_vec.push_back(attr);
+    ctx->attr = attr;
     ctx->net_client_ = nullptr;
   } catch (const std::bad_alloc &) {
     errno = ENOMEM;
@@ -131,13 +111,11 @@ client_ctx_ptr ctx_new(const client_ctx_attr_ptr attr) {
 
   switch (attr->transport) {
     case TransportType::TCP: {
-      std::string uri = "tcp://" + attr->host + ":" + std::to_string(attr->port);
-      ctx->uri_vec.push_back(uri);
+      ctx->uri = "tcp://" + attr->host + ":" + std::to_string(attr->port);
       break;
     }
     case TransportType::RDMA: {
-      std::string uri = "rdma://" + attr->host + ":" + std::to_string(attr->port);
-      ctx->uri_vec.push_back(uri);
+      ctx->uri = "rdma://" + attr->host + ":" + std::to_string(attr->port);
       break;
     }
     default: {
@@ -159,14 +137,9 @@ int ctx_init(client_ctx_ptr ctx) {
 
   try {
     ctx->net_client_ =
-        std::make_shared<gobjfs::xio::NetworkXioClient>(256);
+        std::make_shared<gobjfs::xio::NetworkXioClient>(256, ctx->uri);
 
-    for (auto& uri : ctx->uri_vec) { 
-      err = ctx->net_client_->connect(uri);
-      if (err != 0) {
-        break;
-      }
-    }
+    err = ctx->net_client_->connect();
   } catch (...) {
     err = -EIO;
   }
@@ -191,9 +164,9 @@ std::string ctx_get_stats(client_ctx_ptr ctx) {
   return ret_string;
 }
 
-bool ctx_is_disconnected(client_ctx_ptr ctx, int32_t uri_slot) {
+bool ctx_is_disconnected(client_ctx_ptr ctx, int32_t conn_slot) {
   if (ctx && ctx->net_client_) {
-    return ctx->net_client_->is_disconnected(uri_slot);
+    return ctx->net_client_->is_disconnected(conn_slot);
   } else {
     return true;
   }
@@ -226,8 +199,7 @@ static aio_request *create_new_request(RequestOp op, struct giocb *aio,
 static int _submit_aio_request(client_ctx_ptr ctx, 
     const std::vector<giocb*> &giocbp_vec, 
     notifier_sptr &cvp,
-    const RequestOp &op,
-    int32_t uri_slot) {
+    const RequestOp &op) {
 
   int r = 0;
   gobjfs::xio::NetworkXioClientPtr net_client = ctx->net_client_;
@@ -263,8 +235,7 @@ static int _submit_aio_request(client_ctx_ptr ctx,
           giocbp->aio_buf,
           giocbp->aio_nbytes,
           giocbp->aio_offset,
-          request,
-          uri_slot);
+          request);
 
     } catch (const std::bad_alloc &) {
       errno = ENOMEM;
@@ -441,28 +412,28 @@ int gbuffer_deallocate(client_ctx_ptr ctx, gbuffer *ptr) {
   return 0;
 }
 
-int aio_read(client_ctx_ptr ctx, giocb *giocbp, int32_t uri_slot) {
+int aio_read(client_ctx_ptr ctx, giocb *giocbp) {
 
   auto cv = std::make_shared<notifier>();
 
   std::vector<giocb*> giocbp_vec(1, giocbp);
   return _submit_aio_request(ctx, giocbp_vec, cv, 
-                             RequestOp::Read, uri_slot);
+                             RequestOp::Read);
 }
 
 int aio_readv(client_ctx_ptr ctx, 
-              const std::vector<giocb *> &giocbp_vec, int32_t uri_slot) {
+              const std::vector<giocb *> &giocbp_vec) {
   int err = 0;
 
   auto cv = std::make_shared<notifier>(giocbp_vec.size());
 
   err = _submit_aio_request(ctx, giocbp_vec, cv, 
-                               RequestOp::Read, uri_slot);
+                               RequestOp::Read);
   return err;
 }
 
 ssize_t read(client_ctx_ptr ctx, const std::string &filename, void *buf,
-             size_t nbytes, off_t offset, int32_t uri_slot) {
+             size_t nbytes, off_t offset) {
   ssize_t r;
   giocb aio;
   aio.filename = filename;
@@ -474,7 +445,7 @@ ssize_t read(client_ctx_ptr ctx, const std::string &filename, void *buf,
     return (r = -1);
   }
 
-  if ((r = aio_read(ctx, &aio, uri_slot)) < 0) {
+  if ((r = aio_read(ctx, &aio)) < 0) {
     return r;
   }
 

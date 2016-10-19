@@ -33,22 +33,14 @@ int times = 10;
 using namespace gobjfs::xio;
 
 void NetworkServerWriteReadTest(void) {
-  auto ctx_attr1 = ctx_attr_new();
-  ctx_attr_set_transport(ctx_attr1, "tcp", "127.0.0.1", 21321);
 
-  auto ctx_attr2 = ctx_attr_new();
-  ctx_attr_set_transport(ctx_attr2, "tcp", "127.0.0.1", 12333);
+  auto ctx_attr = ctx_attr_new();
+  ctx_attr_set_transport(ctx_attr, "tcp", "127.0.0.1", 21321);
 
-  std::vector<gobjfs::xio::client_ctx_attr_ptr> ctx_attr_vec{ctx_attr1, ctx_attr2};
-
-  client_ctx_ptr ctx = ctx_new(ctx_attr_vec);
+  client_ctx_ptr ctx = ctx_new(ctx_attr);
   assert(ctx != nullptr);
-
   int err = ctx_init(ctx);
-  if (err < 0) {
-    GLOG_ERROR("Volume open failed ");
-    return;
-  }
+  assert(err == 0);
 
   int32_t uriSlot = 0;
 
@@ -59,7 +51,7 @@ void NetworkServerWriteReadTest(void) {
 
     size_t readSz = BufferSize - ShortenSize;
 
-    auto sz = gobjfs::xio::read(ctx, "abcd", rbuf, readSz, i * BufferSize, uriSlot);
+    auto sz = gobjfs::xio::read(ctx, "abcd", rbuf, readSz, i * BufferSize);
 
     if (sz < 0) {
       GLOG_ERROR("OMG!!read failure with error  : " << sz);

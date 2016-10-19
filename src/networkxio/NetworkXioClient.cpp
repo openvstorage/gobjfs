@@ -35,46 +35,10 @@ but WITHOUT ANY WARRANTY of any kind.
 namespace gobjfs {
 namespace xio {
 
-//#define SHARED_SESSION
-
-/**
- * keep one session per uri for portals
- */
-
-typedef std::map<std::string, std::shared_ptr<xio_session>> SessionMap;
-
-static SessionMap sessionMap;
-static std::mutex mutex;
-
 static int dbg_xio_session_destroy(xio_session* s)
 {
   GLOG_INFO("destroying session=" << (void*)s);
   return xio_session_destroy(s);
-}
-
-static inline std::shared_ptr<xio_session> getSession(const std::string& uri, 
-    xio_session_params& session_params) {
-
-  std::shared_ptr<xio_session> retptr;
-  std::unique_lock<std::mutex> l(mutex);
-
-  auto iter = sessionMap.find(uri);
-  if (iter == sessionMap.end()) {
-    // session does not exist, create one
-    auto session = std::shared_ptr<xio_session>(xio_session_create(&session_params),
-                                         dbg_xio_session_destroy);
-#ifdef SHARED_SESSION
-    //TODO change conn_idx = 0 when you enable this code
-    auto insertIter = sessionMap.insert(std::make_pair(uri, session));
-    assert(insertIter.second == true); // insert succeded
-#endif
-    GLOG_INFO("session=" << (void*)session.get() << " created for " << uri << " by thread=" << gettid());
-    retptr = session;
-  } else {
-    retptr = iter->second;
-    GLOG_INFO("session=" << (void*)retptr.get() << " found for " << uri << " by thread=" << gettid());
-  }
-  return retptr;
 }
 
 /**
@@ -235,9 +199,10 @@ std::string NetworkXioClient::statistics::ToString() const {
   return s.str();
 }
 
-NetworkXioClient::NetworkXioClient(const uint64_t qd)
-    : stopping(false), stopped(false), 
-      maxQueued_(qd), inflight_reqs(qd) {
+NetworkXioClient::NetworkXioClient(const uint64_t qd, const std::string& uri)
+    : uri_(uri)
+    , stopping(false), stopped(false)
+    , maxQueued_(qd), inflight_reqs(qd) {
 
   ses_ops.on_session_event = static_on_session_event<NetworkXioClient>;
   ses_ops.on_session_established = NULL;
@@ -246,14 +211,24 @@ NetworkXioClient::NetworkXioClient(const uint64_t qd)
   ses_ops.on_cancel_request = NULL;
   ses_ops.assign_data_in_buf = NULL;
 
-  memset(&params, 0, sizeof(params));
-  memset(&cparams, 0, sizeof(cparams));
-
-  params.type = XIO_SESSION_CLIENT;
-  params.ses_ops = &ses_ops;
-  params.user_context = this;
+  bzero(&sparams, sizeof(sparams));
+  bzero(&cparams, sizeof(cparams));
 
   xrefcnt_init();
+
+  sparams.type = XIO_SESSION_CLIENT;
+  sparams.ses_ops = &ses_ops;
+  sparams.user_context = this;
+  sparams.uri = uri_.c_str();
+
+  session_ = std::shared_ptr<xio_session>(xio_session_create(&sparams),
+                                         dbg_xio_session_destroy);
+
+  GLOG_INFO("session=" << (void*)session_.get() << " created for " << uri << " by thread=" << gettid());
+
+  if (session_ == nullptr) {
+    throw XioClientCreateException("failed to create session for uri=" + uri);
+  }
 
   std::promise<bool> promise;
   std::future<bool> future(promise.get_future());
@@ -389,35 +364,22 @@ void NetworkXioClient::run(std::promise<bool>& promise) {
 }
 
 
-int NetworkXioClient::connect(const std::string& uri) {
-  //session = std::shared_ptr<xio_session>(xio_session_create(&params),
-                                         //xio_session_destroy);
-  params.uri = uri.c_str();
-  auto session = getSession(uri, params);
-  if (session == nullptr) {
-    throw XioClientCreateException("failed to create session for uri=" + uri);
-  }
+/** 
+ * Open new connection to same URI
+ * Take advantage of portals on server
+ */
+int NetworkXioClient::connect() {
 
-  cparams.session = session.get();
+  cparams.session = session_.get();
   cparams.ctx = ctx.get();
   cparams.conn_user_context = this;
-#ifdef SHARED_SESSION
   cparams.conn_idx = 0; 
-  // xio will auto-increment internally when conn_idx = 0
-  // and load-balance when session is shared between multiple connections
-  // enable this code after fixing shared session destructor error
-#else
-  // this is temporary hack assuming max portals never more than 20
-  cparams.conn_idx = gettid() % 20;
-#endif
 
   auto conn = xio_connect(&cparams);
   if (conn == nullptr) {
-    throw XioClientCreateException("failed to connect to uri=" + uri);
+    throw XioClientCreateException("failed to connect to uri=" + uri_);
   }
 
-  uriVec.push_back(uri);
-  sessionVec.push_back(session);
   connVec.push_back(conn);
 
   return 0;
@@ -444,7 +406,7 @@ NetworkXioClient::~NetworkXioClient() {
   shutdown(); 
 }
 
-bool NetworkXioClient::is_disconnected(int32_t uri_slot) {
+bool NetworkXioClient::is_disconnected(int uri_slot) {
   return (connVec.at(uri_slot) == nullptr);
 }
 
@@ -582,11 +544,8 @@ void NetworkXioClient::run_loop_worker() {
     }
   }
 
-  for (auto& session : sessionVec) { 
-    GLOG_INFO("session=" << session.get() << " use_count=" << session.use_count());
-    session.reset();
-  }
-  sessionVec.clear();
+  GLOG_INFO("destroying session=" << session_.get() << " use_count=" << session_.use_count());
+  session_.reset();
 }
 
 
@@ -699,7 +658,7 @@ void NetworkXioClient::send_msg(ClientMsg *msgPtr) {
   int ret = 0;
   // TODO add check if uri_slot exists 
   do {
-    ret = xio_send_request(connVec.at(msgPtr->uriSlot), &msgPtr->xreq);
+    ret = xio_send_request(connVec.at(msgPtr->connSlot), &msgPtr->xreq);
     // TODO resend on approp xio_errno
     NetworkXioMsg& requestHeader = msgPtr->msg;
     const size_t numElem = requestHeader.numElems_;
@@ -716,9 +675,9 @@ void NetworkXioClient::send_msg(ClientMsg *msgPtr) {
   } while (0);
 }
 
-NetworkXioClient::ClientMsg* NetworkXioClient::allocClientMsg(int32_t uri_slot) {
+NetworkXioClient::ClientMsg* NetworkXioClient::allocClientMsg(int32_t conn_slot) {
 
-    ClientMsg* newMsgPtr = new ClientMsg(uri_slot);
+    ClientMsg* newMsgPtr = new ClientMsg(conn_slot);
 
     // TODO have preallocated msgptr
     bzero(static_cast<void *>(&newMsgPtr->xreq), sizeof(xio_msg));
@@ -766,13 +725,12 @@ int NetworkXioClient::append_read_request(const std::string &filename,
                                              void *buf,
                                              const uint64_t size_in_bytes,
                                              const uint64_t offset_in_bytes,
-                                             void *aioReqPtr,
-                                             int32_t uri_slot) {
+                                             void *aioReqPtr) {
 
   std::unique_lock<std::mutex> l(currentMsgMutex);
 
   if (!currentMsgPtr) {
-    currentMsgPtr = allocClientMsg(uri_slot);
+    currentMsgPtr = allocClientMsg(0); // TODO use portals
   }
   NetworkXioMsg* requestHeader = &currentMsgPtr->msg;
 

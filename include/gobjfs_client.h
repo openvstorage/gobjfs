@@ -89,7 +89,10 @@ client_ctx_ptr ctx_new(const client_ctx_attr_ptr attr);
 client_ctx_ptr ctx_new(const std::vector<client_ctx_attr_ptr> &attr_vec);
 
 /**
- * Initialize gobjfs xio context to talk to server
+ * Initialize gobjfs xio context to talk to a particular server
+ * listening at a URI
+ * Guideline - Create one ctx per URI in a process.
+ * The returned ctx can be used by multiple threads to submit requests
  * @param ctx: gobjfs xio context
  * @return: zero on success, or error code on fail
  */
@@ -105,10 +108,10 @@ std::string ctx_get_stats(client_ctx_ptr ctx);
 /**
  * Check connection status
  * @param ctx: gobjfs xio context
- * @param uri_slot: index of connection
+ * @param conn_slot: index of connection
  * @return: True if the client has been disconnected, false otherwise
  */
-bool ctx_is_disconnected(client_ctx_ptr ctx, int32_t uri_slot);
+bool ctx_is_disconnected(client_ctx_ptr ctx, int32_t conn_slot);
 
 /**
  * Allocate buffer from the shared memory segment
@@ -146,11 +149,10 @@ int gbuffer_deallocate(client_ctx_ptr ctx, gbuffer *ptr);
  * @param buf: Shared memory buffer
  * @param nbytes: Size to read in bytes
  * @param offset: Offset to read in volume
- * @param uri_slot : which uri to send request
  * @return: Number of bytes actually read, -1 on fail
  */
 ssize_t read(client_ctx_ptr ctx, const std::string &filename, void *buf,
-             size_t nbytes, off_t offset, int32_t uri_slot = 0);
+             size_t nbytes, off_t offset);
 
 /**
  * Suspend until asynchronous I/O operation or timeout complete
@@ -207,20 +209,18 @@ int aio_finish(client_ctx_ptr ctx, giocb *giocbp);
  * Asynchronous read from a volume
  * @param ctx: gobjfs xio context
  * @param giocb: Pointer to an AIO Control Block structure
- * @param uri_slot : which uri to send request
  * @return: 0 on success, -1 on fail
  */
-int aio_read(client_ctx_ptr ctx, giocb *giocbp, int32_t uri_slot = 0);
+int aio_read(client_ctx_ptr ctx, giocb *giocbp);
 
 /**
  * Asynchronous readv from a volume
  * @param ctx: gobjfs xio context
  * @param giocb_vec: Pointer to vector of AIO Control Block structure
- * @param uri_slot : which uri to send request
  * @return: 0 on success, -1 on fail
  */
 int aio_readv(client_ctx_ptr ctx, 
-    const std::vector<giocb *> &giocbp_vec, int32_t uri_slot = 0);
+    const std::vector<giocb *> &giocbp_vec);
 
 }
 }
