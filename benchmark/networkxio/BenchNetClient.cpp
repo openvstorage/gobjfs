@@ -295,7 +295,7 @@ void ThreadCtx::doRandomRead() {
 
     for (auto& ctx_attr : ctx_attr_vec) { 
       auto ctx_ptr = ctx_new(ctx_attr);
-      int err = ctx_init(ctx_ptr);
+      int err = ctx_init(ctx_ptr, config.maxOutstandingIO);
       assert(err == 0);
       ctx_ptr_vec.push_back(ctx_ptr);
     }
@@ -511,7 +511,7 @@ int main(int argc, char *argv[]) {
   
     for (auto& ctx_attr : ctx_attr_vec) { 
       auto ctx_ptr = ctx_new(ctx_attr);
-      int err = ctx_init(ctx_ptr);
+      int err = ctx_init(ctx_ptr, config.maxThr * config.maxOutstandingIO);
       assert(err == 0);
       ctx_ptr_vec.push_back(ctx_ptr);
     }

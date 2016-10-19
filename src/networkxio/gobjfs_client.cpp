@@ -126,7 +126,7 @@ client_ctx_ptr ctx_new(const client_ctx_attr_ptr attr) {
   return ctx;
 }
 
-int ctx_init(client_ctx_ptr ctx) {
+int ctx_init(client_ctx_ptr ctx, int32_t queue_depth) {
 
   int err = 0;
 
@@ -137,7 +137,7 @@ int ctx_init(client_ctx_ptr ctx) {
 
   try {
     ctx->net_client_ =
-        std::make_shared<gobjfs::xio::NetworkXioClient>(256, ctx->uri);
+        std::make_shared<gobjfs::xio::NetworkXioClient>(queue_depth, ctx->uri);
 
     err = ctx->net_client_->connect();
   } catch (...) {

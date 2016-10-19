@@ -94,9 +94,10 @@ client_ctx_ptr ctx_new(const std::vector<client_ctx_attr_ptr> &attr_vec);
  * Guideline - Create one ctx per URI in a process.
  * The returned ctx can be used by multiple threads to submit requests
  * @param ctx: gobjfs xio context
+ * @param queue_depth: max number of concurrent requests
  * @return: zero on success, or error code on fail
  */
-int ctx_init(client_ctx_ptr ctx);
+int ctx_init(client_ctx_ptr ctx, int queue_depth = 256);
 
 /**
  * Get stats for this connection

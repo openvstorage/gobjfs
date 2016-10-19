@@ -199,10 +199,15 @@ std::string NetworkXioClient::statistics::ToString() const {
   return s.str();
 }
 
-NetworkXioClient::NetworkXioClient(const uint64_t qd, const std::string& uri)
+NetworkXioClient::NetworkXioClient(const uint64_t queueDepth, const std::string& uri)
     : uri_(uri)
     , stopping(false), stopped(false)
-    , maxQueued_(qd), inflight_reqs(qd) {
+    , maxBatchSize_(queueDepth/4)
+    , maxQueued_(queueDepth), inflight_reqs(queueDepth) {
+
+  if (maxBatchSize_ == 0) {
+    maxBatchSize_ = 1;
+  }
 
   ses_ops.on_session_event = static_on_session_event<NetworkXioClient>;
   ses_ops.on_session_established = NULL;
