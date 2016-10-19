@@ -510,16 +510,27 @@ void NetworkXioClient::evfd_stop_loop(int fd, int /*events*/, void * /*data*/) {
 void NetworkXioClient::run_loop_worker() {
 
   GLOG_INFO("thread=" << gettid() << " running loop on ctx=" << (void*)this->ctx.get());
+
+  int timeout_ms = XIO_INFINITE;
   while (not stopping) {
-    int ret = xio_context_run_loop(this->ctx.get(), XIO_INFINITE);
+    int ret = xio_context_run_loop(this->ctx.get(), timeout_ms);
     assert(ret == 0);
 
+    int numProcessed = 0;
     while (1) {
       ClientMsg *req = pop_request();
       if (!req) { 
         break;
       }
       send_msg(req);
+      numProcessed ++;
+    }
+    // if there were outgoing requests, we are expecting more
+    // lets set timeout to zero 
+    if (numProcessed) {
+      timeout_ms = 0;
+    } else {
+      timeout_ms = XIO_INFINITE;
     }
   }
 
