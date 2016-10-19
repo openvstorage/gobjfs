@@ -76,18 +76,11 @@ public:
     void prepare();
   };
 
-  int send_read_request(const std::string &filename, void *buf,
+  int append_read_request(const std::string &filename, void *buf,
                              const uint64_t size_in_bytes,
                              const uint64_t offset_in_bytes,
                              void *opaque,
                              int32_t uri_slot = 0);
-
-  int send_multi_read_request(std::vector<std::string> &&filenameVec, 
-      std::vector<void *>   &&bufVec,
-      std::vector<uint64_t> &&sizeVec,
-      std::vector<uint64_t> &&offsetVec,
-      const std::vector<void *>   &opaqueVec,
-      int32_t uri_slot = 0);
 
   void send_msg(ClientMsg *msgHeader);
 
@@ -134,6 +127,9 @@ private:
   std::vector<xio_connection*> connVec;
   std::vector<std::string> uriVec;
 
+  std::mutex currentMsgMutex;
+  ClientMsg *currentMsgPtr = nullptr;
+
   xio_session_params params;
   xio_connection_params cparams;
 
@@ -142,20 +138,27 @@ private:
   std::thread xio_thread_;
 
 public:
+
+  int timeout_ms = XIO_INFINITE; 
+
   size_t maxBatchSize_ = MAX_AIO_BATCH_SIZE;
 private:
 
-  boost::lockfree::queue<ClientMsg*, boost::lockfree::fixed_sized<true>> inflight_reqs;
   std::atomic<int32_t> numQueued_{0};
-  std::atomic<int32_t> waiters_{0};
   const int32_t maxQueued_{0};
+  boost::lockfree::queue<ClientMsg*, boost::lockfree::fixed_sized<true>> inflight_reqs;
+
+  std::atomic<int32_t> waiters_{0};
   std::mutex inflight_mutex;
   std::condition_variable inflight_cond;
 
 public:
   int32_t inflight_queue_size();
   ClientMsg* pop_request();
-  int32_t push_request(ClientMsg* req);
+  void push_request(ClientMsg* req);
+
+  ClientMsg* allocClientMsg(int32_t uri_slot);
+  int flush(ClientMsg* sendMsgPtr);
 
 private:
 

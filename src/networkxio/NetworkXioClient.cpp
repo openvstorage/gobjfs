@@ -184,6 +184,15 @@ void NetworkXioClient::runTimerHandler() {
   uint64_t count = 0;
   flushTimerFD_->recv(count);
 
+  // move outstanding requests to flush queue
+  ClientMsg* sendMsgPtr = nullptr;
+  {
+    std::unique_lock<std::mutex> l(currentMsgMutex);
+    sendMsgPtr = currentMsgPtr;
+    currentMsgPtr = nullptr;
+  }
+  this->flush(sendMsgPtr);
+    
   size_t qsz = 0;
   if ((qsz = inflight_queue_size()) > 0) { 
     stats.timeout_queue_len = qsz;
@@ -452,7 +461,7 @@ NetworkXioClient::ClientMsg *NetworkXioClient::pop_request() {
   if (popReturn == true) {
     numQueued_ --;
     if (waiters_) {
-      // in queue near-full conditions, notification wont be sent
+      // in queue near-full conditions, notification may not be sent
       // and pushing thread waits some extra microsec
       std::unique_lock<std::mutex> l(inflight_mutex);
       inflight_cond.notify_one();
@@ -464,7 +473,7 @@ NetworkXioClient::ClientMsg *NetworkXioClient::pop_request() {
 /**
  * called by external user thread to insert new requests
  */
-int32_t NetworkXioClient::push_request(ClientMsg *req) {
+void NetworkXioClient::push_request(ClientMsg *req) {
 
 
   bool pushReturn = false;
@@ -487,8 +496,8 @@ int32_t NetworkXioClient::push_request(ClientMsg *req) {
   } while (pushReturn == false);
 
   stats.num_queued++;
-
-  return numQueued_;
+  // race conditions - stat can be inaccurate
+  stats.direct_queue_len = numQueued_;  
 }
 
 /**
@@ -511,7 +520,7 @@ void NetworkXioClient::run_loop_worker() {
 
   GLOG_INFO("thread=" << gettid() << " running loop on ctx=" << (void*)this->ctx.get());
 
-  int timeout_ms = XIO_INFINITE;
+  timeout_ms = XIO_INFINITE;
   while (not stopping) {
     int ret = xio_context_run_loop(this->ctx.get(), timeout_ms);
     assert(ret == 0);
@@ -707,96 +716,90 @@ void NetworkXioClient::send_msg(ClientMsg *msgPtr) {
   } while (0);
 }
 
-int NetworkXioClient::send_multi_read_request(std::vector<std::string> &&filenameVec, 
-    std::vector<void *>   &&bufVec,
-    std::vector<uint64_t> &&sizeVec,
-    std::vector<uint64_t> &&offsetVec,
-    const std::vector<void *>   &aioReqVec,
-    int uri_slot) {
+NetworkXioClient::ClientMsg* NetworkXioClient::allocClientMsg(int32_t uri_slot) {
 
+    ClientMsg* newMsgPtr = new ClientMsg(uri_slot);
 
-  ClientMsg *msgPtr = new ClientMsg(uri_slot);
-  msgPtr->aioReqVec_ = aioReqVec;
+    // TODO have preallocated msgptr
+    bzero(static_cast<void *>(&newMsgPtr->xreq), sizeof(xio_msg));
 
-  NetworkXioMsg& requestHeader = msgPtr->msg;
-  requestHeader.opcode(NetworkXioMsgOpcode::ReadReq);
-  requestHeader.clientMsgPtr_ = reinterpret_cast<uintptr_t>(msgPtr);
+    NetworkXioMsg* requestHeader = &newMsgPtr->msg;
+    requestHeader->opcode(NetworkXioMsgOpcode::ReadReq);
+    requestHeader->clientMsgPtr_ = (uintptr_t)newMsgPtr;
+    requestHeader->numElems_ = 0;
 
-  const size_t numElems = filenameVec.size();
-  requestHeader.numElems_ = numElems;
+    requestHeader->sizeVec_.reserve(maxBatchSize_);
+    requestHeader->offsetVec_.reserve(maxBatchSize_);
+    requestHeader->filenameVec_.reserve(maxBatchSize_);
+    requestHeader->errvalVec_.reserve(maxBatchSize_);
+    requestHeader->retvalVec_.reserve(maxBatchSize_);
 
-  // Caller must ensure
-  // all vectors have same size
-  // AND batch size less than max configured
-  assert(numElems <= maxBatchSize_); 
-  assert(bufVec.size() == numElems); 
-  assert(sizeVec.size() == numElems);
-  assert(offsetVec.size() == numElems);
-  assert(aioReqVec.size() == numElems);
+    newMsgPtr->aioReqVec_.reserve(maxBatchSize_);
 
-  requestHeader.sizeVec_ = std::move(sizeVec);
-  requestHeader.offsetVec_ = std::move(offsetVec);
-  requestHeader.filenameVec_ = std::move(filenameVec);
+    newMsgPtr->xreq.in.sgl_type = XIO_SGL_TYPE_IOV_PTR;
+    newMsgPtr->xreq.in.pdata_iov.max_nents = maxBatchSize_;
+    newMsgPtr->xreq.in.pdata_iov.sglist = (xio_iovec_ex*)
+        (calloc(maxBatchSize_, sizeof(xio_iovec_ex)));
 
-  msgPtr->prepare();
+    xio_iovec_ex *in_sglist = newMsgPtr->xreq.in.pdata_iov.sglist;
+    for (size_t idx = 0; idx < maxBatchSize_; idx ++) {
+      in_sglist[idx].iov_base = nullptr;
+      in_sglist[idx].iov_len = 0;
+    }
+    return newMsgPtr;
+}
 
-  // Allocate the scatter-gather list upto numElems
-  msgPtr->xreq.in.sgl_type = XIO_SGL_TYPE_IOV_PTR;
-  vmsg_sglist_set_nents(&msgPtr->xreq.in, numElems);
-  msgPtr->xreq.in.pdata_iov.max_nents = numElems;
-  struct xio_iovec_ex* in_sglist = (struct xio_iovec_ex*)
-      (calloc(numElems, sizeof(struct xio_iovec_ex)));
-  msgPtr->xreq.in.pdata_iov.sglist = in_sglist;
-  for (size_t idx = 0; idx < numElems; idx ++) {
-    in_sglist[idx].iov_base = bufVec[idx];
-    in_sglist[idx].iov_len = requestHeader.sizeVec_[idx];
+int NetworkXioClient::flush(ClientMsg* sendMsgPtr)
+{
+  if (sendMsgPtr) {
+    sendMsgPtr->prepare();
+    vmsg_sglist_set_nents(&sendMsgPtr->xreq.in, sendMsgPtr->msg.numElems_);
+    push_request(sendMsgPtr);
+    if (timeout_ms != 0) {
+      xstop_loop();
+    }
   }
-
-  bufVec.clear();
-  // check the vectors have been "std::move" and emptied 
-  assert(filenameVec.empty());
-  assert(sizeVec.empty());
-  assert(offsetVec.empty());
-
-  auto numRequests = push_request(msgPtr);
-  if (numRequests >= maxBatchSize_) {
-    stats.direct_queue_len = numRequests;
-    xstop_loop();
-  }
-
   return 0;
 }
 
-int NetworkXioClient::send_read_request(const std::string &filename,
+int NetworkXioClient::append_read_request(const std::string &filename,
                                              void *buf,
                                              const uint64_t size_in_bytes,
                                              const uint64_t offset_in_bytes,
                                              void *aioReqPtr,
                                              int32_t uri_slot) {
 
-  ClientMsg *msgPtr = new ClientMsg(uri_slot);
-  msgPtr->aioReqVec_.push_back(aioReqPtr);
+  std::unique_lock<std::mutex> l(currentMsgMutex);
 
-  NetworkXioMsg& requestHeader = msgPtr->msg;
-  requestHeader.opcode(NetworkXioMsgOpcode::ReadReq);
-  requestHeader.clientMsgPtr_ = (uintptr_t)msgPtr;
-  requestHeader.sizeVec_.push_back(size_in_bytes);
-  requestHeader.offsetVec_.push_back(offset_in_bytes);
-  requestHeader.filenameVec_.push_back(filename);
-  requestHeader.numElems_ = 1;
-
-  msgPtr->prepare();
-
-  // TODO_MULTI add vector to sglist
-  vmsg_sglist_set_nents(&msgPtr->xreq.in, 1);
-  msgPtr->xreq.in.data_iov.sglist[0].iov_base = buf;
-  msgPtr->xreq.in.data_iov.sglist[0].iov_len = size_in_bytes;
-
-  auto numRequests = push_request(msgPtr);
-  if (numRequests >= maxBatchSize_) {
-    stats.direct_queue_len = numRequests;
-    xstop_loop();
+  if (!currentMsgPtr) {
+    currentMsgPtr = allocClientMsg(uri_slot);
   }
+  NetworkXioMsg* requestHeader = &currentMsgPtr->msg;
+
+  assert(requestHeader->numElems_ < maxBatchSize_);
+
+  // TODO reserve vector size
+  currentMsgPtr->aioReqVec_.push_back(aioReqPtr);
+  requestHeader->sizeVec_.push_back(size_in_bytes);
+  requestHeader->offsetVec_.push_back(offset_in_bytes);
+  requestHeader->filenameVec_.push_back(filename);
+
+  const size_t curIdx = requestHeader->numElems_;
+
+  xio_iovec_ex *in_sglist = currentMsgPtr->xreq.in.pdata_iov.sglist;
+  in_sglist[curIdx].iov_base = buf;
+  in_sglist[curIdx].iov_len = size_in_bytes;
+
+  requestHeader->numElems_ ++;
+
+  if (requestHeader->numElems_ == maxBatchSize_) {
+    ClientMsg* sendMsgPtr = currentMsgPtr;
+    currentMsgPtr = nullptr;
+    l.unlock();
+
+    // flush outside the mutex, lets other threads append
+    this->flush(sendMsgPtr); 
+  } 
 
   return 0;
 }
@@ -847,8 +850,6 @@ int NetworkXioClient::on_response(xio_session *session __attribute__((unused)),
 
 void NetworkXioClient::ClientMsg::prepare() {
   msgpackBuffer = msg.pack_msg();
-
-  memset(static_cast<void *>(&xreq), 0, sizeof(xio_msg));
 
   vmsg_sglist_set_nents(&xreq.out, 0);
   xreq.out.header.iov_base = (void *)msgpackBuffer.c_str();
