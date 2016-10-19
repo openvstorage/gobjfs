@@ -19,7 +19,7 @@ but WITHOUT ANY WARRANTY of any kind.
 
 #include <libxio.h>
 #include <iostream>
-#include <queue>
+#include <boost/lockfree/queue.hpp>
 #include <future>
 #include <mutex>
 #include <boost/thread/lock_guard.hpp>
@@ -145,8 +145,13 @@ public:
   size_t maxBatchSize_ = MAX_AIO_BATCH_SIZE;
 private:
 
-  gobjfs::os::Spinlock inflight_lock;
-  std::queue<ClientMsg*> inflight_reqs;
+  boost::lockfree::queue<ClientMsg*, boost::lockfree::fixed_sized<true>> inflight_reqs;
+  std::atomic<int32_t> numQueued_{0};
+  std::atomic<int32_t> waiters_{0};
+  const int32_t maxQueued_{0};
+  std::mutex inflight_mutex;
+  std::condition_variable inflight_cond;
+
 public:
   int32_t inflight_queue_size();
   ClientMsg* pop_request();
@@ -164,13 +169,6 @@ public:
 private:
 
   void run_loop_worker();
-
-  std::atomic<int64_t> availableRequests_{0};
-  std::mutex req_queue_lock;
-  std::condition_variable req_queue_cond;
-
-  void req_queue_wait_until(ClientMsg *xmsg);
-  void req_queue_release();
 
   void shutdown();
 
