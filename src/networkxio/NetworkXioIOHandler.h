@@ -41,6 +41,8 @@ using gobjfs::os::TimerNotifier;
 namespace gobjfs {
 namespace xio {
 
+class NetworkXioMsg;
+
 static int static_runEventHandler(gIOStatus& iostatus, void* ctx);
 
 class NetworkXioIOHandler {
@@ -70,6 +72,8 @@ public:
 
 private:
   void handle_open(NetworkXioRequest *req);
+
+  int handle_multi_read(NetworkXioRequest *req, NetworkXioMsg& msg);
 
   int handle_read(NetworkXioRequest *req, const std::string &filename,
                   size_t size, off_t offset);

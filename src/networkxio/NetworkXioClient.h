@@ -19,7 +19,7 @@ but WITHOUT ANY WARRANTY of any kind.
 
 #include <libxio.h>
 #include <iostream>
-#include <queue>
+#include <vector>
 #include <future>
 #include <mutex>
 #include <boost/thread/lock_guard.hpp>
@@ -42,25 +42,44 @@ MAKE_EXCEPTION(XioClientQueueIsBusyException);
 MAKE_EXCEPTION(FailedRegisterEventHandler);
 
 
+/**
+ * One NetworkXioClient can only connect to single URI (i.e. NetworkXioServer)
+ * And xio_context <-> xio_connection is 1:1
+ * Only one thread should access one xio_context at a time
+ *
+ * To connect to multiple portals on same URI, 
+ * OR To connect to multiple URIs
+ * call ctx_init(uri) multiple times
+ */
 class NetworkXioClient {
 public:
   NetworkXioClient(const std::string &uri, const uint64_t qd);
 
   ~NetworkXioClient();
 
-  struct xio_msg_s {
-    xio_msg xreq;           // stuff actually sent to server
-    const void *opaque{nullptr};
-    NetworkXioMsg msg;
-    std::string s_msg;
-  };
+  struct ClientMsg {
 
-  void send_open_request(const void *opaque);
+    // header message actually sent to server
+    xio_msg xreq;           
+
+    // points to list of original aio_requests
+    // which comprise this single server message
+    std::vector<void*> aioReqVec_;
+    
+    // arguments to be sent to server in header
+    NetworkXioMsg msg;
+
+    // msgpack buffer generated from NetworkXioMsg
+    // which is sent as header in xio_msg
+    std::string msgpackBuffer;
+
+    void prepare();
+  };
 
   void send_read_request(const std::string &filename, void *buf,
                              const uint64_t size_in_bytes,
                              const uint64_t offset_in_bytes,
-                             const void *opaque);
+                             void *opaque);
 
   int on_session_event(xio_session *session,
                        xio_session_event_data *event_data);
@@ -71,8 +90,6 @@ public:
                    xio_msg_direction direction, xio_msg *msg);
 
   void run();
-
-  static void destroy_ctx_shutdown(xio_context *ctx);
 
   struct statistics {
 
@@ -92,7 +109,7 @@ public:
 
   const bool &is_disconnected() { return disconnected; }
 
-  void send_msg(xio_msg_s *xmsg);
+  void send_msg(ClientMsg *msgPtr);
 
   void run_loop();
 
@@ -100,7 +117,7 @@ private:
   std::shared_ptr<xio_context> ctx;
   std::shared_ptr<xio_session> session;
   xio_connection *conn{nullptr};
-  xio_session_params params;
+  xio_session_params sparams;
   xio_connection_params cparams;
 
   std::string uri_;
@@ -117,8 +134,6 @@ private:
   void xio_run_loop_worker(void *arg);
 
   void shutdown();
-
-  static void msg_prepare(xio_msg_s *xmsg);
 
 };
 

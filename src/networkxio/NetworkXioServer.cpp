@@ -455,11 +455,16 @@ int NetworkXioServer::on_session_event(xio_session *session,
 
 void NetworkXioServer::deallocate_request(NetworkXioRequest *req) {
 
-  if ((req->op == NetworkXioMsgOpcode::ReadRsp) && req->data) {
-    if (req->from_pool) {
-      xio_mempool_free(&req->reg_mem);
-    } else {
-      xio_mem_free(&req->reg_mem);
+  if (req->op == NetworkXioMsgOpcode::ReadRsp) {
+
+    const size_t numElems = req->reg_mem_vec.size();
+
+    for (size_t idx = 0; idx < numElems; idx ++) {
+      if (req->from_pool_vec[idx]) {
+        xio_mempool_free(&req->reg_mem_vec[idx]);
+      } else {
+        xio_mem_free(&req->reg_mem_vec[idx]);
+      }
     }
   }
 
@@ -468,8 +473,14 @@ void NetworkXioServer::deallocate_request(NetworkXioRequest *req) {
 
 int NetworkXioServer::on_msg_send_complete(xio_session *session
                                                ATTRIBUTE_UNUSED,
-                                           xio_msg *msg ATTRIBUTE_UNUSED,
+                                           xio_msg *msg,
                                            void *cb_user_ctx) {
+
+  // free memory allocated to sglist
+  if (msg->out.sgl_type == XIO_SGL_TYPE_IOV_PTR) {
+    free(vmsg_sglist(&msg->out));
+  }
+
   NetworkXioClientData *cd =
       static_cast<NetworkXioClientData *>(cb_user_ctx);
   NetworkXioRequest *req = cd->ncd_done_reqs.front();
@@ -494,7 +505,7 @@ void NetworkXioServer::send_reply(NetworkXioRequest *req) {
   XXEnter();
   xio_msg *xio_req = req->xio_req;
 
-  memset(&req->xio_reply, 0, sizeof(xio_msg));
+  bzero(&req->xio_reply, sizeof(xio_msg));
 
   vmsg_sglist_set_nents(&req->xio_req->in, 0);
   xio_req->in.header.iov_base = NULL;
@@ -502,17 +513,34 @@ void NetworkXioServer::send_reply(NetworkXioRequest *req) {
   req->xio_reply.request = xio_req;
 
   req->xio_reply.out.header.iov_base =
-      const_cast<void *>(reinterpret_cast<const void *>(req->s_msg.c_str()));
-  req->xio_reply.out.header.iov_len = req->s_msg.length();
-  if ((req->op == NetworkXioMsgOpcode::ReadRsp) && req->data) {
-    vmsg_sglist_set_nents(&req->xio_reply.out, 1);
-    req->xio_reply.out.sgl_type = XIO_SGL_TYPE_IOV;
-    req->xio_reply.out.data_iov.max_nents = XIO_IOVLEN;
-    req->xio_reply.out.data_iov.sglist[0].iov_base = req->data;
-    req->xio_reply.out.data_iov.sglist[0].iov_len = req->data_len;
-    req->xio_reply.out.data_iov.sglist[0].mr = req->reg_mem.mr;
+      const_cast<void *>(reinterpret_cast<const void *>(req->msgpackBuffer.c_str()));
+  req->xio_reply.out.header.iov_len = req->msgpackBuffer.length();
+
+  size_t numElems = 0;
+  if (req->op == NetworkXioMsgOpcode::ReadRsp) {
+
+    numElems = req->reg_mem_vec.size();
+    // Allocate the scatter-gather list upto numElems
+    // TODO check numElems does not exceed configured MAX_AIO_BATCH_SIZE
+    struct xio_iovec_ex* out_sglist = (struct xio_iovec_ex*)
+        (calloc(numElems, sizeof(struct xio_iovec_ex)));
+    req->xio_reply.out.pdata_iov.sglist = out_sglist;
+    req->xio_reply.out.sgl_type = XIO_SGL_TYPE_IOV_PTR;
+    vmsg_sglist_set_nents(&req->xio_reply.out, numElems);
+    req->xio_reply.out.pdata_iov.max_nents = numElems;
+
+    for (size_t idx = 0; idx < numElems; idx ++) {
+      out_sglist[idx].iov_base = req->reg_mem_vec[idx].addr;
+      out_sglist[idx].iov_len = req->reg_mem_vec[idx].length;
+      out_sglist[idx].mr = req->reg_mem_vec[idx].mr;
+    }
   }
   req->xio_reply.flags = XIO_MSG_FLAG_IMM_SEND_COMP;
+
+  GLOG_DEBUG("sent reply=" << (void*)&req->xio_reply 
+        << " for original message=" << (void*)xio_req
+        << " req=" << (void*)req
+        << " with num elem=" << numElems);
 
   int ret = xio_send_response(&req->xio_reply);
   if (ret != 0) {
@@ -532,7 +560,6 @@ int NetworkXioServer::on_request(xio_session *session ATTRIBUTE_UNUSED,
   try {
     auto clientData = static_cast<NetworkXioClientData *>(cb_user_ctx);
     NetworkXioRequest *req = new NetworkXioRequest(xio_req, clientData);
-    req->from_pool = true;
     clientData->ncd_refcnt ++;
     clientData->pt_->ioh_->handle_request(req);
   } catch (const std::bad_alloc &) {

@@ -17,64 +17,89 @@
 
 #include <msgpack.hpp>
 #include <sstream>
+#include <vector>
 
 #include <networkxio/NetworkXioCommon.h>
 
 namespace gobjfs {
 namespace xio {
 
+/**
+ *  DATA MODEL
+ *
+ *  N giocb in user thread
+ *  map to
+ *    |
+ *    |
+ *  N aio_request on NetworkXioClient
+ *  map to
+ *    |
+ *    |
+ *  1 ClientMsg on NetworkXioClient
+ *  map to
+ *    |
+ *    | 
+ *  1 NetworkXioMsg on accelio transport
+ *  map to
+ *    |
+ *    | 
+ *  N NetworkXioRequest on NetworkXioServer
+ *  map to
+ *    |
+ *    | 
+ *  N gIOBatch on IOExecFile
+ *  map to
+ *    |
+ *    | 
+ *  N FilerJob on IOExecutor
+ */
+
+/**
+ * The header of the xio_msg is packed using msgpack
+ *   i.e. xio_msg.in.header.iov_base = (msgpack buffer)
+ * When the receiver unpack this header from an xio_msg, it does not know the opcode
+ * so it cannot tell apriori which structure is being unpacked.
+ *
+ * Therefore, all msgpack messages are unpacked into fields of one NetworkXioMsg.
+ * This is a single structure which is union of fields for all possible
+ * messages in the network protocol.
+ * While sending from client to server {filename, offset, size} are set
+ * When sending from server to client {errval, retval} are set
+ * This waste some spaces but not too much since the std::vectors are dynamically sized
+ */
+
 class NetworkXioMsg {
 public:
-  explicit NetworkXioMsg(NetworkXioMsgOpcode opcode = NetworkXioMsgOpcode::Noop,
-                         const std::string &filename = "",
-                         const size_t size = 0, const uint64_t offset = 0,
-                         const ssize_t retval = 0, const int errval = 0,
-                         const uintptr_t opaque = 0, const int64_t timeout = 0)
-      : opcode_(opcode), filename_(filename), size_(size), offset_(offset),
-        retval_(retval), errval_(errval), opaque_(opaque), timeout_(timeout) {}
+  explicit NetworkXioMsg(NetworkXioMsgOpcode opcode = NetworkXioMsgOpcode::Noop)
+      : opcode_(opcode) {}
 
 public:
   NetworkXioMsgOpcode opcode_;
-  std::string filename_;
-  size_t size_{0};
-  uint64_t offset_{0};
-  ssize_t retval_{0};
-  int errval_{0};
-  uintptr_t opaque_{0};
-  int64_t timeout_{0};
+
+  size_t numElems_{0};
+
+  // sent from client to server
+  std::vector<std::string> filenameVec_;
+  std::vector<size_t> sizeVec_;
+  std::vector<uint64_t> offsetVec_;
+
+  // sent from server to client
+  std::vector<ssize_t> retvalVec_;
+  std::vector<int> errvalVec_;
+  
+  // ptr to ClientMsg allocated on client-side
+  // sent from client to server and reflected back
+  uintptr_t clientMsgPtr_{0};
 
 public:
+  NetworkXioMsg(const NetworkXioMsg& other) = delete;
+  NetworkXioMsg(NetworkXioMsg&& other) = delete;
+  void operator = (const NetworkXioMsg& other) = delete;
+  void operator = (NetworkXioMsg&& other) = delete;
+
   const NetworkXioMsgOpcode &opcode() const { return opcode_; }
 
   void opcode(const NetworkXioMsgOpcode &op) { opcode_ = op; }
-
-  const std::string &filename() const { return filename_; }
-
-  void filename(const std::string &fname) { filename_ = fname; }
-
-  const uintptr_t &opaque() const { return opaque_; }
-
-  void opaque(const uintptr_t &opq) { opaque_ = opq; }
-
-  const size_t &size() const { return size_; }
-
-  void size(const size_t &size) { size_ = size; }
-
-  const ssize_t &retval() const { return retval_; }
-
-  void retval(const ssize_t &retval) { retval_ = retval; }
-
-  const int &errval() const { return errval_; }
-
-  void errval(const int &errval) { errval_ = errval; }
-
-  const uint64_t &offset() const { return offset_; }
-
-  void offset(const uint64_t &offset) { offset_ = offset; }
-
-  const int64_t &timeout() const { return timeout_; }
-
-  void timeout(const int64_t &timeout) { timeout_ = timeout; }
 
   const std::string pack_msg() const {
     std::stringstream sbuf;
@@ -98,18 +123,24 @@ public:
 
   void clear() {
     opcode_ = NetworkXioMsgOpcode::Noop;
-    filename_.clear();
-    size_ = 0;
-    offset_ = 0;
-    retval_ = 0;
-    errval_ = 0;
-    opaque_ = 0;
-    timeout_ = 0;
+
+    numElems_ = 0;
+    clientMsgPtr_ = 0;
+
+    filenameVec_.clear();
+    sizeVec_.clear();
+    offsetVec_.clear();
+
+    retvalVec_.clear();
+    errvalVec_.clear();
   }
 
 public:
-  MSGPACK_DEFINE(opcode_, filename_, size_, offset_, retval_, errval_, opaque_,
-                 timeout_);
+  MSGPACK_DEFINE(opcode_, 
+      numElems_, 
+      filenameVec_, sizeVec_, offsetVec_, 
+      retvalVec_, errvalVec_, 
+      clientMsgPtr_);
 };
 }
 }

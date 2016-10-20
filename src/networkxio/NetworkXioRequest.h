@@ -45,25 +45,22 @@ struct NetworkXioClientData;
 struct NetworkXioRequest {
   NetworkXioMsgOpcode op{NetworkXioMsgOpcode::Noop};
 
-  void *data{nullptr};
-  unsigned int data_len{0}; // DataLen of buffer pointed by data
-  size_t size{0};           // Size to be written/read.
-  uint64_t offset{0};       // at which offset
+  std::vector<ssize_t> retvalVec_;
+  std::vector<int> errvalVec_;
 
-  ssize_t retval{0};
-  int errval{0};
-  uintptr_t opaque{0};
+  uintptr_t clientMsgPtr_; // ClientMsg allocated on client side 
+  size_t numElems_{0};
+  size_t completeElems_{0};
 
   xio_msg *xio_req{nullptr}; // message received from client
   xio_msg xio_reply;         // structure send back to client
-  xio_reg_mem reg_mem;       // memory allocated from xio
-  bool from_pool{false};
+
+  std::vector<xio_reg_mem> reg_mem_vec;       // memory allocated from xio
+  std::vector<bool> from_pool_vec;
 
   NetworkXioClientData *pClientData{nullptr};
 
-  void *private_data{nullptr};
-
-  std::string s_msg;         // return codes which are sent back to client
+  std::string msgpackBuffer;         // msgpack buffer which is sent back as header
 
   void pack_msg();
 

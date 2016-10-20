@@ -97,6 +97,10 @@ static inline void xrefcnt_shutdown() {
   }
 }
 
+static void destroy_ctx_shutdown(xio_context *ctx) {
+  xio_context_destroy(ctx);
+  xrefcnt_shutdown();
+}
 
 template <class T>
 static int static_on_session_event(xio_session *session,
@@ -171,13 +175,13 @@ NetworkXioClient::NetworkXioClient(const std::string &uri, const uint64_t qd)
   ses_ops.on_cancel_request = NULL;
   ses_ops.assign_data_in_buf = NULL;
 
-  memset(&params, 0, sizeof(params));
-  memset(&cparams, 0, sizeof(cparams));
+  bzero(&sparams, sizeof(sparams));
+  bzero(&cparams, sizeof(cparams));
 
-  params.type = XIO_SESSION_CLIENT;
-  params.ses_ops = &ses_ops;
-  params.user_context = this;
-  params.uri = uri_.c_str();
+  sparams.type = XIO_SESSION_CLIENT;
+  sparams.ses_ops = &ses_ops;
+  sparams.user_context = this;
+  sparams.uri = uri_.c_str();
 
   int queue_depth = 2 * nr_req_queue;
 
@@ -226,7 +230,7 @@ void NetworkXioClient::run() {
 
   //session = std::shared_ptr<xio_session>(xio_session_create(&params),
                                          //xio_session_destroy);
-  session = getSession(uri_, params);
+  session = getSession(uri_, sparams);
   if (session == nullptr) {
     throw XioClientCreateException("failed to create XIO client");
   }
@@ -250,6 +254,9 @@ void NetworkXioClient::run() {
   }
 }
 
+/**
+ * can be called by external thread
+ */
 void NetworkXioClient::shutdown() {
   GLOG_INFO("thread=" << gettid() << " disconnecting conn=" << conn);
   xio_disconnect(conn);
@@ -263,13 +270,10 @@ void NetworkXioClient::shutdown() {
   //session.reset();
 }
 
-NetworkXioClient::~NetworkXioClient() { shutdown(); }
-
-void NetworkXioClient::destroy_ctx_shutdown(xio_context *ctx) {
-  xio_context_destroy(ctx);
-  xrefcnt_shutdown();
-  XXExit();
+NetworkXioClient::~NetworkXioClient() { 
+  shutdown(); 
 }
+
 
 /**
  * the request can get freed after signaling completion in
@@ -296,20 +300,26 @@ void NetworkXioClient::update_stats(void *void_req, bool req_failed) {
 int NetworkXioClient::on_msg_error(xio_session *session __attribute__((unused)),
                                    xio_status error __attribute__((unused)),
                                    xio_msg_direction direction, xio_msg *msg) {
-  NetworkXioMsg imsg;
-  xio_msg_s *xio_msg;
+  int ret = 0;
+
+  NetworkXioMsg responseHeader;
+
   if (direction == XIO_MSG_DIRECTION_OUT) {
     try {
-      imsg.unpack_msg(static_cast<const char *>(msg->out.header.iov_base),
+      responseHeader.unpack_msg(static_cast<const char *>(msg->out.header.iov_base),
                       msg->out.header.iov_len);
     } catch (...) {
       GLOG_ERROR("failed to unpack msg");
       return 0;
     }
-  } else /* XIO_MSG_DIRECTION_IN */
-  {
+    // free memory allocated to sglist
+    if (msg->out.sgl_type == XIO_SGL_TYPE_IOV_PTR) {
+      free(vmsg_sglist(&msg->out));
+    }
+  } else {
+    /* XIO_MSG_DIRECTION_IN */
     try {
-      imsg.unpack_msg(static_cast<const char *>(msg->in.header.iov_base),
+      responseHeader.unpack_msg(static_cast<const char *>(msg->in.header.iov_base),
                       msg->in.header.iov_len);
     } catch (...) {
       xio_release_response(msg);
@@ -320,15 +330,39 @@ int NetworkXioClient::on_msg_error(xio_session *session __attribute__((unused)),
     msg->in.header.iov_len = 0;
     vmsg_sglist_set_nents(&msg->in, 0);
     xio_release_response(msg);
+
+    // free memory allocated to sglist
+    if (msg->in.sgl_type == XIO_SGL_TYPE_IOV_PTR) {
+      free(vmsg_sglist(&msg->in));
+    }
   }
-  xio_msg = reinterpret_cast<xio_msg_s *>(imsg.opaque());
 
-  update_stats(const_cast<void *>(xio_msg->opaque), true);
-  aio_complete_request(const_cast<void *>(xio_msg->opaque), -1, EIO);
+  const size_t numElem = responseHeader.numElems_;
+  if ((numElem != responseHeader.errvalVec_.size()) || 
+      (numElem != responseHeader.retvalVec_.size())) {
+    GLOG_ERROR("num elements in header=" << numElem << " not matching "
+        << "num elements in retval=" << responseHeader.retvalVec_.size() 
+        << " or num elements in errval=" << responseHeader.errvalVec_.size());
+    ret = -1;
+  }
 
-  nr_req_queue++;
-  delete xio_msg;
-  return 0;
+  ClientMsg *msgPtr = reinterpret_cast<ClientMsg *>(responseHeader.clientMsgPtr_);
+
+  if (ret == 0) {
+
+    for (size_t idx = 0; idx < numElem; idx ++) {
+  
+      void* aio_req = const_cast<void *>(msgPtr->aioReqVec_[idx]);
+      update_stats(aio_req, true);
+      aio_complete_request(aio_req,
+          responseHeader.retvalVec_[idx], 
+          responseHeader.errvalVec_[idx]);
+    }
+  }
+
+  delete msgPtr;
+  xio_context_stop_loop(ctx.get());
+  return ret;
 }
 
 int NetworkXioClient::on_session_event(xio_session *session
@@ -363,22 +397,25 @@ void NetworkXioClient::run_loop() {
   assert(ret == 0);
 }
 
-void NetworkXioClient::send_msg(xio_msg_s *xmsg) {
+void NetworkXioClient::send_msg(ClientMsg *msgPtr) {
   int ret = 0;
   do {
-    ret = xio_send_request(conn, &xmsg->xreq);
+    ret = xio_send_request(conn, &msgPtr->xreq);
     // TODO resend on approp xio_errno
-    // update_stats(const_cast<void *>(req->opaque), true);
-    // aio_complete_request(const_cast<void *>(req->opaque), -1, EIO)
-    // delete req;
-    if (ret < 0) { 
-      update_stats(const_cast<void *>(xmsg->opaque), true);
-      aio_complete_request(const_cast<void *>(xmsg->opaque), -1, EIO);
-      delete xmsg;
-    } else {
-      --nr_req_queue;
-      stats.num_queued ++;
-    }
+    NetworkXioMsg& requestHeader = msgPtr->msg;
+    const size_t numElem = requestHeader.numElems_;
+    {
+      if (ret < 0) { 
+        for (size_t idx = 0; idx < numElem; idx ++) {
+          void* aio_req = const_cast<void *>(msgPtr->aioReqVec_[idx]);
+          update_stats(aio_req, true);
+          aio_complete_request(aio_req, -1, EIO);
+        }
+        delete msgPtr;
+      } else {
+        stats.num_queued ++;
+      }
+    } 
   } while (0);
 }
 
@@ -386,63 +423,87 @@ void NetworkXioClient::send_read_request(const std::string &filename,
                                              void *buf,
                                              const uint64_t size_in_bytes,
                                              const uint64_t offset_in_bytes,
-                                             const void *opaque) {
+                                             void *aioReqPtr) {
   XXEnter();
-  xio_msg_s *xmsg = new xio_msg_s;
-  xmsg->opaque = opaque;
-  xmsg->msg.opcode(NetworkXioMsgOpcode::ReadReq);
-  xmsg->msg.opaque((uintptr_t)xmsg);
-  xmsg->msg.size(size_in_bytes);
-  xmsg->msg.offset(offset_in_bytes);
-  xmsg->msg.filename_ = filename;
 
-  msg_prepare(xmsg);
+  ClientMsg *newMsgPtr = new ClientMsg;
+  bzero(static_cast<void *>(&newMsgPtr->xreq), sizeof(xio_msg));
 
-  vmsg_sglist_set_nents(&xmsg->xreq.in, 1);
-  xmsg->xreq.in.data_iov.sglist[0].iov_base = buf;
-  xmsg->xreq.in.data_iov.sglist[0].iov_len = size_in_bytes;
-  send_msg(xmsg);
+  NetworkXioMsg* requestHeader = &newMsgPtr->msg;
+
+  newMsgPtr->aioReqVec_.push_back(aioReqPtr);
+
+  requestHeader->opcode(NetworkXioMsgOpcode::ReadReq);
+  requestHeader->clientMsgPtr_ = (uintptr_t)newMsgPtr;
+  requestHeader->numElems_ = 1;
+
+  requestHeader->sizeVec_.push_back(size_in_bytes);
+  requestHeader->offsetVec_.push_back(offset_in_bytes);
+  requestHeader->filenameVec_.push_back(filename);
+
+  newMsgPtr->prepare();
+
+  // TODO Check on server if data in IOV_PTR or not
+  vmsg_sglist_set_nents(&newMsgPtr->xreq.in, 1);
+  newMsgPtr->xreq.in.data_iov.sglist[0].iov_base = buf;
+  newMsgPtr->xreq.in.data_iov.sglist[0].iov_len = size_in_bytes;
+
+  send_msg(newMsgPtr);
 }
 
 int NetworkXioClient::on_response(xio_session *session __attribute__((unused)),
                                   xio_msg *reply,
                                   int last_in_rxq __attribute__((unused))) {
   XXEnter();
-  NetworkXioMsg imsg;
+  NetworkXioMsg responseHeader;
   try {
-    imsg.unpack_msg(static_cast<const char *>(reply->in.header.iov_base),
+    responseHeader.unpack_msg(static_cast<const char *>(reply->in.header.iov_base),
                     reply->in.header.iov_len);
   } catch (...) {
     GLOG_ERROR("failed to unpack msg");
     xio_release_response(reply);
     return 0;
   }
-  xio_msg_s *xio_msg = reinterpret_cast<xio_msg_s *>(imsg.opaque());
-
-  update_stats(const_cast<void *>(xio_msg->opaque), (imsg.retval() < 0));
-  aio_complete_request(const_cast<void *>(xio_msg->opaque),
-                               imsg.retval(), imsg.errval());
 
   reply->in.header.iov_base = NULL;
   reply->in.header.iov_len = 0;
   vmsg_sglist_set_nents(&reply->in, 0);
   xio_release_response(reply);
-  nr_req_queue++;
-  xio_context_stop_loop(ctx.get());
-  delete xio_msg;
-  XXExit();
+
+  const size_t numElems = responseHeader.numElems_;
+  {
+    ClientMsg *msgPtr = reinterpret_cast<ClientMsg *>(responseHeader.clientMsgPtr_);
+
+    for (size_t idx = 0; idx < numElems; idx ++) {
+  
+      void* aio_req = msgPtr->aioReqVec_[idx];
+      update_stats(aio_req, (responseHeader.retvalVec_[idx] < 0));
+      aio_complete_request(aio_req,
+                                responseHeader.retvalVec_[idx], 
+                                responseHeader.errvalVec_[idx]);
+    }
+
+    // free memory allocated to sglist
+    if (msgPtr->xreq.in.sgl_type == XIO_SGL_TYPE_IOV_PTR) {
+      free(vmsg_sglist(&msgPtr->xreq.in));
+    }
+
+    // the msgPtr must be freed after xio_release_response()
+    // otherwise its a memory corruption bug
+    delete msgPtr;
+    xio_context_stop_loop(ctx.get());
+  }
+  
   return 0;
 }
 
-void NetworkXioClient::msg_prepare(xio_msg_s *xmsg) {
+void NetworkXioClient::ClientMsg::prepare() {
   XXEnter();
-  xmsg->s_msg = xmsg->msg.pack_msg();
+  msgpackBuffer = msg.pack_msg();
 
-  memset(static_cast<void *>(&xmsg->xreq), 0, sizeof(xio_msg));
-
-  vmsg_sglist_set_nents(&xmsg->xreq.out, 0);
-  xmsg->xreq.out.header.iov_base = (void *)xmsg->s_msg.c_str();
-  xmsg->xreq.out.header.iov_len = xmsg->s_msg.length();
+  vmsg_sglist_set_nents(&xreq.out, 0);
+  xreq.out.header.iov_base = (void *)msgpackBuffer.c_str();
+  xreq.out.header.iov_len = msgpackBuffer.length();
   XXExit();
 }
 }
