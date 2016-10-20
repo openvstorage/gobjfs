@@ -97,39 +97,6 @@ static inline void xrefcnt_shutdown() {
   }
 }
 
-inline void _xio_aio_wake_up_suspended_aiocb(aio_request *request) {
-  XXEnter();
-  {
-    request->_signaled = true;
-    GLOG_DEBUG("waking up the suspended thread for request=" << (void*)request);
-    request->_cvp->signal();
-  }
-  XXExit();
-}
-
-/* called when response is received by NetworkXioClient */
-void ovs_xio_aio_complete_request(void *opaque, ssize_t retval, int errval) {
-  XXEnter();
-  aio_request *request = reinterpret_cast<aio_request *>(opaque);
-  completion *cptr = request->cptr;
-  request->_errno = errval;
-  request->_rv = retval;
-  request->_failed = (retval < 0 ? true : false);
-  request->_completed = true;
-
-  //_xio_aio_wake_up_suspended_aiocb(request); 
-
-  if (cptr) {
-    cptr->_rv = retval;
-    cptr->_failed = (retval == -1 ? true : false);
-    GLOG_DEBUG("signalling completion for request=" << (void*)request);
-    // first invoke the callback, then signal completion
-    // caller must free the completion in main loop - not in callback!
-    cptr->complete_cb(cptr, cptr->cb_arg);
-    aio_signal_completion(cptr);
-  }
-  XXExit();
-}
 
 template <class T>
 static int static_on_session_event(xio_session *session,
@@ -306,7 +273,7 @@ void NetworkXioClient::destroy_ctx_shutdown(xio_context *ctx) {
 
 /**
  * the request can get freed after signaling completion in
- * ovs_xio_aio_complete_request
+ * aio_complete_request
  * therefore, update_stats must be called before this function
  * otherwise its a use-after-free error
  */
@@ -357,7 +324,7 @@ int NetworkXioClient::on_msg_error(xio_session *session __attribute__((unused)),
   xio_msg = reinterpret_cast<xio_msg_s *>(imsg.opaque());
 
   update_stats(const_cast<void *>(xio_msg->opaque), true);
-  ovs_xio_aio_complete_request(const_cast<void *>(xio_msg->opaque), -1, EIO);
+  aio_complete_request(const_cast<void *>(xio_msg->opaque), -1, EIO);
 
   nr_req_queue++;
   delete xio_msg;
@@ -402,11 +369,11 @@ void NetworkXioClient::send_msg(xio_msg_s *xmsg) {
     ret = xio_send_request(conn, &xmsg->xreq);
     // TODO resend on approp xio_errno
     // update_stats(const_cast<void *>(req->opaque), true);
-    // ovs_xio_aio_complete_request(const_cast<void *>(req->opaque), -1, EIO)
+    // aio_complete_request(const_cast<void *>(req->opaque), -1, EIO)
     // delete req;
     if (ret < 0) { 
       update_stats(const_cast<void *>(xmsg->opaque), true);
-      ovs_xio_aio_complete_request(const_cast<void *>(xmsg->opaque), -1, EIO);
+      aio_complete_request(const_cast<void *>(xmsg->opaque), -1, EIO);
       delete xmsg;
     } else {
       --nr_req_queue;
@@ -453,7 +420,7 @@ int NetworkXioClient::on_response(xio_session *session __attribute__((unused)),
   xio_msg_s *xio_msg = reinterpret_cast<xio_msg_s *>(imsg.opaque());
 
   update_stats(const_cast<void *>(xio_msg->opaque), (imsg.retval() < 0));
-  ovs_xio_aio_complete_request(const_cast<void *>(xio_msg->opaque),
+  aio_complete_request(const_cast<void *>(xio_msg->opaque),
                                imsg.retval(), imsg.errval());
 
   reply->in.header.iov_base = NULL;

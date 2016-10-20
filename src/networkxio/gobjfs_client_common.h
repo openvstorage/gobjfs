@@ -152,6 +152,8 @@ public:
 
 typedef std::shared_ptr<notifier> notifier_sptr;
 
+extern void aio_complete_request(void *request, ssize_t retval, int errval);
+
 struct aio_request {
   struct giocb *giocbp{nullptr};
   completion *cptr{nullptr};
