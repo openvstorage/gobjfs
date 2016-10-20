@@ -99,6 +99,8 @@ public:
 
   void send_reply(NetworkXioRequest *req);
 
+  void stop_loop();
+
   void evfd_stop_loop(int fd, int events, void *data);
 
   static void destroy_ctx_shutdown(xio_context *ctx);
@@ -143,7 +145,7 @@ private:
   std::mutex mutex_;
   std::condition_variable cv_;
 
-  EventFD evfd;
+  EventFD evfd_;
 
   int queue_depth{0};
 

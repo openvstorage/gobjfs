@@ -42,6 +42,16 @@ but WITHOUT ANY WARRANTY of any kind.
 using namespace gobjfs::xio;
 using namespace std;
 
+std::promise<void> pr;
+std::future<void> fut;
+
+void shutit(NetworkXioServer* xs) {
+  fut.wait();
+  //// enable these to shutdown server
+  //sleep(5);
+  //delete xs;
+}
+
 int main(int argc, char *argv[]) {
 
   // log files are in /tmp
@@ -54,13 +64,15 @@ int main(int argc, char *argv[]) {
     configFileName = argv[1];
   }
 
-  std::promise<void> _pr;
-
   FileTranslatorFunc fileTranslatorFunc{nullptr};
 
   NetworkXioServer *xs =
       new NetworkXioServer("tcp", "127.0.0.1", 21321, 1, 2, 200, fileTranslatorFunc, newInstance);
   
+  fut = pr.get_future();
 
-  xs->run(_pr);
+  auto f1 = std::async(std::launch::async, shutit, xs);
+
+  xs->run(pr);
+
 }

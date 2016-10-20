@@ -129,6 +129,11 @@ int fileTranslatorFunc(const char *old_name, size_t old_length,
   return 0;
 }
 
+TEST_F(NetworkXioServerTest, UpDownTest) {
+  // Check if NetworkXioServer doesnt hang in shutdown
+  sleep(5);
+}
+
 TEST_F(NetworkXioServerTest, MultipleClients) {
 
   auto ctx_attr = ctx_attr_new();

@@ -41,6 +41,18 @@ using gobjfs::os::DirectIOSize;
 namespace gobjfs {
 namespace xio {
 
+template <class T>
+static void static_evfd_stop_loop(int fd, int events, void *data) {
+  XXEnter();
+  T *obj = reinterpret_cast<T *>(data);
+  if (obj == NULL) {
+    XXExit();
+    return;
+  }
+  obj->evfd_stop_loop(fd, events, data);
+  XXExit();
+}
+
 
 /**
  * Only called for Server
@@ -158,9 +170,15 @@ void NetworkXioServer::destroy_ctx_shutdown(xio_context *ctx) {
 
 NetworkXioServer::~NetworkXioServer() { shutdown(); }
 
+void NetworkXioServer::stop_loop() {
+  stopping = true;
+  evfd_.writefd();
+}
+
+
 void NetworkXioServer::evfd_stop_loop(int /*fd*/, int /*events*/,
                                       void * /*data*/) {
-  evfd.readfd();
+  evfd_.readfd();
   xio_context_stop_loop(ctx.get());
 }
 
@@ -246,10 +264,16 @@ void NetworkXioServer::run(std::promise<void> &promise) {
     ptVec_.push_back(std::move(newpt));
   }
 
-  promise.set_value();
 
   // bind this thread to core different than the portal threads
   gobjfs::os::BindThreadToCore(startCoreForIO_);
+
+  if (xio_context_add_ev_handler(ctx.get(), evfd_, XIO_POLLIN,
+                                 static_evfd_stop_loop<NetworkXioServer>,
+                                 this)) {
+    throw FailedRegisterEventHandler("failed to register event handler");
+  }
+
 
   try {
 
@@ -273,6 +297,8 @@ void NetworkXioServer::run(std::promise<void> &promise) {
 
   GLOG_INFO("registered timer event fd=" << statsTimerFD_->getFD()
       << ",thread=" << gettid());
+
+  promise.set_value();
 
   while (not stopping) {
     int ret = xio_context_run_loop(ctx.get(), XIO_INFINITE);
@@ -516,16 +542,20 @@ int NetworkXioServer::on_request(xio_session *session ATTRIBUTE_UNUSED,
   return 0;
 }
 
+/**
+ * This function will be called by an external thread
+ * This call should not touch xio_context because its not thread-safe
+ * Just signal all the threads to shut their xio_context down
+ * And wait for all portal threads to exit
+ */
 void NetworkXioServer::shutdown() {
   XXEnter();
   if (not stopped) {
-    stopping = true;
     // stop all portal loops 
     for (auto& elem : ptVec_) {
-      elem->stopping = true;
       elem->stop_loop();
     }
-    xio_context_stop_loop(ctx.get());
+    stop_loop();
     {
       std::unique_lock<std::mutex> lock_(mutex_);
       cv_.wait(lock_, [&] { return stopped == true; });
