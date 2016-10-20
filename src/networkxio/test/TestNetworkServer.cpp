@@ -233,27 +233,27 @@ TEST_F(NetworkXioServerTest, AsyncFileDoesntExist) {
     auto rbuf = (char *)malloc(BufferSize);
     EXPECT_NE(rbuf, nullptr);
 
-    giocb *iocb = (giocb *)malloc(sizeof(giocb));
+    giocb *iocb = new giocb;
+    iocb->filename = testDataFileName;
     iocb->aio_buf = rbuf;
     iocb->aio_offset = i * BufferSize;
     iocb->aio_nbytes = readSz;
 
     iocb_vec.push_back(iocb);
-    filename_vec.push_back(testDataFileName);
   }
 
-  auto ret = aio_readv(ctx, filename_vec, iocb_vec);
+  auto ret = aio_readv(ctx, iocb_vec);
   EXPECT_EQ(ret, 0);
 
   ret = aio_suspendv(ctx, iocb_vec, nullptr);
   EXPECT_EQ(ret, -1);
 
-  for (auto &elem : iocb_vec) {
-    auto retcode = aio_return(ctx, elem);
+  for (auto &iocb : iocb_vec) {
+    auto retcode = aio_return(ctx, iocb);
     EXPECT_EQ(retcode, -EIO);
-    aio_finish(ctx, elem);
-    free(elem->aio_buf);
-    free(elem);
+    aio_finish(ctx, iocb);
+    free(iocb->aio_buf);
+    delete iocb;
   }
 
   auto stats_string = ctx_get_stats(ctx);
@@ -341,12 +341,13 @@ TEST_F(NetworkXioServerTest, AsyncRead) {
     auto rbuf = (char *)malloc(BufferSize);
     EXPECT_NE(rbuf, nullptr);
 
-    giocb *iocb = (giocb *)malloc(sizeof(giocb));
+    giocb *iocb = new giocb;
+    iocb->filename = testDataFileName;
     iocb->aio_buf = rbuf;
     iocb->aio_offset = i * BufferSize;
     iocb->aio_nbytes = readSz;
 
-    auto ret = aio_readcb(ctx, testDataFileName, iocb, nullptr);
+    auto ret = aio_readcb(ctx, iocb, nullptr);
     EXPECT_EQ(ret, 0);
 
     vec.push_back(iocb);
@@ -362,7 +363,7 @@ TEST_F(NetworkXioServerTest, AsyncRead) {
 
     aio_finish(ctx, elem);
     free(elem->aio_buf);
-    free(elem);
+    delete elem;
   }
 
   removeDataFile();
@@ -406,16 +407,16 @@ TEST_F(NetworkXioServerTest, MultiAsyncRead) {
     auto rbuf = (char *)malloc(BufferSize);
     EXPECT_NE(rbuf, nullptr);
 
-    giocb *iocb = (giocb *)malloc(sizeof(giocb));
+    giocb *iocb = new giocb;
+    iocb->filename = testDataFileName;
     iocb->aio_buf = rbuf;
     iocb->aio_offset = i * BufferSize;
     iocb->aio_nbytes = readSz;
 
     iocb_vec.push_back(iocb);
-    filename_vec.push_back(testDataFileName);
   }
 
-  auto ret = aio_readv(ctx, filename_vec, iocb_vec);
+  auto ret = aio_readv(ctx, iocb_vec);
   EXPECT_EQ(ret, 0);
 
   ret = aio_suspendv(ctx, iocb_vec, nullptr);
@@ -426,7 +427,7 @@ TEST_F(NetworkXioServerTest, MultiAsyncRead) {
     EXPECT_EQ(retcode, readSz);
     aio_finish(ctx, elem);
     free(elem->aio_buf);
-    free(elem);
+    delete elem;
   }
 
   removeDataFile();

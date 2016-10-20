@@ -54,7 +54,8 @@ void NetworkServerWriteReadTest(bool use_completion) {
     auto rbuf = (char *)malloc(4096);
     assert(rbuf != nullptr);
 
-    giocb *iocb = (giocb *)malloc(sizeof(giocb));
+    giocb *iocb = new giocb;
+    iocb->filename = "abcd";
     iocb->aio_buf = rbuf;
     iocb->aio_offset = 0;
     iocb->aio_nbytes = 4096;
@@ -65,10 +66,10 @@ void NetworkServerWriteReadTest(bool use_completion) {
       comp = aio_create_completion(callback_func, iocb);
     }
 
-    auto ret = aio_readcb(ctx, "abcd", iocb, comp);
+    auto ret = aio_readcb(ctx, iocb, comp);
 
     if (ret != 0) {
-      free(iocb);
+      delete iocb;
       free(rbuf);
       if (comp)
         aio_release_completion(comp);
@@ -91,7 +92,7 @@ void NetworkServerWriteReadTest(bool use_completion) {
       aio_suspend(ctx, elem, nullptr);
     aio_finish(ctx, elem);
     free(elem->aio_buf);
-    free(elem);
+    delete elem; 
   }
 
   GLOG_DEBUG(

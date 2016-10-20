@@ -44,6 +44,7 @@ struct completion;
 typedef void (*gcallback)(completion *cb, void *arg);
 
 struct giocb {
+  std::string filename;
   void *aio_buf;
   off_t aio_offset;
   size_t aio_nbytes;
@@ -129,6 +130,7 @@ int gbuffer_deallocate(client_ctx_ptr ctx, gbuffer *ptr);
 /*
  * Read from a volume
  * @param ctx: gobjfs xio context
+ * @param filename: file to read from
  * @param buf: Shared memory buffer
  * @param nbytes: Size to read in bytes
  * @param offset: Offset to read in volume
@@ -191,22 +193,18 @@ int aio_finish(client_ctx_ptr ctx, giocb *giocbp);
 /*
  * Asynchronous read from a volume
  * @param ctx: gobjfs xio context
- * @param filename: filenames on which to read
  * @param giocb: Pointer to an AIO Control Block structure
  * @return: 0 on success, -1 on fail
  */
-int aio_read(client_ctx_ptr ctx, const std::string &filename, giocb *giocbp);
+int aio_read(client_ctx_ptr ctx, giocb *giocbp);
 
 /*
  * Asynchronous readv from a volume
  * @param ctx: gobjfs xio context
- * @param filename_vec: Pointer to vector of filenames to read
  * @param giocb_vec: Pointer to vector of AIO Control Block structure
- *   this vector and filename_vec must be same size
  * @return: 0 on success, -1 on fail
  */
-int aio_readv(client_ctx_ptr ctx, const std::vector<std::string> &filename_vec,
-              const std::vector<giocb *> &giocbp_vec);
+int aio_readv(client_ctx_ptr ctx, const std::vector<giocb *> &giocbp_vec);
 
 /*
  * Asynchronous read from a volume with completion
@@ -215,7 +213,7 @@ int aio_readv(client_ctx_ptr ctx, const std::vector<std::string> &filename_vec,
  * @param completion: Pointer to a completion structure
  * @return: 0 on success, -1 on fail
  */
-int aio_readcb(client_ctx_ptr ctx, const std::string &filename, giocb *giocbp,
+int aio_readcb(client_ctx_ptr ctx, giocb *giocbp,
                completion *completion);
 
 /*

@@ -204,7 +204,7 @@ aio_request *create_new_request(RequestOp op, struct giocb *aio,
 }
 
 
-static int _submit_aio_request(client_ctx_ptr ctx, const std::string &filename,
+static int _submit_aio_request(client_ctx_ptr ctx, 
                                giocb *giocbp, notifier_sptr &cvp,
                                completion *completion, const RequestOp &op) {
   XXEnter();
@@ -243,7 +243,7 @@ static int _submit_aio_request(client_ctx_ptr ctx, const std::string &filename,
   switch (op) {
   case RequestOp::Read: {
     try {
-      net_client->send_read_request(filename, giocbp->aio_buf,
+      net_client->send_read_request(giocbp->filename, giocbp->aio_buf,
                                         giocbp->aio_nbytes, giocbp->aio_offset,
                                         reinterpret_cast<void *>(request));
 
@@ -509,41 +509,32 @@ int aio_release_completion(completion *completion) {
   return 0;
 }
 
-int aio_read(client_ctx_ptr ctx, const std::string &filename, giocb *giocbp) {
+int aio_read(client_ctx_ptr ctx, giocb *giocbp) {
   auto cv = std::make_shared<notifier>();
 
-  return _submit_aio_request(ctx, filename, giocbp, cv, nullptr,
+  return _submit_aio_request(ctx, giocbp, cv, nullptr,
                              RequestOp::Read);
 }
 
-int aio_readv(client_ctx_ptr ctx, const std::vector<std::string> &filename_vec,
-              const std::vector<giocb *> &giocbp_vec) {
+int aio_readv(client_ctx_ptr ctx, const std::vector<giocb *> &giocbp_vec) {
   int err = 0;
-
-  if (filename_vec.size() != giocbp_vec.size()) {
-    GLOG_ERROR("mismatch between filename vector size="
-               << filename_vec.size()
-               << " and iocb vector size=" << giocbp_vec.size());
-    errno = EINVAL;
-    return -1;
-  }
 
   auto cv = std::make_shared<notifier>(giocbp_vec.size());
 
   size_t idx = 0;
   for (auto elem : giocbp_vec) {
-    err |= _submit_aio_request(ctx, filename_vec[idx++], elem, cv, nullptr,
+    err |= _submit_aio_request(ctx, elem, cv, nullptr,
                                RequestOp::Read);
   }
 
   return err;
 }
 
-int aio_readcb(client_ctx_ptr ctx, const std::string &filename, giocb *giocbp,
+int aio_readcb(client_ctx_ptr ctx, giocb *giocbp,
                completion *completion) {
   auto cv = std::make_shared<notifier>();
 
-  return _submit_aio_request(ctx, filename, giocbp, cv, completion,
+  return _submit_aio_request(ctx, giocbp, cv, completion,
                              RequestOp::Read);
 }
 
@@ -551,6 +542,7 @@ ssize_t read(client_ctx_ptr ctx, const std::string &filename, void *buf,
              size_t nbytes, off_t offset) {
   ssize_t r;
   giocb aio;
+  aio.filename = filename;
   aio.aio_buf = buf;
   aio.aio_nbytes = nbytes;
   aio.aio_offset = offset;
@@ -559,7 +551,7 @@ ssize_t read(client_ctx_ptr ctx, const std::string &filename, void *buf,
     return (r = -1);
   }
 
-  if ((r = aio_read(ctx, filename, &aio)) < 0) {
+  if ((r = aio_read(ctx, &aio)) < 0) {
     return r;
   }
 
