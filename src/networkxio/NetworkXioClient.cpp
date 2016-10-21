@@ -183,8 +183,6 @@ NetworkXioClient::NetworkXioClient(const std::string &uri, const uint64_t qd)
   sparams.user_context = this;
   sparams.uri = uri_.c_str();
 
-  int queue_depth = 2 * nr_req_queue;
-
   xrefcnt_init();
 
   run();
@@ -413,42 +411,97 @@ void NetworkXioClient::send_msg(ClientMsg *msgPtr) {
         }
         delete msgPtr;
       } else {
-        stats.num_queued ++;
+        stats.num_queued += numElem;
       }
     } 
   } while (0);
 }
 
-void NetworkXioClient::send_read_request(const std::string &filename,
+int NetworkXioClient::send_multi_read_request(std::vector<std::string> &&filenameVec, 
+    std::vector<void *>   &&bufVec,
+    std::vector<uint64_t> &&sizeVec,
+    std::vector<uint64_t> &&offsetVec,
+    const std::vector<void *>   &aioReqVec) {
+
+
+  ClientMsg *msgPtr = new ClientMsg;
+  msgPtr->aioReqVec_ = aioReqVec;
+
+  NetworkXioMsg& requestHeader = msgPtr->msg;
+  requestHeader.opcode(NetworkXioMsgOpcode::ReadReq);
+  requestHeader.clientMsgPtr_ = reinterpret_cast<uintptr_t>(msgPtr);
+
+  const size_t numElems = filenameVec.size();
+  requestHeader.numElems_ = numElems;
+
+  // Caller must ensure
+  // all vectors have same size
+  // AND batch size less than max configured
+  assert(numElems <= maxBatchSize_); 
+  assert(bufVec.size() == numElems); 
+  assert(sizeVec.size() == numElems);
+  assert(offsetVec.size() == numElems);
+  assert(aioReqVec.size() == numElems);
+
+  requestHeader.sizeVec_ = std::move(sizeVec);
+  requestHeader.offsetVec_ = std::move(offsetVec);
+  requestHeader.filenameVec_ = std::move(filenameVec);
+
+  msgPtr->prepare();
+
+  // Allocate the scatter-gather list upto numElems
+  msgPtr->xreq.in.sgl_type = XIO_SGL_TYPE_IOV_PTR;
+  vmsg_sglist_set_nents(&msgPtr->xreq.in, numElems);
+  msgPtr->xreq.in.pdata_iov.max_nents = numElems;
+  struct xio_iovec_ex* in_sglist = (struct xio_iovec_ex*)
+      (calloc(numElems, sizeof(struct xio_iovec_ex)));
+  msgPtr->xreq.in.pdata_iov.sglist = in_sglist;
+  for (size_t idx = 0; idx < numElems; idx ++) {
+    in_sglist[idx].iov_base = bufVec[idx];
+    in_sglist[idx].iov_len = requestHeader.sizeVec_[idx];
+  }
+
+  bufVec.clear();
+  // check the vectors have been "std::move" and emptied 
+  assert(filenameVec.empty());
+  assert(sizeVec.empty());
+  assert(offsetVec.empty());
+
+  send_msg(msgPtr);
+
+  return 0;
+}
+
+
+int NetworkXioClient::send_read_request(const std::string &filename,
                                              void *buf,
                                              const uint64_t size_in_bytes,
                                              const uint64_t offset_in_bytes,
                                              void *aioReqPtr) {
   XXEnter();
 
-  ClientMsg *newMsgPtr = new ClientMsg;
-  bzero(static_cast<void *>(&newMsgPtr->xreq), sizeof(xio_msg));
+  ClientMsg *msgPtr = new ClientMsg;
+  msgPtr->aioReqVec_.push_back(aioReqPtr);
 
-  NetworkXioMsg* requestHeader = &newMsgPtr->msg;
-
-  newMsgPtr->aioReqVec_.push_back(aioReqPtr);
-
+  NetworkXioMsg* requestHeader = &msgPtr->msg;
   requestHeader->opcode(NetworkXioMsgOpcode::ReadReq);
-  requestHeader->clientMsgPtr_ = (uintptr_t)newMsgPtr;
+  requestHeader->clientMsgPtr_ = (uintptr_t)msgPtr;
   requestHeader->numElems_ = 1;
 
   requestHeader->sizeVec_.push_back(size_in_bytes);
   requestHeader->offsetVec_.push_back(offset_in_bytes);
   requestHeader->filenameVec_.push_back(filename);
 
-  newMsgPtr->prepare();
+  msgPtr->prepare();
 
   // TODO Check on server if data in IOV_PTR or not
-  vmsg_sglist_set_nents(&newMsgPtr->xreq.in, 1);
-  newMsgPtr->xreq.in.data_iov.sglist[0].iov_base = buf;
-  newMsgPtr->xreq.in.data_iov.sglist[0].iov_len = size_in_bytes;
+  vmsg_sglist_set_nents(&msgPtr->xreq.in, 1);
+  msgPtr->xreq.in.data_iov.sglist[0].iov_base = buf;
+  msgPtr->xreq.in.data_iov.sglist[0].iov_len = size_in_bytes;
 
-  send_msg(newMsgPtr);
+  send_msg(msgPtr);
+
+  return 0;
 }
 
 int NetworkXioClient::on_response(xio_session *session __attribute__((unused)),
@@ -497,14 +550,16 @@ int NetworkXioClient::on_response(xio_session *session __attribute__((unused)),
   return 0;
 }
 
+NetworkXioClient::ClientMsg::ClientMsg() {
+  bzero(static_cast<void *>(&xreq), sizeof(xreq));
+}
+
 void NetworkXioClient::ClientMsg::prepare() {
-  XXEnter();
   msgpackBuffer = msg.pack_msg();
 
   vmsg_sglist_set_nents(&xreq.out, 0);
   xreq.out.header.iov_base = (void *)msgpackBuffer.c_str();
   xreq.out.header.iov_len = msgpackBuffer.length();
-  XXExit();
 }
 }
 } // namespace gobjfs

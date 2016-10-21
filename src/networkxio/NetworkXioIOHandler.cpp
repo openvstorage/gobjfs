@@ -41,7 +41,11 @@ namespace xio {
  * 2. xio_send_response(header + data buffer)
  */
 void NetworkXioRequest::pack_msg() {
-  GLOG_DEBUG(" packing msg for req=" << (void*)this);
+  GLOG_DEBUG(" packing msg for req=" << (void*)this
+      << ",retvec=" << this->retvalVec_.size()
+      << ",errvec=" << this->errvalVec_.size()
+      << ",client_msg=" << this->clientMsgPtr_
+      );
   NetworkXioMsg replyHeader(this->op);
   replyHeader.numElems_ = this->numElems_;
   replyHeader.retvalVec_ = this->retvalVec_;
@@ -373,8 +377,11 @@ int NetworkXioIOHandler::handle_read(NetworkXioRequest *req,
 
 void NetworkXioIOHandler::handle_error(NetworkXioRequest *req, int errval) {
   req->op = NetworkXioMsgOpcode::ErrorRsp;
-  req->retvalVec_.push_back(-1);
-  req->errvalVec_.push_back(errval);
+  const size_t numElems = req->numElems_;
+  for (size_t idx = 0; idx < numElems; idx ++) {
+    req->retvalVec_.push_back(-1);
+    req->errvalVec_.push_back(errval);
+  }
   req->pack_msg();
 }
 

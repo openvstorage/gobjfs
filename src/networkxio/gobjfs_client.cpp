@@ -205,49 +205,49 @@ aio_request *create_new_request(RequestOp op, struct giocb *aio,
 
 
 static int _submit_aio_request(client_ctx_ptr ctx, 
-                               giocb *giocbp, notifier_sptr &cvp,
-                               completion *completion, const RequestOp &op) {
-  XXEnter();
+                              const std::vector<giocb*> &giocbp_vec, 
+                               notifier_sptr &cvp,
+                               completion *completion, 
+                               const RequestOp &op) {
   int r = 0;
   gobjfs::xio::NetworkXioClientPtr net_client = ctx->net_client_;
 
-  if (ctx == nullptr || giocbp == nullptr) {
+  if (ctx == nullptr || giocbp_vec.empty()) {
     errno = EINVAL;
-    XXExit();
     return -1;
   }
 
-  if ((giocbp->aio_nbytes <= 0 || giocbp->aio_offset < 0)) {
-    errno = EINVAL;
-    XXExit();
-    return -1;
-  }
-
-  switch (op) {
-  case RequestOp::Read:
-    break;
-  default:
+  if (op != RequestOp::Read) {
     errno = EBADF;
-    XXExit();
     return -1;
   }
 
-  aio_request *request = create_new_request(op, giocbp, cvp, completion);
-  if (request == nullptr) {
-    GLOG_ERROR("create_new_request() failed \n");
-    errno = ENOMEM;
-    XXExit();
-    return -1;
-  }
+  std::vector<std::string> filename_vec;
+  std::vector<void*> request_vec;
+  std::vector<void *> bufVec;
+  std::vector<uint64_t> sizeVec;
+  std::vector<uint64_t> offsetVec;
 
-  switch (op) {
-  case RequestOp::Read: {
+  const size_t batchSize = net_client->maxBatchSize_;
+
+  auto invokeNetClientSend = [&] () -> int {
+
+    int r = 0;
+
     try {
-      net_client->send_read_request(giocbp->filename, giocbp->aio_buf,
-                                        giocbp->aio_nbytes, giocbp->aio_offset,
-                                        reinterpret_cast<void *>(request));
+      // TODO just call timer once and copy its value to others
+      for (auto request : request_vec) {
+        ((aio_request*)request)->_timer.reset();
+      }
 
-      request->_timer.reset();
+      r = net_client->send_multi_read_request(std::move(filename_vec), 
+                                        std::move(bufVec),
+                                        std::move(sizeVec), 
+                                        std::move(offsetVec),
+                                        request_vec);
+
+      request_vec.clear();
+
     } catch (const std::bad_alloc &) {
       errno = ENOMEM;
       r = -1;
@@ -257,20 +257,55 @@ static int _submit_aio_request(client_ctx_ptr ctx,
       r = -1;
       GLOG_ERROR("xio_send_read_request() failed \n");
     }
-  } break;
-  default:
-    errno = EINVAL;
-    r = -1;
-    GLOG_ERROR("incorrect command \n");
-    break;
+
+    return r;
+
+  };
+
+  for (auto giocbp : giocbp_vec) {
+
+    if ((giocbp->aio_nbytes <= 0 || giocbp->aio_offset < 0)) {
+      errno = EINVAL;
+      r = -1;
+      break;
+    }
+  
+    aio_request *request = create_new_request(op, giocbp, cvp, nullptr);
+    if (request == nullptr) {
+      GLOG_ERROR("create_new_request() failed \n");
+      errno = ENOMEM;
+      r = -1;
+      break;
+    }
+
+    filename_vec.push_back(giocbp->filename);
+    bufVec.push_back(giocbp->aio_buf);
+    sizeVec.push_back(giocbp->aio_nbytes);
+    offsetVec.push_back(giocbp->aio_offset);
+    request_vec.push_back(request);
+
+    if (request_vec.size() == batchSize) {
+      r = invokeNetClientSend();
+      if (r != 0) { 
+        break;
+      }
+    }
   }
-  if (r < 0) {
-    delete request;
+
+  if ((r == 0) && request_vec.size()) {
+    // cannot be greater or equal if previous processing was successful
+    assert(request_vec.size() < batchSize);
+    r = invokeNetClientSend();
   }
-  int saved_errno = errno;
-  errno = saved_errno;
+
   if (r != 0) {
     GLOG_ERROR(" Remove request send failed with error " << r);
+    for (auto req : request_vec) {
+      delete reinterpret_cast<aio_request*>(req);
+    }
+    request_vec.clear();
+  } else {
+    assert(request_vec.empty());
   }
   return r;
 }
@@ -512,7 +547,8 @@ int aio_release_completion(completion *completion) {
 int aio_read(client_ctx_ptr ctx, giocb *giocbp) {
   auto cv = std::make_shared<notifier>();
 
-  return _submit_aio_request(ctx, giocbp, cv, nullptr,
+  std::vector<giocb*> giocbp_vec(1, giocbp);
+  return _submit_aio_request(ctx, giocbp_vec, cv, nullptr,
                              RequestOp::Read);
 }
 
@@ -521,11 +557,8 @@ int aio_readv(client_ctx_ptr ctx, const std::vector<giocb *> &giocbp_vec) {
 
   auto cv = std::make_shared<notifier>(giocbp_vec.size());
 
-  size_t idx = 0;
-  for (auto elem : giocbp_vec) {
-    err |= _submit_aio_request(ctx, elem, cv, nullptr,
+  err = _submit_aio_request(ctx, giocbp_vec, cv, nullptr,
                                RequestOp::Read);
-  }
 
   return err;
 }
@@ -534,7 +567,8 @@ int aio_readcb(client_ctx_ptr ctx, giocb *giocbp,
                completion *completion) {
   auto cv = std::make_shared<notifier>();
 
-  return _submit_aio_request(ctx, giocbp, cv, completion,
+  std::vector<giocb*> giocbp_vec(1, giocbp);
+  return _submit_aio_request(ctx, giocbp_vec, cv, completion,
                              RequestOp::Read);
 }
 

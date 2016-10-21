@@ -43,7 +43,7 @@ namespace xio {
  *  map to
  *    |
  *    | 
- *  N NetworkXioRequest on NetworkXioServer
+ *  1 NetworkXioRequest on NetworkXioServer
  *  map to
  *    |
  *    | 
