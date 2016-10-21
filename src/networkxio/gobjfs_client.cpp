@@ -179,12 +179,11 @@ bool ctx_is_disconnected(client_ctx_ptr ctx) {
 }
 
 aio_request *create_new_request(RequestOp op, struct giocb *aio,
-                                       notifier_sptr cvp, completion *cptr) {
+                                       notifier_sptr cvp) {
   try {
     aio_request *request = new aio_request;
     request->_op = op;
     request->giocbp = aio;
-    request->cptr = cptr;
     /*cnanakos TODO: err handling */
     request->_on_suspend = false;
     request->_canceled = false;
@@ -207,7 +206,6 @@ aio_request *create_new_request(RequestOp op, struct giocb *aio,
 static int _submit_aio_request(client_ctx_ptr ctx, 
                               const std::vector<giocb*> &giocbp_vec, 
                                notifier_sptr &cvp,
-                               completion *completion, 
                                const RequestOp &op) {
   int r = 0;
   gobjfs::xio::NetworkXioClientPtr net_client = ctx->net_client_;
@@ -270,7 +268,7 @@ static int _submit_aio_request(client_ctx_ptr ctx,
       break;
     }
   
-    aio_request *request = create_new_request(op, giocbp, cvp, nullptr);
+    aio_request *request = create_new_request(op, giocbp, cvp);
     if (request == nullptr) {
       GLOG_ERROR("create_new_request() failed \n");
       errno = ENOMEM;
@@ -466,90 +464,11 @@ int gbuffer_deallocate(client_ctx_ptr ctx, gbuffer *ptr) {
   return 0;
 }
 
-completion *aio_create_completion(gcallback complete_cb, void *arg) {
-  completion *cptr = nullptr;
-
-  if (complete_cb == nullptr) {
-    errno = EINVAL;
-    return nullptr;
-  }
-  try {
-    cptr = new completion;
-    cptr->complete_cb = complete_cb;
-    cptr->cb_arg = arg;
-    cptr->_calling = false;
-    cptr->_on_wait = false;
-    cptr->_signaled = false;
-    cptr->_failed = false;
-    return cptr;
-  } catch (const std::bad_alloc &) {
-    errno = ENOMEM;
-    return nullptr;
-  }
-}
-
-ssize_t aio_return_completion(completion *completion) {
-
-  if (completion == nullptr) {
-    errno = EINVAL;
-    return -1;
-  }
-
-  assert(completion->_signaled == true);
-  if (not completion->_calling) {
-    return -1;
-  } else {
-    if (not completion->_failed) {
-      return completion->_rv;
-    } else {
-      errno = EIO;
-      return -1;
-    }
-  }
-}
-
-int aio_wait_completion(client_ctx_ptr& ctx, completion *completion, const timespec *timeout) {
-  int r = 0;
-
-  if (completion == nullptr) {
-    errno = EINVAL;
-    return (r = -1);
-  }
-
-  do {
-    // TODO pass timespec here
-    ctx->net_client_->run_loop();
-  } while (not completion->_signaled);
-
-  return r;
-}
-
-int aio_signal_completion(completion *completion) {
-
-  if (completion == nullptr) {
-    errno = EINVAL;
-    return -1;
-  }
-  completion->_signaled = true;
-  return 0;
-}
-
-int aio_release_completion(completion *completion) {
-
-  if (completion == nullptr) {
-    errno = EINVAL;
-    return -1;
-  }
-  delete completion;
-  return 0;
-}
-
 int aio_read(client_ctx_ptr ctx, giocb *giocbp) {
   auto cv = std::make_shared<notifier>();
 
   std::vector<giocb*> giocbp_vec(1, giocbp);
-  return _submit_aio_request(ctx, giocbp_vec, cv, nullptr,
-                             RequestOp::Read);
+  return _submit_aio_request(ctx, giocbp_vec, cv, RequestOp::Read);
 }
 
 int aio_readv(client_ctx_ptr ctx, const std::vector<giocb *> &giocbp_vec) {
@@ -557,19 +476,9 @@ int aio_readv(client_ctx_ptr ctx, const std::vector<giocb *> &giocbp_vec) {
 
   auto cv = std::make_shared<notifier>(giocbp_vec.size());
 
-  err = _submit_aio_request(ctx, giocbp_vec, cv, nullptr,
-                               RequestOp::Read);
+  err = _submit_aio_request(ctx, giocbp_vec, cv, RequestOp::Read);
 
   return err;
-}
-
-int aio_readcb(client_ctx_ptr ctx, giocb *giocbp,
-               completion *completion) {
-  auto cv = std::make_shared<notifier>();
-
-  std::vector<giocb*> giocbp_vec(1, giocbp);
-  return _submit_aio_request(ctx, giocbp_vec, cv, completion,
-                             RequestOp::Read);
 }
 
 ssize_t read(client_ctx_ptr ctx, const std::string &filename, void *buf,
@@ -613,23 +522,15 @@ static void _aio_wake_up_suspended_aiocb(aio_request *request) {
 void aio_complete_request(void *opaque, ssize_t retval, int errval) {
   XXEnter();
   aio_request *request = reinterpret_cast<aio_request *>(opaque);
-  completion *cptr = request->cptr;
   request->_errno = errval;
   request->_rv = retval;
   request->_failed = (retval < 0 ? true : false);
   request->_completed = true;
 
+  // no need to wakeup since there is now a single
+  // thread running the event loop
   //_xio_aio_wake_up_suspended_aiocb(request); 
 
-  if (cptr) {
-    cptr->_rv = retval;
-    cptr->_failed = (retval == -1 ? true : false);
-    GLOG_DEBUG("signalling completion for request=" << (void*)request);
-    // first invoke the callback, then signal completion
-    // caller must free the completion in main loop - not in callback!
-    cptr->complete_cb(cptr, cptr->cb_arg);
-    aio_signal_completion(cptr);
-  }
   XXExit();
 }
 
