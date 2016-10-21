@@ -69,6 +69,8 @@ void NetworkServerWriteReadTest(void) {
       std::cout << "completed reads=" << i << std::endl;
     }
   }
+
+  std::cout << ctx_get_stats(ctx) << std::endl;
 }
 
 int main(int argc, char *argv[]) {

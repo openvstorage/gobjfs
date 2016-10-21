@@ -24,7 +24,8 @@ but WITHOUT ANY WARRANTY of any kind.
 #include <gobjfs_client.h>
 #include <networkxio/gobjfs_client_common.h> // GLOG_DEBUG
 
-int times = 10;
+int times = 1000;
+int batchSize = 4;
 
 using namespace gobjfs::xio;
 
@@ -37,41 +38,40 @@ void NetworkServerWriteReadTest() {
   assert(ctx != nullptr);
 
   int err = ctx_init(ctx);
-  if (err < 0) {
-    GLOG_ERROR("Volume open failed ");
-    return;
+  assert (err == 0);
+
+  for (int j = 0; j < times; j++) {
+
+    std::vector<giocb *> iocb_vec;
+
+    for (int i = 0; i < batchSize; i++) {
+
+      auto rbuf = (char *)malloc(4096);
+      assert(rbuf != nullptr);
+  
+      giocb *iocb = new giocb;
+      iocb->filename = "abcd";
+      iocb->aio_buf = rbuf;
+      iocb->aio_offset = i * 4096;
+      iocb->aio_nbytes = 4096;
+  
+      iocb_vec.push_back(iocb);
+    }
+
+    auto ret = aio_readv(ctx, iocb_vec);
+
+    if (ret == 0) {
+      ret = aio_suspendv(ctx, iocb_vec, nullptr);
+    }
+  
+    for (auto &iocb : iocb_vec) {
+      aio_finish(ctx, iocb);
+      std::free(iocb->aio_buf);
+      delete iocb;
+    }
   }
 
-  std::vector<giocb *> iocb_vec;
-
-  for (int i = 0; i < times; i++) {
-
-    auto rbuf = (char *)malloc(4096);
-    assert(rbuf != nullptr);
-
-    giocb *iocb = (giocb *)malloc(sizeof(giocb));
-    iocb->filename = "abcd";
-    iocb->aio_buf = rbuf;
-    iocb->aio_offset = times * 4096;
-    iocb->aio_nbytes = 4096;
-
-    iocb_vec.push_back(iocb);
-  }
-
-  auto ret = aio_readv(ctx, iocb_vec);
-
-  if (ret == 0) {
-    ret = aio_suspendv(ctx, iocb_vec, nullptr);
-  }
-
-  for (auto &elem : iocb_vec) {
-    aio_finish(ctx, elem);
-    free(elem->aio_buf);
-    delete elem;
-  }
-
-  GLOG_DEBUG(
-      "\n\n------------------- ctx_destroy Successful -------------- \n\n");
+  std::cout << ctx_get_stats(ctx) << std::endl;
 }
 
 int main(int argc, char *argv[]) {

@@ -95,8 +95,7 @@ void NetworkServerWriteReadTest(bool use_completion) {
     delete elem; 
   }
 
-  GLOG_DEBUG(
-      "\n\n------------------- ctx_destroy Successful -------------- \n\n");
+  std::cout << ctx_get_stats(ctx) << std::endl;
 }
 
 int main(int argc, char *argv[]) {
