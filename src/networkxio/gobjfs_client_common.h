@@ -17,8 +17,6 @@ but WITHOUT ANY WARRANTY of any kind.
 */
 #pragma once
 
-#include <mutex>
-#include <condition_variable>
 #include <iostream>
 #include <assert.h>
 #include <string>
@@ -90,56 +88,6 @@ struct gbuffer {
   size_t size{0};
 };
 
-struct notifier {
-private:
-  int _count{0};
-  std::condition_variable _cond;
-  std::mutex _mutex;
-
-public:
-  notifier(int c = 1) : _count(c) {}
-
-  void wait() {
-    std::unique_lock<std::mutex> l(_mutex);
-    while (_count != 0) {
-      _cond.wait(l);
-    }
-  }
-
-  std::cv_status wait_for(const timespec *timeout) {
-    std::unique_lock<std::mutex> l(_mutex);
-    return _cond.wait_for(l, std::chrono::nanoseconds(
-                          ((uint64_t)timeout->tv_sec * SEC_TO_NANOSEC) +
-                          timeout->tv_nsec));
-  }
-
-  /*
-  void wait_for(struct timespec* timeout)
-  {
-    std::unique_lock<std::mutex> l(_mutex);
-    _cond.wait_for(
-        l_,
-        std::chrono::nanoseconds(
-          ((uint64_t)timeout->tv_sec * SEC_TO_NANOSEC) +
-          timeout->tv_nsec),
-        func);
-  }
-  */
-
-  void signal() {
-    std::unique_lock<std::mutex> l(_mutex);
-    assert(_count);
-    _count--;
-    if (0 == _count) {
-      GLOG_DEBUG("thr=" << gettid() << " signal not=" << (void *)this
-                        << " count=" << _count);
-      _cond.notify_all();
-    }
-  }
-};
-
-typedef std::shared_ptr<notifier> notifier_sptr;
-
 extern void aio_complete_request(void *request, ssize_t retval, int errval);
 
 struct aio_request {
@@ -148,12 +96,9 @@ struct aio_request {
   bool _on_suspend{false};
   bool _canceled{false};
   bool _completed{false};
-  bool _signaled{false};
   bool _failed{false};
   int _errno{0};
   ssize_t _rv{0};
-
-  notifier_sptr _cvp;
 
   int64_t _rtt_nanosec{0};
   gobjfs::stats::Timer _timer;

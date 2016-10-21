@@ -178,8 +178,7 @@ bool ctx_is_disconnected(client_ctx_ptr ctx) {
   }
 }
 
-aio_request *create_new_request(RequestOp op, struct giocb *aio,
-                                       notifier_sptr cvp) {
+aio_request *create_new_request(RequestOp op, struct giocb *aio) {
   try {
     aio_request *request = new aio_request;
     request->_op = op;
@@ -188,9 +187,7 @@ aio_request *create_new_request(RequestOp op, struct giocb *aio,
     request->_on_suspend = false;
     request->_canceled = false;
     request->_completed = false;
-    request->_signaled = false;
     request->_rv = 0;
-    request->_cvp = cvp;
     request->_rtt_nanosec = 0;
     if (aio and op != RequestOp::Noop) {
       aio->request_ = request;
@@ -205,7 +202,6 @@ aio_request *create_new_request(RequestOp op, struct giocb *aio,
 
 static int _submit_aio_request(client_ctx_ptr ctx, 
                               const std::vector<giocb*> &giocbp_vec, 
-                               notifier_sptr &cvp,
                                const RequestOp &op) {
   int r = 0;
   gobjfs::xio::NetworkXioClientPtr net_client = ctx->net_client_;
@@ -268,7 +264,7 @@ static int _submit_aio_request(client_ctx_ptr ctx,
       break;
     }
   
-    aio_request *request = create_new_request(op, giocbp, cvp);
+    aio_request *request = create_new_request(op, giocbp);
     if (request == nullptr) {
       GLOG_ERROR("create_new_request() failed \n");
       errno = ENOMEM;
@@ -412,8 +408,6 @@ int aio_suspend(client_ctx_ptr ctx, giocb *giocbp, const timespec *timeout) {
     if (not giocbp->request_->_completed) {
       more_work = true;
     } else if (giocbp->request_->_failed) {
-      // break out on first error
-      // let caller check individual error codes using aio_return
       errno = giocbp->request_->_errno;
       r = -1;
       break;
@@ -465,20 +459,12 @@ int gbuffer_deallocate(client_ctx_ptr ctx, gbuffer *ptr) {
 }
 
 int aio_read(client_ctx_ptr ctx, giocb *giocbp) {
-  auto cv = std::make_shared<notifier>();
-
   std::vector<giocb*> giocbp_vec(1, giocbp);
-  return _submit_aio_request(ctx, giocbp_vec, cv, RequestOp::Read);
+  return _submit_aio_request(ctx, giocbp_vec, RequestOp::Read);
 }
 
 int aio_readv(client_ctx_ptr ctx, const std::vector<giocb *> &giocbp_vec) {
-  int err = 0;
-
-  auto cv = std::make_shared<notifier>(giocbp_vec.size());
-
-  err = _submit_aio_request(ctx, giocbp_vec, cv, RequestOp::Read);
-
-  return err;
+  return _submit_aio_request(ctx, giocbp_vec, RequestOp::Read);
 }
 
 ssize_t read(client_ctx_ptr ctx, const std::string &filename, void *buf,
@@ -510,28 +496,15 @@ ssize_t read(client_ctx_ptr ctx, const std::string &filename, void *buf,
   return r;
 }
 
-static void _aio_wake_up_suspended_aiocb(aio_request *request) {
-  {
-    request->_signaled = true;
-    GLOG_DEBUG("waking up the suspended thread for request=" << (void*)request);
-    request->_cvp->signal();
-  }
-}
-
-/* called when response is received by NetworkXioClient */
+/**
+ * called when response is received by NetworkXioClient 
+ */
 void aio_complete_request(void *opaque, ssize_t retval, int errval) {
-  XXEnter();
   aio_request *request = reinterpret_cast<aio_request *>(opaque);
   request->_errno = errval;
   request->_rv = retval;
   request->_failed = (retval < 0 ? true : false);
   request->_completed = true;
-
-  // no need to wakeup since there is now a single
-  // thread running the event loop
-  //_xio_aio_wake_up_suspended_aiocb(request); 
-
-  XXExit();
 }
 
 }
