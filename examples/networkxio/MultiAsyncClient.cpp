@@ -60,8 +60,11 @@ void NetworkServerWriteReadTest() {
 
     auto ret = aio_readv(ctx, iocb_vec);
 
+    aio_wait_all(ctx);
+
     if (ret == 0) {
-      ret = aio_suspendv(ctx, iocb_vec, nullptr);
+      iocb_vec.clear();
+      ret = aio_getevents(ctx, batchSize, iocb_vec, nullptr);
     }
   
     for (auto &iocb : iocb_vec) {

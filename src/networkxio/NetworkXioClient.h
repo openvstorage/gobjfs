@@ -97,7 +97,12 @@ public:
   int on_msg_error(xio_session *session, xio_status error,
                    xio_msg_direction direction, xio_msg *msg);
 
-  void run();
+  int getevents(int32_t max, std::vector<giocb*> &giocb_vec,
+    const timespec* timeout);
+
+  int waitAll(int timeout_ms = XIO_INFINITE);
+
+  void run(); // TODO make private
 
   struct statistics {
 
@@ -113,14 +118,14 @@ public:
 
   } stats;
 
-  void update_stats(aio_request *req, bool req_failed);
+  void update_stats(aio_request *req);
 
   const bool &is_disconnected() { return disconnected; }
 
-  void run_loop(int timeout_ms = XIO_INFINITE);
-
 private:
 
+  // destructors are called in reverse order from bottom to top
+  // so keep xio_context first
   std::shared_ptr<xio_context> ctx;
   std::shared_ptr<xio_session> session;
   xio_connection *conn{nullptr};
@@ -142,16 +147,20 @@ private:
   int64_t maxQueueLen_{0};
   int64_t postProcessQueueLen_{0};
 
+  // TODO use lockfree
+  std::mutex postProcessQueueMutex_;
+  std::vector<aio_request*> postProcessQueue_;
+
 public:
   size_t maxBatchSize_ = 4; // TODO dynamic
 
 private:
 
-  void xio_run_loop_worker(void *arg);
-
   void shutdown();
 
   int send_msg(ClientMsg *msgPtr);
+
+  void postProcess(aio_request *aio_req, ssize_t retval, int errval);
 };
 
 typedef std::shared_ptr<NetworkXioClient> NetworkXioClientPtr;

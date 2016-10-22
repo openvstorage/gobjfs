@@ -46,6 +46,9 @@ static std::mutex mutex;
 
 static int dbg_xio_session_destroy(xio_session* s)
 {
+  // during process exit, boost logger can be destroyed before client_ctx
+  // triggering address sanitizer errors here
+  // better to manually destroy client_ctx to avoid this case
     GLOG_INFO("destroying session=" << (void*)s << " for uri="  << getURI(s));
     return xio_session_destroy(s);
 }
@@ -118,7 +121,8 @@ static int static_on_session_event(xio_session *session,
   // causing a SEGV
   //getAddressAndPort(event_data->conn, localAddr, localPort, peerAddr, peerPort);
 
-  GLOG_INFO("got session event=" << xio_session_event_str(event_data->event)
+  GLOG_INFO(
+      "got session event=" << xio_session_event_str(event_data->event)
       << ",reason=" << xio_strerror(event_data->reason)
       << ",conn=" << event_data->conn
       << ",cb_user_ctx=" << (void*)cb_user_context
@@ -127,7 +131,8 @@ static int static_on_session_event(xio_session *session,
       << ",peer_port=" << peerPort
       << ",local_addr=" << localAddr.c_str()
       << ",local_port=" << localPort
-      << ",uri=" << getURI(session));
+      << ",uri=" << getURI(session)
+      );
 
   return obj->on_session_event(session, event_data);
 }
@@ -256,7 +261,23 @@ void NetworkXioClient::run() {
  * can only be called from the thread owning xio_context
  */
 void NetworkXioClient::shutdown() {
-  GLOG_INFO("thread=" << gettid() << " disconnecting conn=" << conn);
+
+  // wait for inFlightQueueLen_ to reach 0
+  waitAll();
+
+  // wait for postProcessQueue to empty
+  while (1) {
+    std::unique_lock<std::mutex> l(postProcessQueueMutex_);
+    if (postProcessQueue_.empty()) 
+      break;
+    else
+      GLOG_INFO("thread=" << gettid() 
+          << " waiting for finished requests to be returned via getevents");
+      usleep(1000);
+  }
+
+
+  GLOG_INFO("thread=" << gettid() << " disconnecting conn=" << (void*)conn);
   xio_disconnect(conn);
   if (not disconnected) {
     disconnecting = true;
@@ -265,13 +286,18 @@ void NetworkXioClient::shutdown() {
     GLOG_INFO("thread=" << gettid() << " destroying conn=" << conn);
     xio_connection_destroy(conn);
   }
-  //session.reset(); TODO
 }
 
 NetworkXioClient::~NetworkXioClient() { 
   shutdown(); 
 }
 
+void NetworkXioClient::postProcess(aio_request *aio_req, ssize_t retval, int errval) {
+  aio_complete_request(aio_req, retval, errval);
+  update_stats(aio_req);
+  std::unique_lock<std::mutex> l(postProcessQueueMutex_);
+  postProcessQueue_.push_back(aio_req);
+}
 
 /**
  * the request can get freed after signaling completion in
@@ -279,14 +305,16 @@ NetworkXioClient::~NetworkXioClient() {
  * therefore, update_stats must be called before this function
  * otherwise its a use-after-free error
  */
-void NetworkXioClient::update_stats(aio_request *req, bool req_failed) {
+void NetworkXioClient::update_stats(aio_request *req) {
+  assert(req->_completed);
+
   if (!req) {
     stats.num_failed++;
     return;
   }
 
   req->_rtt_nanosec = req->_timer.elapsedNanoseconds();
-  if (req_failed) {
+  if (req->_failed) {
     stats.num_failed++;
   }
   stats.num_completed++;
@@ -350,8 +378,7 @@ int NetworkXioClient::on_msg_error(xio_session *session __attribute__((unused)),
     for (size_t idx = 0; idx < numElem; idx ++) {
   
       auto aio_req = msgPtr->aioReqVec_[idx];
-      update_stats(aio_req, true);
-      aio_complete_request(aio_req,
+      postProcess(aio_req,
           responseHeader.retvalVec_[idx], 
           responseHeader.errvalVec_[idx]);
     }
@@ -391,9 +418,34 @@ int NetworkXioClient::on_session_event(xio_session *session
   return 0;
 }
 
-void NetworkXioClient::run_loop(int timeout_ms) {
-  int ret = xio_context_run_loop(ctx.get(), timeout_ms);
-  assert(ret == 0);
+/**
+ * must be called from same thread which created the xio_context
+ * wait for all pending work to finish
+ * can be called before shutdown
+ */
+int NetworkXioClient::waitAll(int timeout_ms)
+{
+  while (inFlightQueueLen_) {
+    xio_context_run_loop(ctx.get(), timeout_ms);
+  }
+
+  return 0;
+}
+
+int NetworkXioClient::getevents(int32_t max, std::vector<giocb*> &giocb_vec,
+    const timespec* timeout) {
+
+  std::vector<aio_request*> localQueue;
+  {
+    std::unique_lock<std::mutex> l(postProcessQueueMutex_);
+    localQueue = std::move(postProcessQueue_);
+  }
+
+  // TODO use timeout param
+  for (auto& aio_req : localQueue) {
+    giocb_vec.push_back(aio_req->giocbp);
+  }
+  return 0;
 }
 
 int NetworkXioClient::send_msg(ClientMsg *msgPtr) {
@@ -401,12 +453,12 @@ int NetworkXioClient::send_msg(ClientMsg *msgPtr) {
  
   if (inFlightQueueLen_ < maxQueueLen_) {
     // process any finished requests before submitting new
-    run_loop(0);
+    xio_context_run_loop(ctx.get(), 0);
   } else {
     int numTries = 0;
     while (inFlightQueueLen_ == maxQueueLen_) {
       // will exit on every on_response, on_msg_error called
-      run_loop();
+      xio_context_run_loop(ctx.get(), XIO_INFINITE);
       numTries ++;
       if (numTries > 3) {
         break;
@@ -427,8 +479,7 @@ int NetworkXioClient::send_msg(ClientMsg *msgPtr) {
     const size_t numElem = requestHeader.numElems_;
     for (size_t idx = 0; idx < numElem; idx ++) {
       auto aio_req = msgPtr->aioReqVec_[idx];
-      update_stats(aio_req, true);
-      aio_complete_request(aio_req, -1, EIO);
+      postProcess(aio_req, -1, EIO);
     }
     delete msgPtr;
   } else {
@@ -548,12 +599,13 @@ int NetworkXioClient::on_response(xio_session *session __attribute__((unused)),
     for (size_t idx = 0; idx < numElems; idx ++) {
   
       auto aio_req = msgPtr->aioReqVec_[idx];
-      update_stats(aio_req, (responseHeader.retvalVec_[idx] < 0));
-      aio_complete_request(aio_req,
+      postProcess(aio_req,
                                 responseHeader.retvalVec_[idx], 
                                 responseHeader.errvalVec_[idx]);
     }
 
+    // first put into postProcessQueue and then decrement inFlightQueueLen
+    // to ensure shutdown waits for pending work
     inFlightQueueLen_ --;
 
     // free memory allocated to sglist

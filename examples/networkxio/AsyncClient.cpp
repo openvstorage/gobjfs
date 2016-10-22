@@ -20,29 +20,41 @@ but WITHOUT ANY WARRANTY of any kind.
 #include <fcntl.h>
 #include <string.h>
 #include <vector>
+#include <future>
+#include <thread>
 
 #include <gobjfs_client.h>
 #include <networkxio/gobjfs_client_common.h> // GLOG_DEBUG
 
-int times = 10;
 
 using namespace gobjfs::xio;
 
-void NetworkServerWriteReadTest() {
-  auto ctx_attr = ctx_attr_new();
+int32_t times = 1000;
+client_ctx_ptr ctx;
 
-  ctx_attr_set_transport(ctx_attr, "tcp", "127.0.0.1", 21321);
+void iocompletionFunc() {
 
-  client_ctx_ptr ctx = ctx_new(ctx_attr);
-  assert(ctx != nullptr);
+  int32_t doneCount = 0;
 
-  int err = ctx_init(ctx);
-  if (err < 0) {
-    GLOG_ERROR("Volume open failed ");
-    return;
+  while (doneCount < times) {
+
+    std::vector<giocb *> iocb_vec;
+
+    int r = aio_getevents(ctx, times, iocb_vec);
+
+    if (r == 0) {
+      for (auto &iocb : iocb_vec) {
+        aio_finish(iocb);
+        std::free(iocb->aio_buf);
+        delete iocb; 
+      }
+      doneCount += iocb_vec.size();
+      std::cout << "finished=" << iocb_vec.size() << ",total=" << doneCount << std::endl;
+    }
   }
+}
 
-  std::vector<giocb *> vec;
+void NetworkServerWriteReadTest() {
 
   for (int i = 0; i < times; i++) {
 
@@ -60,24 +72,33 @@ void NetworkServerWriteReadTest() {
     if (ret != 0) {
       std::free(iocb->aio_buf);
       delete iocb;
-    } else {
-      vec.push_back(iocb);
-    }
+    } 
   }
-
-  for (auto &iocb : vec) {
-    aio_suspend(ctx, iocb, nullptr);
-    aio_finish(iocb);
-    std::free(iocb->aio_buf);
-    delete iocb; 
-  }
-
-  std::cout << ctx_get_stats(ctx) << std::endl;
 }
 
 int main(int argc, char *argv[]) {
 
   times = atoi(argv[1]);
 
+  auto ctx_attr = ctx_attr_new();
+  ctx_attr_set_transport(ctx_attr, "tcp", "127.0.0.1", 21321);
+
+  ctx = ctx_new(ctx_attr);
+  assert(ctx != nullptr);
+
+  int err = ctx_init(ctx);
+  assert(err == 0);
+
   NetworkServerWriteReadTest();
+
+  auto fut = std::async(std::launch::async,
+      iocompletionFunc);
+
+  aio_wait_all(ctx);
+
+  fut.wait();
+
+  std::cout << ctx_get_stats(ctx) << std::endl;
+
+  ctx.reset();
 }

@@ -316,14 +316,15 @@ void ThreadCtx::doRandomRead() {
         benchInfo.failedReads ++;
         //LOG(ERROR) << "failed0";
       } else {
-        iocb_vec.push_back(iocb);
       }
 
       if (doneCount % config.maxOutstandingIO == 0) {
 
-        for (auto &iocb : iocb_vec) {
+        aio_wait_all(ctx_ptr);
+        std::vector<giocb *> local_iocb_vec;
+        ssize_t ret = aio_getevents(ctx_ptr, config.maxOutstandingIO, local_iocb_vec);
 
-          ssize_t ret = aio_suspend(ctx_ptr, iocb, nullptr);
+        for (auto &iocb : local_iocb_vec) {
 
           benchInfo.readLatency = latencyTimer.elapsedMicroseconds();
 
@@ -365,11 +366,14 @@ void ThreadCtx::doRandomRead() {
           }
         } else {
 
-          aio_suspendv(ctx_ptr, iocb_vec, nullptr);
+          aio_wait_all(ctx_ptr);
+
+          std::vector<giocb *> local_iocb_vec;
+          aio_getevents(ctx_ptr, config.maxOutstandingIO, local_iocb_vec);
 
           benchInfo.readLatency = latencyTimer.elapsedMicroseconds();
 
-          for (auto &iocb : iocb_vec) {
+          for (auto &iocb : local_iocb_vec) {
             ssize_t ret = aio_return(iocb);
             if (ret != config.blockSize) {
               benchInfo.failedReads ++;

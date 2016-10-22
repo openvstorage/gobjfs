@@ -139,23 +139,26 @@ ssize_t read(client_ctx_ptr ctx, const std::string &filename, void *buf,
 
 /*
  * Suspend until asynchronous I/O operation or timeout complete
+ * Can be called by any thread
  * @param ctx: gobjfs xio context
- * @param giocb: Pointer to an AIO Control Block structure
- * @param timeout: Pointer to a timespec structure
- * @return: 0 on success, -1 on fail
- */
-int aio_suspend(client_ctx_ptr ctx, giocb *giocb, const timespec *timeout);
-
-/*
- * Suspend until asynchronous I/O operation or timeout complete
- * @param ctx: gobjfs xio context
- * @param giocb_vec: Pointer to vector of AIO Control Block structure
+ * @param max: max number of completed iocb to return
+ * @param giocb_vec: vector of iocb to fill up and return
  * @param timeout: Pointer to a timespec structure
  * @return: 0 on success, -1 on fail
  */
 
-int aio_suspendv(client_ctx_ptr ctx, const std::vector<giocb *> &giocbp_vec,
-                 const timespec *timeout);
+int aio_getevents(client_ctx_ptr ctx, int32_t max, std::vector<giocb *> &giocbp_vec,
+                 const timespec *timeout = nullptr);
+
+/**
+ * Suspend till all transmitted requests get a response from server
+ * Should be called only by thread which initialized ctx
+ * @param ctx: gobjfs xio context
+ * @param timeout: in milliseconds (-1 for infinite)
+ * @return: 0 on success, -1 on fail
+ */
+int aio_wait_all(client_ctx_ptr ctx, int timeout_ms = -1);
+
 /*
  * Retrieve error status of asynchronous I/O operation
  * @param giocb: Pointer to an AIO Control Block structure

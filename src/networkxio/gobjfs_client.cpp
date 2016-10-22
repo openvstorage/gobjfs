@@ -148,8 +148,6 @@ int ctx_init(client_ctx_ptr ctx) {
       XXDone();
     }
   }
-done:
-  XXExit();
   return err;
 }
 
@@ -349,63 +347,45 @@ int aio_finish(giocb *giocbp) {
   return 0;
 }
 
-int aio_suspendv(client_ctx_ptr ctx, const std::vector<giocb *> &giocbp_vec,
-                 const timespec *timeout) {
+/**
+ * TODO : check owner tid = caller of this func
+ */
+int aio_wait_all(client_ctx_ptr ctx, int timeout_ms) {
+
   int r = 0;
-  if (ctx == nullptr || giocbp_vec.size() == 0) {
+  if (ctx == nullptr) {
     errno = EINVAL;
-    XXExit();
     return (r = -1);
   }
 
-  bool more_work = false;
-  do {
+  int timeout = XIO_INFINITE;
+  if (timeout_ms > 0) {
+    timeout = timeout_ms;
+  }
 
-    more_work = false;
-
-    for (auto& elem : giocbp_vec) {
-      if (not elem->request_->_completed) {
-        more_work = true;
-      } else if (elem->request_->_failed) {
-        // wait until all requests are complete
-        // otherwise proper error codes are not propagated
-        errno = elem->request_->_errno;
-        r = -1;
-      }
-    }
-
-    if (more_work) {
-      ctx->net_client_->run_loop();
-    }
-
-  } while (more_work);
-
-  return r;
+  return ctx->net_client_->waitAll(timeout);
 }
 
-int aio_suspend(client_ctx_ptr ctx, giocb *giocbp, const timespec *timeout) {
+/**
+ * This func can be called by a thread different from one running xio loop
+ * it should not call xio_context_run_loop()
+ */
+int aio_getevents(client_ctx_ptr ctx, int32_t max, std::vector<giocb *> &giocbp_vec,
+                 const timespec *timeout) {
   int r = 0;
-  if (ctx == nullptr || giocbp == nullptr) {
+  if (ctx == nullptr || not giocbp_vec.empty()) {
     errno = EINVAL;
     return (r = -1);
   }
-  bool more_work = false;
+
   do {
-
-    more_work = false;
-
-    if (not giocbp->request_->_completed) {
-      more_work = true;
-    } else if (giocbp->request_->_failed) {
-      errno = giocbp->request_->_errno;
-      r = -1;
+    r = ctx->net_client_->getevents(max, giocbp_vec, timeout);
+    // if r = etimeout, reset r = 0
+    // if r = eagain, retry
+    if (r != 0) {
       break;
     }
-
-    if (more_work) {
-      ctx->net_client_->run_loop();
-    }
-  } while (more_work);
+  } while (giocbp_vec.empty());
 
   return r;
 }
@@ -468,13 +448,16 @@ ssize_t read(client_ctx_ptr ctx, const std::string &filename, void *buf,
     return r;
   }
 
-  r = aio_suspend(ctx, &aio, nullptr);
+  ctx->net_client_->waitAll();
+
+  std::vector<giocb*> giocbp_vec;
+  r = aio_getevents(ctx, 1, giocbp_vec, nullptr);
 
   if (r == 0) {
-    r = aio_return(&aio);
+    r = aio_return(giocbp_vec[0]);
   }
 
-  if (aio_finish(&aio) < 0) {
+  if (aio_finish(giocbp_vec[0]) < 0) {
     r = -1;
   }
   return r;

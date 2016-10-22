@@ -245,8 +245,11 @@ TEST_F(NetworkXioServerTest, AsyncFileDoesntExist) {
   auto ret = aio_readv(ctx, iocb_vec);
   EXPECT_EQ(ret, 0);
 
-  ret = aio_suspendv(ctx, iocb_vec, nullptr);
-  EXPECT_EQ(ret, -1);
+  aio_wait_all(ctx);
+
+  iocb_vec.clear();
+  ret = aio_getevents(ctx, times, iocb_vec);
+  EXPECT_EQ(ret, 0);
 
   for (auto &iocb : iocb_vec) {
     auto retcode = aio_return(iocb);
@@ -255,6 +258,7 @@ TEST_F(NetworkXioServerTest, AsyncFileDoesntExist) {
     std::free(iocb->aio_buf);
     delete iocb;
   }
+  iocb_vec.clear();
 
   auto stats_string = ctx_get_stats(ctx);
   auto expected_str = "num_failed=" + std::to_string(times);
@@ -332,7 +336,6 @@ TEST_F(NetworkXioServerTest, AsyncRead) {
   EXPECT_EQ(err, 0);
   EXPECT_EQ(ctx_is_disconnected(ctx), false);
 
-  std::vector<giocb *> vec;
 
   size_t readSz = BufferSize - ShortenSize;
 
@@ -350,12 +353,14 @@ TEST_F(NetworkXioServerTest, AsyncRead) {
     auto ret = aio_read(ctx, iocb);
     EXPECT_EQ(ret, 0);
 
-    vec.push_back(iocb);
   }
 
-  for (auto &iocb : vec) {
+  aio_wait_all(ctx);
 
-    auto ret = aio_suspend(ctx, iocb, nullptr);
+  std::vector<giocb *> vec;
+  auto ret = aio_getevents(ctx, times, vec);
+
+  for (auto &iocb : vec) {
     EXPECT_EQ(ret, 0);
 
     auto retcode = aio_return(iocb);
@@ -365,6 +370,7 @@ TEST_F(NetworkXioServerTest, AsyncRead) {
     std::free(iocb->aio_buf);
     delete iocb;
   }
+  vec.clear();
 
   removeDataFile();
 
@@ -419,7 +425,10 @@ TEST_F(NetworkXioServerTest, MultiAsyncRead) {
   auto ret = aio_readv(ctx, iocb_vec);
   EXPECT_EQ(ret, 0);
 
-  ret = aio_suspendv(ctx, iocb_vec, nullptr);
+  aio_wait_all(ctx);
+
+  iocb_vec.clear();
+  ret = aio_getevents(ctx, times, iocb_vec);
   EXPECT_EQ(ret, 0);
 
   for (auto &iocb : iocb_vec) {
@@ -429,6 +438,7 @@ TEST_F(NetworkXioServerTest, MultiAsyncRead) {
     std::free(iocb->aio_buf);
     delete iocb;
   }
+  iocb_vec.clear();
 
   removeDataFile();
 
