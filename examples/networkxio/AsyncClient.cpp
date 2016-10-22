@@ -58,18 +58,18 @@ void NetworkServerWriteReadTest() {
     auto ret = aio_read(ctx, iocb);
 
     if (ret != 0) {
+      std::free(iocb->aio_buf);
       delete iocb;
-      free(rbuf);
     } else {
       vec.push_back(iocb);
     }
   }
 
-  for (auto &elem : vec) {
-    aio_suspend(ctx, elem, nullptr);
-    aio_finish(ctx, elem);
-    free(elem->aio_buf);
-    delete elem; 
+  for (auto &iocb : vec) {
+    aio_suspend(ctx, iocb, nullptr);
+    aio_finish(iocb);
+    std::free(iocb->aio_buf);
+    delete iocb; 
   }
 
   std::cout << ctx_get_stats(ctx) << std::endl;

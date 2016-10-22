@@ -158,27 +158,24 @@ int aio_suspendv(client_ctx_ptr ctx, const std::vector<giocb *> &giocbp_vec,
                  const timespec *timeout);
 /*
  * Retrieve error status of asynchronous I/O operation
- * @param ctx: gobjfs xio context
  * @param giocb: Pointer to an AIO Control Block structure
  * @return: 0 on success, -1 on fail
  */
-int aio_error(client_ctx_ptr ctx, giocb *giocbp);
+int aio_error(giocb *giocbp);
 
 /*
  * Retrieve return status of asynchronous I/O operation
- * @param ctx: gobjfs xio context
  * @param giocb: Pointer to an AIO Control Block structure
  * @return: Number of bytes returned based on the operation, -1 on fail
  */
-ssize_t aio_return(client_ctx_ptr ctx, giocb *giocbp);
+ssize_t aio_return(giocb *giocbp);
 
 /*
- * Finish an asynchronous I/O operation
- * @param ctx: gobjfs xio context
+ * Destroy internal resources associated to an asynchronous I/O operation
  * @param giocb: Pointer to an AIO Control Block structure
  * @return: 0 on success, -1 on fail
  */
-int aio_finish(client_ctx_ptr ctx, giocb *giocbp);
+int aio_finish(giocb *giocbp);
 
 /*
  * Asynchronous read from a volume

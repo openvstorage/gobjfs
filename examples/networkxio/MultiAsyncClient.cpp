@@ -65,7 +65,7 @@ void NetworkServerWriteReadTest() {
     }
   
     for (auto &iocb : iocb_vec) {
-      aio_finish(ctx, iocb);
+      aio_finish(iocb);
       std::free(iocb->aio_buf);
       delete iocb;
     }

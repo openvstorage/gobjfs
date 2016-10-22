@@ -178,7 +178,7 @@ bool ctx_is_disconnected(client_ctx_ptr ctx) {
   }
 }
 
-aio_request *create_new_request(RequestOp op, struct giocb *aio) {
+static aio_request *create_new_request(RequestOp op, struct giocb *aio) {
   try {
     aio_request *request = new aio_request;
     request->_op = op;
@@ -302,9 +302,9 @@ static int _submit_aio_request(client_ctx_ptr ctx,
   return r;
 }
 
-int aio_error(client_ctx_ptr ctx, giocb *giocbp) {
+int aio_error(giocb *giocbp) {
   int r = 0;
-  if (ctx == nullptr || giocbp == nullptr) {
+  if (giocbp == nullptr) {
     errno = EINVAL;
     return (r = -1);
   }
@@ -320,13 +320,11 @@ int aio_error(client_ctx_ptr ctx, giocb *giocbp) {
   }
 }
 
-ssize_t aio_return(client_ctx_ptr ctx, giocb *giocbp) {
+ssize_t aio_return(giocb *giocbp) {
   int r = 0;
-  XXEnter();
-  if (ctx == nullptr || giocbp == nullptr) {
+  if (giocbp == nullptr) {
     GLOG_ERROR("ctx or giocbp NULL");
     r = -EINVAL;
-    XXExit();
     return r;
   }
 
@@ -337,20 +335,17 @@ ssize_t aio_return(client_ctx_ptr ctx, giocb *giocbp) {
     r = GetNegative(errno);
     GLOG_ERROR("giocbp->request_->_failed is true. Error is " << r);
   }
-  XXExit();
   return r;
 }
 
-int aio_finish(client_ctx_ptr ctx, giocb *giocbp) {
-  XXEnter();
-  if (ctx == nullptr || giocbp == nullptr) {
+int aio_finish(giocb *giocbp) {
+  if (giocbp == nullptr) {
     errno = EINVAL;
     GLOG_ERROR("ctx or giocbp NULL ");
     return -1;
   }
 
   delete giocbp->request_;
-  XXExit();
   return 0;
 }
 
@@ -476,10 +471,10 @@ ssize_t read(client_ctx_ptr ctx, const std::string &filename, void *buf,
   r = aio_suspend(ctx, &aio, nullptr);
 
   if (r == 0) {
-    r = aio_return(ctx, &aio);
+    r = aio_return(&aio);
   }
 
-  if (aio_finish(ctx, &aio) < 0) {
+  if (aio_finish(&aio) < 0) {
     r = -1;
   }
   return r;

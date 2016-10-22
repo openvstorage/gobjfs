@@ -321,9 +321,9 @@ void ThreadCtx::doRandomRead() {
 
       if (doneCount % config.maxOutstandingIO == 0) {
 
-        for (auto &elem : iocb_vec) {
+        for (auto &iocb : iocb_vec) {
 
-          ssize_t ret = aio_suspend(ctx_ptr, elem, nullptr);
+          ssize_t ret = aio_suspend(ctx_ptr, iocb, nullptr);
 
           benchInfo.readLatency = latencyTimer.elapsedMicroseconds();
 
@@ -331,15 +331,15 @@ void ThreadCtx::doRandomRead() {
             //LOG(ERROR) << "failed suspend " << ret;
             benchInfo.failedReads ++;      
           } else {
-            ret = aio_return(ctx_ptr, elem);
+            ret = aio_return(iocb);
             if (ret != config.blockSize) {
               //LOG(ERROR) << "failed1 " << ret;
               benchInfo.failedReads ++;      
             }
           }
-          aio_finish(ctx_ptr, elem);
-          std::free(elem->aio_buf);
-          delete elem;
+          aio_finish(iocb);
+          std::free(iocb->aio_buf);
+          delete iocb;
         }
         iocb_vec.clear();
       }
@@ -358,10 +358,10 @@ void ThreadCtx::doRandomRead() {
         if (ret != 0) {
           benchInfo.failedReads += iocb_vec.size();
           //LOG(ERROR) << "failed2";
-          for (auto &elem : iocb_vec) {
-            aio_finish(ctx_ptr, elem);
-            std::free(elem->aio_buf);
-            delete elem;
+          for (auto &iocb : iocb_vec) {
+            aio_finish(iocb);
+            std::free(iocb->aio_buf);
+            delete iocb;
           }
         } else {
 
@@ -369,15 +369,15 @@ void ThreadCtx::doRandomRead() {
 
           benchInfo.readLatency = latencyTimer.elapsedMicroseconds();
 
-          for (auto &elem : iocb_vec) {
-            ssize_t ret = aio_return(ctx_ptr, elem);
+          for (auto &iocb : iocb_vec) {
+            ssize_t ret = aio_return(iocb);
             if (ret != config.blockSize) {
               benchInfo.failedReads ++;
               //LOG(ERROR) << "failed3";
             }
-            aio_finish(ctx_ptr, elem);
-            std::free(elem->aio_buf);
-            delete elem;
+            aio_finish(iocb);
+            std::free(iocb->aio_buf);
+            delete iocb;
           }
         }
         iocb_vec.clear();

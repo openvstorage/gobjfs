@@ -249,10 +249,10 @@ TEST_F(NetworkXioServerTest, AsyncFileDoesntExist) {
   EXPECT_EQ(ret, -1);
 
   for (auto &iocb : iocb_vec) {
-    auto retcode = aio_return(ctx, iocb);
+    auto retcode = aio_return(iocb);
     EXPECT_EQ(retcode, -EIO);
-    aio_finish(ctx, iocb);
-    free(iocb->aio_buf);
+    aio_finish(iocb);
+    std::free(iocb->aio_buf);
     delete iocb;
   }
 
@@ -297,7 +297,7 @@ TEST_F(NetworkXioServerTest, SyncRead) {
     // reads will fail since file doesnt exist
     EXPECT_EQ(sz, readSz);
 
-    free(rbuf);
+    std::free(rbuf);
   }
 
   removeDataFile();
@@ -353,17 +353,17 @@ TEST_F(NetworkXioServerTest, AsyncRead) {
     vec.push_back(iocb);
   }
 
-  for (auto &elem : vec) {
+  for (auto &iocb : vec) {
 
-    auto ret = aio_suspend(ctx, elem, nullptr);
+    auto ret = aio_suspend(ctx, iocb, nullptr);
     EXPECT_EQ(ret, 0);
 
-    auto retcode = aio_return(ctx, elem);
+    auto retcode = aio_return(iocb);
     EXPECT_EQ(retcode, readSz);
 
-    aio_finish(ctx, elem);
-    free(elem->aio_buf);
-    delete elem;
+    aio_finish(iocb);
+    std::free(iocb->aio_buf);
+    delete iocb;
   }
 
   removeDataFile();
@@ -422,12 +422,12 @@ TEST_F(NetworkXioServerTest, MultiAsyncRead) {
   ret = aio_suspendv(ctx, iocb_vec, nullptr);
   EXPECT_EQ(ret, 0);
 
-  for (auto &elem : iocb_vec) {
-    auto retcode = aio_return(ctx, elem);
+  for (auto &iocb : iocb_vec) {
+    auto retcode = aio_return(iocb);
     EXPECT_EQ(retcode, readSz);
-    aio_finish(ctx, elem);
-    free(elem->aio_buf);
-    delete elem;
+    aio_finish(iocb);
+    std::free(iocb->aio_buf);
+    delete iocb;
   }
 
   removeDataFile();
