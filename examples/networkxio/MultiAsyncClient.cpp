@@ -20,25 +20,34 @@ but WITHOUT ANY WARRANTY of any kind.
 #include <fcntl.h>
 #include <string.h>
 #include <vector>
+#include <future>
+#include <thread>
+#include <atomic>
 
 #include <gobjfs_client.h>
 #include <networkxio/gobjfs_client_common.h> // GLOG_DEBUG
 
 int times = 1000;
 int batchSize = 4;
+static constexpr size_t MaxThr = 10;
+std::atomic<int> barrierCount{0};
 
 using namespace gobjfs::xio;
 
 void NetworkServerWriteReadTest() {
-  auto ctx_attr = ctx_attr_new();
 
+  auto ctx_attr = ctx_attr_new();
   ctx_attr_set_transport(ctx_attr, "tcp", "127.0.0.1", 21321);
 
   client_ctx_ptr ctx = ctx_new(ctx_attr);
   assert(ctx != nullptr);
-
   int err = ctx_init(ctx);
   assert (err == 0);
+
+  barrierCount ++;
+  while (barrierCount != MaxThr) {
+    usleep(1000);
+  }
 
   for (int j = 0; j < times; j++) {
 
@@ -75,7 +84,10 @@ void NetworkServerWriteReadTest() {
   }
 
   std::cout << ctx_get_stats(ctx) << std::endl;
+
+  ctx.reset();
 }
+
 
 int main(int argc, char *argv[]) {
 
@@ -83,5 +95,14 @@ int main(int argc, char *argv[]) {
     times = atoi(argv[1]);
   }
 
-  NetworkServerWriteReadTest();
+  std::vector<std::future<void>> futVec;
+
+  for (int idx = 0; idx < MaxThr; idx ++) {
+    auto fut = std::async(std::launch::async, NetworkServerWriteReadTest);
+    futVec.push_back(std::move(fut));
+  }
+
+  for (auto& fut : futVec) {
+    fut.wait();
+  }
 }

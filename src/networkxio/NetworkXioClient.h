@@ -41,6 +41,7 @@ MAKE_EXCEPTION(XioClientRegHandlerException);
 MAKE_EXCEPTION(XioClientQueueIsBusyException);
 MAKE_EXCEPTION(FailedRegisterEventHandler);
 
+class Session;
 
 /**
  * One NetworkXioClient can only connect to single URI (i.e. NetworkXioServer)
@@ -102,6 +103,8 @@ public:
 
   int waitAll(int timeout_ms = XIO_INFINITE);
 
+  void stop_loop();
+
   void run(); // TODO make private
 
   struct statistics {
@@ -127,7 +130,7 @@ private:
   // destructors are called in reverse order from bottom to top
   // so keep xio_context first
   std::shared_ptr<xio_context> ctx;
-  std::shared_ptr<xio_session> session;
+  std::shared_ptr<Session> sptr;
   xio_connection *conn{nullptr};
 
   xio_session_params sparams;

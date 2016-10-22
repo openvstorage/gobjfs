@@ -36,80 +36,139 @@ namespace gobjfs {
 namespace xio {
 
 /**
- * keep one session per uri for portals
+ * this ensures that xio library is initialized
+ * once and destroyed when all xio_sessions are
+ * destroyed.
+ */
+struct XioInit {
+
+  int xio_init_refcnt = 0;
+  std::mutex xioLibMutex;
+
+  XioInit() {
+    std::unique_lock<std::mutex> l(xioLibMutex);
+    if (++ xio_init_refcnt == 1) {
+      xio_init();
+      GLOG_INFO("starting up xio lib");
+    }
+  }
+
+  ~XioInit() {
+    std::unique_lock<std::mutex> l(xioLibMutex);
+    if (-- xio_init_refcnt == 0) {
+      GLOG_INFO("shutting down xio lib");
+      xio_shutdown();
+    }
+  }
+};
+
+// Keep this pointer inside every Session
+std::shared_ptr<XioInit> xioIniter = std::make_shared<XioInit>();
+
+/**
+ * To ensure that load-balancing and xio portals work, we need to have 
+ * one xio_session per uri shared between all xio_connect()
+ * This class maintains that context
  */
 
-typedef std::map<std::string, std::shared_ptr<xio_session>> SessionMap;
+struct Session {
+  // hold a shared ptr to xio library ref cnt here
+  // so that xio_shutdown() is not called until
+  // last session is destroyed
+  std::shared_ptr<XioInit> initer;
 
+  // list of clients which share this session
+  std::vector<NetworkXioClient*> clients;
+
+  xio_session* s = nullptr;
+
+  Session(NetworkXioClient* client, 
+      const std::string& uri, 
+      xio_session_params& sparams)
+  {
+    sparams.uri = uri.c_str();
+    initer = xioIniter;
+    s = xio_session_create(&sparams);
+    assert(s);
+    GLOG_INFO("thread=" << gettid() << " created session=" << s);
+    clients.push_back(client);
+  }
+
+  void stopAll()
+  {
+    for (auto client : clients) {
+      client->stop_loop();
+    }
+  }
+
+  ~Session()
+  {
+    GLOG_INFO("thread=" << gettid() << " destroying session=" << s);
+    xio_session_destroy(s);
+    s = nullptr;
+  }
+
+  xio_session* xioptr()
+  {
+    return s;
+  }
+};
+
+typedef std::shared_ptr<Session> SessionSPtr;
+typedef std::map<std::string, SessionSPtr> SessionMap;
+
+// Map of <uri, Session>
 static SessionMap sessionMap;
-static std::mutex mutex;
+static std::mutex sessionMutex;
 
-static int dbg_xio_session_destroy(xio_session* s)
-{
-  // during process exit, boost logger can be destroyed before client_ctx
-  // triggering address sanitizer errors here
-  // better to manually destroy client_ctx to avoid this case
-    GLOG_INFO("destroying session=" << (void*)s << " for uri="  << getURI(s));
-    return xio_session_destroy(s);
-}
-
-static inline std::shared_ptr<xio_session> getSession(const std::string& uri, 
+static SessionSPtr getSession(NetworkXioClient* client,
+    const std::string& uri, 
     xio_session_params& session_params) {
 
-  std::shared_ptr<xio_session> retptr;
-  std::unique_lock<std::mutex> l(mutex);
+  SessionSPtr retptr;
+  std::unique_lock<std::mutex> l(sessionMutex);
 
   auto iter = sessionMap.find(uri);
   if (iter == sessionMap.end()) {
     // session does not exist, create one
-    auto session = std::shared_ptr<xio_session>(xio_session_create(&session_params),
-                                         dbg_xio_session_destroy);
-#ifdef SHARED_SESSION
-    //TODO change conn_idx = 0 when you enable this code
-    auto insertIter = sessionMap.insert(std::make_pair(uri, session));
-    assert(insertIter.second == true); // insert succeded
-#endif
-    GLOG_INFO("session=" << (void*)session.get() << " created for " << uri);
-    retptr = session;
+    auto sptr = std::make_shared<Session>(client, uri, session_params);
+    auto insertIter = sessionMap.insert(std::make_pair(uri, sptr));
+    assert(insertIter.second == true); // insert succeeded
+    GLOG_INFO("session=" << (void*)sptr.get() 
+        << " created for " << uri 
+        << " by client=" << (void*)client);
+    retptr = sptr;
   } else {
     retptr = iter->second;
-    GLOG_INFO("session=" << (void*)retptr.get() << " found for " << uri);
+    GLOG_INFO("session=" << (void*)retptr.get() 
+        << " found for " << uri 
+        << " by client=" << (void*)client);
   }
   return retptr;
 }
 
-/**
- * initialize xio once
- */
-static int xio_init_refcnt = 0;
-static std::mutex xioLibMutex;
-
-static inline void xrefcnt_init() {
-  std::unique_lock<std::mutex> l(xioLibMutex);
-  if (++ xio_init_refcnt == 1) {
-    xio_init();
-    GLOG_INFO("starting up xio lib");
-  }
-}
-
-static inline void xrefcnt_shutdown() {
-  std::unique_lock<std::mutex> l(xioLibMutex);
-  if (-- xio_init_refcnt == 0) {
-    GLOG_INFO("shutting down xio lib");
-    xio_shutdown();
-  }
-}
-
-static void destroy_ctx_shutdown(xio_context *ctx) {
+static void destroy_ctx_shutdown(xio_context* ctx) {
   xio_context_destroy(ctx);
-  xrefcnt_shutdown();
 }
 
+/**
+ * Portal connections to same server share the same xio_session
+ * For such connections, note this difference to avoid grief
+ * the cb_user_context (3rd arg) to this function is same as 
+ *     "cparams.conn_user_context" specified for the
+ *     first xio_connect() which in our case is the first NetworkXioClient 
+ * whereas
+ * the event_data->conn_user_context is same as 
+ *     "cparams.conn_user_context" specified in 
+ *     each subsequent xio_connect(), which in our case are the
+ *     subsequent NetworkXioClient that share the same xio_session
+ */
 template <class T>
 static int static_on_session_event(xio_session *session,
                                    xio_session_event_data *event_data,
                                    void *cb_user_context) {
-  T *obj = reinterpret_cast<T *>(cb_user_context);
+
+  T *obj = reinterpret_cast<T *>(event_data->conn_user_context);
   if (obj == NULL) {
     return -1;
   }
@@ -126,6 +185,7 @@ static int static_on_session_event(xio_session *session,
       << ",reason=" << xio_strerror(event_data->reason)
       << ",conn=" << event_data->conn
       << ",cb_user_ctx=" << (void*)cb_user_context
+      << ",event_data_ctx=" << (void*)event_data->conn_user_context
       << ",thread=" << gettid() 
       << ",peer_addr=" << peerAddr.c_str()
       << ",peer_port=" << peerPort
@@ -188,9 +248,11 @@ NetworkXioClient::NetworkXioClient(const std::string &uri, const uint64_t qd)
   sparams.user_context = this;
   sparams.uri = uri_.c_str();
 
-  xrefcnt_init();
-
   run();
+}
+
+void NetworkXioClient::stop_loop() {
+  xio_context_stop_loop(ctx.get());
 }
 
 void NetworkXioClient::run() {
@@ -223,7 +285,6 @@ void NetworkXioClient::run() {
         xio_context_create(NULL, polling_time_usec, -1),
         destroy_ctx_shutdown);
   } catch (const std::bad_alloc &) {
-    xrefcnt_shutdown();
     throw;
   }
 
@@ -233,23 +294,15 @@ void NetworkXioClient::run() {
 
   //session = std::shared_ptr<xio_session>(xio_session_create(&params),
                                          //xio_session_destroy);
-  session = getSession(uri_, sparams);
-  if (session == nullptr) {
+  sptr = getSession(this, uri_, sparams);
+  if (sptr == nullptr) {
     throw XioClientCreateException("failed to create XIO client");
   }
 
-  cparams.session = session.get();
+  cparams.session = sptr->xioptr();
   cparams.ctx = ctx.get();
   cparams.conn_user_context = this;
-#ifdef SHARED_SESSION
   cparams.conn_idx = 0; 
-  // xio will auto-increment internally when conn_idx = 0
-  // and load-balance when session is shared between multiple connections
-  // enable this code after fixing shared session destructor error
-#else
-  // this is temporary hack assuming max portals never more than 20
-  cparams.conn_idx = gettid() % 20;
-#endif
 
   conn = xio_connect(&cparams);
   if (conn == nullptr) {
@@ -278,13 +331,13 @@ void NetworkXioClient::shutdown() {
 
 
   GLOG_INFO("thread=" << gettid() << " disconnecting conn=" << (void*)conn);
-  xio_disconnect(conn);
   if (not disconnected) {
+    xio_disconnect(conn);
     disconnecting = true;
-    xio_context_run_loop(ctx.get(), XIO_INFINITE);
-  } else {
-    GLOG_INFO("thread=" << gettid() << " destroying conn=" << conn);
-    xio_connection_destroy(conn);
+    while (not disconnected) {
+      xio_context_run_loop(ctx.get(), 1);
+    }
+    assert(conn == nullptr);
   }
 }
 
@@ -391,8 +444,7 @@ int NetworkXioClient::on_msg_error(xio_session *session __attribute__((unused)),
   return ret;
 }
 
-int NetworkXioClient::on_session_event(xio_session *session
-                                       __attribute__((unused)),
+int NetworkXioClient::on_session_event(xio_session *session,
                                        xio_session_event_data *event_data) {
   XXEnter();
   switch (event_data->event) {
@@ -405,11 +457,13 @@ int NetworkXioClient::on_session_event(xio_session *session
 
   case XIO_SESSION_CONNECTION_TEARDOWN_EVENT:
     xio_connection_destroy(event_data->conn);
+    GLOG_INFO("thread=" << gettid() << " destroying conn=" << event_data->conn);
     disconnected = true;
+    conn = nullptr;
     break;
 
   case XIO_SESSION_TEARDOWN_EVENT:
-    xio_context_stop_loop(ctx.get());
+    sptr->stopAll();
     break;
   default:
     break;
@@ -605,7 +659,8 @@ int NetworkXioClient::on_response(xio_session *session __attribute__((unused)),
     }
 
     // first put into postProcessQueue and then decrement inFlightQueueLen
-    // to ensure shutdown waits for pending work
+    // to ensure shutdown() correctly detects pending work
+    // by checking either indicator
     inFlightQueueLen_ --;
 
     // free memory allocated to sglist
