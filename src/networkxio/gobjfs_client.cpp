@@ -184,7 +184,6 @@ aio_request *create_new_request(RequestOp op, struct giocb *aio) {
     request->_op = op;
     request->giocbp = aio;
     /*cnanakos TODO: err handling */
-    request->_on_suspend = false;
     request->_completed = false;
     request->_rv = 0;
     request->_rtt_nanosec = 0;
