@@ -94,7 +94,6 @@ struct aio_request {
   struct giocb *giocbp{nullptr};
   RequestOp _op{RequestOp::Noop};
   bool _on_suspend{false};
-  bool _canceled{false};
   bool _completed{false};
   bool _failed{false};
   int _errno{0};

@@ -350,7 +350,7 @@ int NetworkXioClient::on_msg_error(xio_session *session __attribute__((unused)),
 
     for (size_t idx = 0; idx < numElem; idx ++) {
   
-      void* aio_req = const_cast<void *>(msgPtr->aioReqVec_[idx]);
+      void* aio_req = msgPtr->aioReqVec_[idx];
       update_stats(aio_req, true);
       aio_complete_request(aio_req,
           responseHeader.retvalVec_[idx], 
@@ -405,7 +405,7 @@ void NetworkXioClient::send_msg(ClientMsg *msgPtr) {
     {
       if (ret < 0) { 
         for (size_t idx = 0; idx < numElem; idx ++) {
-          void* aio_req = const_cast<void *>(msgPtr->aioReqVec_[idx]);
+          void* aio_req = msgPtr->aioReqVec_[idx];
           update_stats(aio_req, true);
           aio_complete_request(aio_req, -1, EIO);
         }

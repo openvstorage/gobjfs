@@ -117,35 +117,39 @@ public:
 
   const bool &is_disconnected() { return disconnected; }
 
-  void send_msg(ClientMsg *msgPtr);
-
   void run_loop();
 
 private:
+
   std::shared_ptr<xio_context> ctx;
   std::shared_ptr<xio_session> session;
   xio_connection *conn{nullptr};
+
   xio_session_params sparams;
   xio_connection_params cparams;
 
+  xio_session_ops ses_ops;
+
   std::string uri_;
+
   bool stopping{false};
   bool stopped{false};
-
-public:
-  size_t maxBatchSize_ = 4; // TODO dynamic
-
-private:
-  xio_session_ops ses_ops;
+  
   bool disconnected{false};
   bool disconnecting{false};
 
   int64_t nr_req_queue{0};
 
+public:
+  size_t maxBatchSize_ = 4; // TODO dynamic
+
+private:
+
   void xio_run_loop_worker(void *arg);
 
   void shutdown();
 
+  void send_msg(ClientMsg *msgPtr);
 };
 
 typedef std::shared_ptr<NetworkXioClient> NetworkXioClientPtr;

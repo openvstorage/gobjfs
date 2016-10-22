@@ -185,7 +185,6 @@ aio_request *create_new_request(RequestOp op, struct giocb *aio) {
     request->giocbp = aio;
     /*cnanakos TODO: err handling */
     request->_on_suspend = false;
-    request->_canceled = false;
     request->_completed = false;
     request->_rv = 0;
     request->_rtt_nanosec = 0;
@@ -311,10 +310,6 @@ int aio_error(client_ctx_ptr ctx, giocb *giocbp) {
     return (r = -1);
   }
 
-  if (giocbp->request_->_canceled) {
-    return (r = ECANCELED);
-  }
-
   if (not giocbp->request_->_completed) {
     return (r = EINPROGRESS);
   }
@@ -419,11 +414,6 @@ int aio_suspend(client_ctx_ptr ctx, giocb *giocbp, const timespec *timeout) {
   } while (more_work);
 
   return r;
-}
-
-int aio_cancel(client_ctx_ptr /*ctx*/, giocb * /*giocbp*/) {
-  errno = ENOSYS;
-  return -1;
 }
 
 gbuffer *gbuffer_allocate(client_ctx_ptr ctx, size_t size) {
