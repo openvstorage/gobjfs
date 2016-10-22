@@ -279,8 +279,7 @@ NetworkXioClient::~NetworkXioClient() {
  * therefore, update_stats must be called before this function
  * otherwise its a use-after-free error
  */
-void NetworkXioClient::update_stats(void *void_req, bool req_failed) {
-  aio_request *req = static_cast<aio_request *>(void_req);
+void NetworkXioClient::update_stats(aio_request *req, bool req_failed) {
   if (!req) {
     stats.num_failed++;
     return;
@@ -350,7 +349,7 @@ int NetworkXioClient::on_msg_error(xio_session *session __attribute__((unused)),
 
     for (size_t idx = 0; idx < numElem; idx ++) {
   
-      void* aio_req = msgPtr->aioReqVec_[idx];
+      auto aio_req = msgPtr->aioReqVec_[idx];
       update_stats(aio_req, true);
       aio_complete_request(aio_req,
           responseHeader.retvalVec_[idx], 
@@ -427,7 +426,7 @@ int NetworkXioClient::send_msg(ClientMsg *msgPtr) {
     NetworkXioMsg& requestHeader = msgPtr->msg;
     const size_t numElem = requestHeader.numElems_;
     for (size_t idx = 0; idx < numElem; idx ++) {
-      void* aio_req = msgPtr->aioReqVec_[idx];
+      auto aio_req = msgPtr->aioReqVec_[idx];
       update_stats(aio_req, true);
       aio_complete_request(aio_req, -1, EIO);
     }
@@ -444,7 +443,7 @@ int NetworkXioClient::send_multi_read_request(std::vector<std::string> &&filenam
     std::vector<void *>   &&bufVec,
     std::vector<uint64_t> &&sizeVec,
     std::vector<uint64_t> &&offsetVec,
-    const std::vector<void *>   &aioReqVec) {
+    const std::vector<aio_request *>   &aioReqVec) {
 
 
   ClientMsg *msgPtr = new ClientMsg;
@@ -498,7 +497,7 @@ int NetworkXioClient::send_read_request(const std::string &filename,
                                              void *buf,
                                              const uint64_t size_in_bytes,
                                              const uint64_t offset_in_bytes,
-                                             void *aioReqPtr) {
+                                             aio_request *aioReqPtr) {
   XXEnter();
 
   ClientMsg *msgPtr = new ClientMsg;
@@ -548,7 +547,7 @@ int NetworkXioClient::on_response(xio_session *session __attribute__((unused)),
 
     for (size_t idx = 0; idx < numElems; idx ++) {
   
-      void* aio_req = msgPtr->aioReqVec_[idx];
+      auto aio_req = msgPtr->aioReqVec_[idx];
       update_stats(aio_req, (responseHeader.retvalVec_[idx] < 0));
       aio_complete_request(aio_req,
                                 responseHeader.retvalVec_[idx], 

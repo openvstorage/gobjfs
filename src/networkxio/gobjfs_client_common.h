@@ -88,7 +88,7 @@ struct gbuffer {
   size_t size{0};
 };
 
-extern void aio_complete_request(void *request, ssize_t retval, int errval);
+extern void aio_complete_request(aio_request *request, ssize_t retval, int errval);
 
 struct aio_request {
   struct giocb *giocbp{nullptr};

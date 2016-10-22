@@ -64,7 +64,7 @@ public:
 
     // points to list of original aio_requests
     // which comprise this single server message
-    std::vector<void*> aioReqVec_;
+    std::vector<aio_request*> aioReqVec_;
     
     // arguments to be sent to server in header
     NetworkXioMsg msg;
@@ -82,12 +82,12 @@ public:
     std::vector<void *>   &&bufVec,
     std::vector<uint64_t> &&sizeVec,
     std::vector<uint64_t> &&offsetVec,
-    const std::vector<void *>   &aioReqVec);
+    const std::vector<aio_request *>   &aioReqVec);
 
   int send_read_request(const std::string &filename, void *buf,
                              const uint64_t size_in_bytes,
                              const uint64_t offset_in_bytes,
-                             void *opaque);
+                             aio_request *opaque);
 
   int on_session_event(xio_session *session,
                        xio_session_event_data *event_data);
@@ -113,7 +113,7 @@ public:
 
   } stats;
 
-  void update_stats(void *req, bool req_failed);
+  void update_stats(aio_request *req, bool req_failed);
 
   const bool &is_disconnected() { return disconnected; }
 

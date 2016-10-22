@@ -215,7 +215,7 @@ static int _submit_aio_request(client_ctx_ptr ctx,
   }
 
   std::vector<std::string> filename_vec;
-  std::vector<void*> request_vec;
+  std::vector<aio_request*> request_vec;
   std::vector<void *> bufVec;
   std::vector<uint64_t> sizeVec;
   std::vector<uint64_t> offsetVec;
@@ -229,7 +229,7 @@ static int _submit_aio_request(client_ctx_ptr ctx,
     try {
       // TODO just call timer once and copy its value to others
       for (auto request : request_vec) {
-        ((aio_request*)request)->_timer.reset();
+        request->_timer.reset();
       }
 
       r = net_client->send_multi_read_request(std::move(filename_vec), 
@@ -483,8 +483,7 @@ ssize_t read(client_ctx_ptr ctx, const std::string &filename, void *buf,
 /**
  * called when response is received by NetworkXioClient 
  */
-void aio_complete_request(void *opaque, ssize_t retval, int errval) {
-  aio_request *request = reinterpret_cast<aio_request *>(opaque);
+void aio_complete_request(aio_request *request, ssize_t retval, int errval) {
   request->_errno = errval;
   request->_rv = retval;
   request->_failed = (retval < 0 ? true : false);
