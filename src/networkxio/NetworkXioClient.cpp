@@ -165,7 +165,7 @@ std::string NetworkXioClient::statistics::ToString() const {
 
 NetworkXioClient::NetworkXioClient(const std::string &uri, const uint64_t qd)
     : uri_(uri), stopping(false), stopped(false), disconnected(false),
-      disconnecting(false), nr_req_queue(qd) {
+      disconnecting(false), maxQueueLen_(qd) {
   XXEnter();
 
   ses_ops.on_session_event = static_on_session_event<NetworkXioClient>;
@@ -193,7 +193,7 @@ void NetworkXioClient::run() {
   xio_set_opt(NULL, XIO_OPTLEVEL_ACCELIO, XIO_OPTNAME_ENABLE_FLOW_CONTROL,
               &xopt, sizeof(xopt));
 
-  xopt = 2 * nr_req_queue;
+  xopt = maxQueueLen_;
   xio_set_opt(NULL, XIO_OPTLEVEL_ACCELIO, XIO_OPTNAME_SND_QUEUE_DEPTH_MSGS,
               &xopt, sizeof(xopt));
 
@@ -253,7 +253,7 @@ void NetworkXioClient::run() {
 }
 
 /**
- * can be called by external thread
+ * can only be called from the thread owning xio_context
  */
 void NetworkXioClient::shutdown() {
   GLOG_INFO("thread=" << gettid() << " disconnecting conn=" << conn);
@@ -265,7 +265,7 @@ void NetworkXioClient::shutdown() {
     GLOG_INFO("thread=" << gettid() << " destroying conn=" << conn);
     xio_connection_destroy(conn);
   }
-  //session.reset();
+  //session.reset(); TODO
 }
 
 NetworkXioClient::~NetworkXioClient() { 
@@ -358,6 +358,8 @@ int NetworkXioClient::on_msg_error(xio_session *session __attribute__((unused)),
     }
   }
 
+  inFlightQueueLen_ --;
+
   delete msgPtr;
   xio_context_stop_loop(ctx.get());
   return ret;
@@ -390,31 +392,52 @@ int NetworkXioClient::on_session_event(xio_session *session
   return 0;
 }
 
-void NetworkXioClient::run_loop() {
-  int ret = xio_context_run_loop(ctx.get(), XIO_INFINITE);
+void NetworkXioClient::run_loop(int timeout_ms) {
+  int ret = xio_context_run_loop(ctx.get(), timeout_ms);
   assert(ret == 0);
 }
 
-void NetworkXioClient::send_msg(ClientMsg *msgPtr) {
+int NetworkXioClient::send_msg(ClientMsg *msgPtr) {
   int ret = 0;
-  do {
+ 
+  if (inFlightQueueLen_ < maxQueueLen_) {
+    // process any finished requests before submitting new
+    run_loop(0);
+  } else {
+    int numTries = 0;
+    while (inFlightQueueLen_ == maxQueueLen_) {
+      // will exit on every on_response, on_msg_error called
+      run_loop();
+      numTries ++;
+      if (numTries > 3) {
+        break;
+      }
+    }
+    if (inFlightQueueLen_ == maxQueueLen_) {
+      GLOG_ERROR("queue full sent=" << inFlightQueueLen_ << " max=" << maxQueueLen_);
+      ret = -1;
+    }
+  }
+
+  if (ret == 0) {
     ret = xio_send_request(conn, &msgPtr->xreq);
-    // TODO resend on approp xio_errno
+  }
+
+  if (ret < 0) { 
     NetworkXioMsg& requestHeader = msgPtr->msg;
     const size_t numElem = requestHeader.numElems_;
-    {
-      if (ret < 0) { 
-        for (size_t idx = 0; idx < numElem; idx ++) {
-          void* aio_req = msgPtr->aioReqVec_[idx];
-          update_stats(aio_req, true);
-          aio_complete_request(aio_req, -1, EIO);
-        }
-        delete msgPtr;
-      } else {
-        stats.num_queued += numElem;
-      }
-    } 
-  } while (0);
+    for (size_t idx = 0; idx < numElem; idx ++) {
+      void* aio_req = msgPtr->aioReqVec_[idx];
+      update_stats(aio_req, true);
+      aio_complete_request(aio_req, -1, EIO);
+    }
+    delete msgPtr;
+  } else {
+    stats.num_queued += msgPtr->aioReqVec_.size();
+    inFlightQueueLen_ ++;
+  }
+
+  return ret;
 }
 
 int NetworkXioClient::send_multi_read_request(std::vector<std::string> &&filenameVec, 
@@ -467,9 +490,7 @@ int NetworkXioClient::send_multi_read_request(std::vector<std::string> &&filenam
   assert(sizeVec.empty());
   assert(offsetVec.empty());
 
-  send_msg(msgPtr);
-
-  return 0;
+  return send_msg(msgPtr);
 }
 
 
@@ -499,9 +520,7 @@ int NetworkXioClient::send_read_request(const std::string &filename,
   msgPtr->xreq.in.data_iov.sglist[0].iov_base = buf;
   msgPtr->xreq.in.data_iov.sglist[0].iov_len = size_in_bytes;
 
-  send_msg(msgPtr);
-
-  return 0;
+  return send_msg(msgPtr);
 }
 
 int NetworkXioClient::on_response(xio_session *session __attribute__((unused)),
@@ -535,6 +554,8 @@ int NetworkXioClient::on_response(xio_session *session __attribute__((unused)),
                                 responseHeader.retvalVec_[idx], 
                                 responseHeader.errvalVec_[idx]);
     }
+
+    inFlightQueueLen_ --;
 
     // free memory allocated to sglist
     if (msgPtr->xreq.in.sgl_type == XIO_SGL_TYPE_IOV_PTR) {

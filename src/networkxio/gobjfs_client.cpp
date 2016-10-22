@@ -292,7 +292,7 @@ static int _submit_aio_request(client_ctx_ptr ctx,
   }
 
   if (r != 0) {
-    GLOG_ERROR(" Remove request send failed with error " << r);
+    GLOG_ERROR(" send request failed with error " << r);
     for (auto req : request_vec) {
       delete reinterpret_cast<aio_request*>(req);
     }

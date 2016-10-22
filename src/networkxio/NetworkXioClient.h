@@ -117,7 +117,7 @@ public:
 
   const bool &is_disconnected() { return disconnected; }
 
-  void run_loop();
+  void run_loop(int timeout_ms = XIO_INFINITE);
 
 private:
 
@@ -138,7 +138,9 @@ private:
   bool disconnected{false};
   bool disconnecting{false};
 
-  int64_t nr_req_queue{0};
+  int64_t inFlightQueueLen_{0};
+  int64_t maxQueueLen_{0};
+  int64_t postProcessQueueLen_{0};
 
 public:
   size_t maxBatchSize_ = 4; // TODO dynamic
@@ -149,7 +151,7 @@ private:
 
   void shutdown();
 
-  void send_msg(ClientMsg *msgPtr);
+  int send_msg(ClientMsg *msgPtr);
 };
 
 typedef std::shared_ptr<NetworkXioClient> NetworkXioClientPtr;
