@@ -93,7 +93,7 @@ ASDQueue::~ASDQueue() {
 /**
  * TODO : can throw
  */
-ssize_t ASDQueue::write(char* buf, size_t sz) {
+ssize_t ASDQueue::write(const char* buf, size_t sz) {
   try {
     mq_->send(buf, sz, 0);
     return sz;

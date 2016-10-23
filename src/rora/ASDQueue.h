@@ -38,7 +38,7 @@ class ASDQueue {
 
   ~ASDQueue();
 
-  ssize_t write(char* buf, size_t sz);
+  ssize_t write(const char* buf, size_t sz);
 
   ssize_t read(char* buf, size_t sz);
    
