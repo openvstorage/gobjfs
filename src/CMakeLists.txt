@@ -33,6 +33,7 @@ target_link_libraries(gobjfs_static ${LIBRARY_LIST})
 install(TARGETS gobjfs_shared LIBRARY DESTINATION lib)
 install(TARGETS gobjfs_static ARCHIVE DESTINATION lib)
 
+add_subdirectory(rora)
 add_subdirectory(util)
-add_subdirectory(test)
 add_subdirectory(networkxio)
+add_subdirectory(test)
