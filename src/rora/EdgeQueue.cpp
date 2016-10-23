@@ -124,7 +124,7 @@ EdgeQueue::~EdgeQueue() {
 /**
  * TODO : can throw
  */
-ssize_t EdgeQueue::write(char* buf, size_t sz) {
+ssize_t EdgeQueue::write(const char* buf, size_t sz) {
   try {
     mq_->send(buf, sz, 0);
     return sz;
@@ -189,7 +189,6 @@ size_t EdgeQueue::getFreeMem() const {
   if (!segment_) {
     throw std::runtime_error("invalid edgequeue");
   }
-  auto p = segment_->get_segment_manager();
   return segment_->get_free_memory();
 }
 

@@ -1,6 +1,7 @@
 
 ADD_EXECUTABLE(RoraTester
   TestEdgeQueue.cpp
+  TestGatewayProtocol.cpp
   TestMain.cpp
   )
 

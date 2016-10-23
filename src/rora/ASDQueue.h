@@ -11,30 +11,23 @@ namespace gobjfs {
 namespace rora {
 
 /**
- * An EdgeQueue combines the message queue and 
- * shared memory segment required for processing read requests.
- *
- * The read response will be sent over the message queue
- * The pointer to the buffer which was read will be in the
- * shared memory segment
+ * An ASDQueue abstracts the message queue and 
+ * required for receiving read requests on the Gateway
  */
-class EdgeQueue {
+class ASDQueue {
 
   std::string queueName_;
-  std::string heapName_;
-  bool created_{false};
-
-  public:
 
   bip::message_queue *mq_{nullptr};
-  bip::managed_shared_memory *segment_{nullptr};
+  
+  bool created_{false};
 
   public:
   /**
    * create edge queue for pid
    */
-  EdgeQueue(int pid, size_t maxQueueLen, size_t maxMsgSize,
-      size_t maxAllocSize);
+  EdgeQueue(int pid, size_t maxQueueLen, size_t maxMsgSize);
+      
 
   /**
    * open existing edge queue for pid
@@ -45,21 +38,16 @@ class EdgeQueue {
 
   ~EdgeQueue();
 
-  ssize_t write(const char* buf, size_t sz);
+  ssize_t write(char* buf, size_t sz);
 
   ssize_t read(char* buf, size_t sz);
    
-  void* alloc(size_t sz);
-
-  int free(void* ptr);
-
   size_t getCurrentQueueLen() const;
 
   size_t getMaxQueueLen() const;
 
   size_t getMaxMsgSize() const;
 
-  size_t getFreeMem() const;
 };
 
 }
