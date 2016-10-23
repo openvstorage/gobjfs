@@ -26,17 +26,17 @@ class ASDQueue {
   /**
    * create edge queue for pid
    */
-  EdgeQueue(int pid, size_t maxQueueLen, size_t maxMsgSize);
+  ASDQueue(const std::string& uri, size_t maxQueueLen, size_t maxMsgSize);
       
 
   /**
    * open existing edge queue for pid
    */
-  EdgeQueue(int pid);
+  ASDQueue(const std::string& uri);
 
-  static int remove(int pid);
+  static int remove(const std::string& uri);
 
-  ~EdgeQueue();
+  ~ASDQueue();
 
   ssize_t write(char* buf, size_t sz);
 

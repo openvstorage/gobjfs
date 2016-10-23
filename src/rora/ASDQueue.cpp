@@ -40,7 +40,7 @@ ASDQueue::ASDQueue(const std::string& uri,
     mq_ = nullptr;
 
     throw std::runtime_error(
-        "failed to create edgequeue for uri=" + std::to_string(uri));
+        "failed to create edgequeue for uri=" + uri);
   }
 }
 
@@ -48,7 +48,7 @@ ASDQueue::ASDQueue(const std::string& uri,
 /**
  * this is an open
  */
-ASDQueue::ASDQueue(int uri) {
+ASDQueue::ASDQueue(const std::string &uri) {
 
   created_ =  false;
 
@@ -62,7 +62,7 @@ ASDQueue::ASDQueue(int uri) {
     mq_ = nullptr;
 
     throw std::runtime_error(
-        "failed to open edgequeue for uri=" + std::to_string(uri));
+        "failed to open edgequeue for uri=" + uri);
   }
 }
 
