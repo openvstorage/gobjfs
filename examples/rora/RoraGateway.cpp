@@ -22,23 +22,34 @@ void iocompletionFunc() {
   int32_t doneCount = 0;
 
   while (doneCount < times) {
+
     std::vector<giocb*> iocb_vec;
     int r = aio_getevents(ctx, times, iocb_vec);
 
     if (r == 0) {
       for (auto& iocb : iocb_vec) {
-        aio_finish(iocb);
-        int pid = (int) iocb->user_ctx;
-        auto edgeIter = edgeCatalog.find(pid);
-        auto edgeQueue = edgeIter->second;
 
-        GatewayMsg respMsg;
-        edgeQueue->GatewayMsg_from_giocb(respMsg, *iocb);
-        LOG(INFO) << "send response for filename=" << iocb->filename;
-        auto ret = edgeQueue->write(respMsg);
-        assert(ret == 0);
+        int pid = (int) iocb->user_ctx;
+
+        auto edgeIter = edgeCatalog.find(pid);
+        if (edgeIter != edgeCatalog.end()) {
+          auto edgeQueue = edgeIter->second;
+
+          GatewayMsg respMsg;
+          edgeQueue->GatewayMsg_from_giocb(respMsg, *iocb, 
+              aio_return(iocb), aio_error(iocb));
+          LOG(INFO) << "send response to pid=" << pid 
+            << " for filename=" << iocb->filename;
+          auto ret = edgeQueue->write(respMsg);
+          assert(ret == 0);
+        } else {
+          LOG(ERROR) << "not found edge queue for pid=" << pid;
+        }
+
+        aio_finish(iocb);
+        delete iocb;
       }
-      doneCount = iocb_vec.size();
+      doneCount += iocb_vec.size();
     }
   }
 }

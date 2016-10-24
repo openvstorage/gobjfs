@@ -65,9 +65,15 @@ class EdgeQueue {
 
   int free(void* ptr);
 
-  int giocb_from_GatewayMsg(gobjfs::xio::giocb& iocb, GatewayMsg& gmsg);
+  int giocb_from_GatewayMsg(gobjfs::xio::giocb& iocb, const GatewayMsg& gmsg);
 
-  int GatewayMsg_from_giocb(GatewayMsg& gmsg, gobjfs::xio::giocb& iocb);
+  /**
+   * @param retval: actual size which was read on server, or -1 in failure
+   * @param errval: value of errno in case retval is -1, else 0
+   */
+  int GatewayMsg_from_giocb(GatewayMsg& gmsg, const gobjfs::xio::giocb& iocb,
+    ssize_t retval, 
+    int errval);
 
   size_t getCurrentQueueLen() const;
 

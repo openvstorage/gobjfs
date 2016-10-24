@@ -22,8 +22,7 @@ int main(int argc, char* argv[])
     // sending open message will cause rora gateway to open
     // the EdgeQueue for sending responses
     GatewayMsg openReq;
-    openReq.opcode_ = Opcode::OPEN;
-    openReq.edgePid_ = pid;
+    createOpenRequest(openReq);
     auto ret = asdQueue->write(openReq);
     assert(ret == 0);
   }
@@ -31,15 +30,7 @@ int main(int argc, char* argv[])
   {
     // send read msg
     GatewayMsg readReq;
-    auto readBuf = edgeQueue->alloc(blockSize);
-
-    readReq.opcode_ = Opcode::READ;
-    readReq.edgePid_ = pid;
-    readReq.filename_ = "abcd";
-    readReq.size_ = blockSize;
-    readReq.offset_ = 0;
-    readReq.buf_ = edgeQueue->segment_->get_handle_from_address(readBuf);
-
+    createReadRequest(readReq, edgeQueue, "abcd", 0, blockSize);
     auto ret = asdQueue->write(readReq);
     assert(ret == 0);
   }
@@ -51,18 +42,17 @@ int main(int argc, char* argv[])
     assert(ret == 0);
 
     // check retval, errval, filename, offset, size match
-    void* respBuf = edgeQueue->segment_->get_address_from_handle(responseMsg.buf_);
+    responseMsg.rawbuf_ = edgeQueue->segment_->get_address_from_handle(responseMsg.buf_);
 
     // free allocated shared segment
-    edgeQueue->free(respBuf);
+    edgeQueue->free(responseMsg.rawbuf_);
   }
 
   {
     // sending close message will cause rora gateway to close
     // the EdgeQueue for sending responses
     GatewayMsg closeReq;
-    closeReq.opcode_ = Opcode::CLOSE;
-    closeReq.edgePid_ = pid;
+    createCloseRequest(closeReq);
     auto ret = asdQueue->write(closeReq);
     assert(ret == 0);
   }

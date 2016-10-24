@@ -19,6 +19,8 @@ enum Opcode {
   CLOSE
 };
 
+class EdgeQueue;
+
 struct GatewayMsg {
 
   Opcode opcode_{Opcode::INVALID};
@@ -28,8 +30,11 @@ struct GatewayMsg {
   size_t size_{0};
   off_t offset_{0};
 
-  // handle is a difference_type
+  // handle is a difference_type (i.e offset within shmem segment)
   bip::managed_shared_memory::handle_t buf_;
+
+  // rawbuf deliberately not included in msgpack
+  void* rawbuf_{nullptr}; 
 
   ssize_t retval_{-1};
   int errval_{-1};
@@ -66,6 +71,16 @@ struct GatewayMsg {
       errval_);
   
 };
+
+int createOpenRequest(GatewayMsg& msg);
+
+int createReadRequest(GatewayMsg& msg, 
+    EdgeQueue* edgeQueue,
+    const std::string& filename, 
+    off_t offset, 
+    size_t size);
+
+int createCloseRequest(GatewayMsg& msg);
 
 }
 }

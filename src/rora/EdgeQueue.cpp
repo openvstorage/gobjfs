@@ -175,7 +175,7 @@ int EdgeQueue::free(void* ptr) {
   return 0;
 }
 
-int EdgeQueue::giocb_from_GatewayMsg(giocb& iocb, GatewayMsg& gmsg) {
+int EdgeQueue::giocb_from_GatewayMsg(giocb& iocb, const GatewayMsg& gmsg) {
 
   iocb.filename = gmsg.filename_;
   iocb.aio_offset = gmsg.offset_;
@@ -186,13 +186,18 @@ int EdgeQueue::giocb_from_GatewayMsg(giocb& iocb, GatewayMsg& gmsg) {
   return 0;
 }
 
-int EdgeQueue::GatewayMsg_from_giocb(GatewayMsg& gmsg, giocb& iocb) {
+int EdgeQueue::GatewayMsg_from_giocb(GatewayMsg& gmsg, 
+    const giocb& iocb, 
+    ssize_t retval, 
+    int errval) {
 
   gmsg.opcode_ = Opcode::READ;
   gmsg.filename_ = iocb.filename;
   gmsg.offset_ = iocb.aio_offset;
   gmsg.size_ = iocb.aio_nbytes;
   gmsg.buf_ = segment_->get_handle_from_address(iocb.aio_buf);
+  gmsg.errval_ = errval;
+  gmsg.retval_ = retval;
 
   return 0;
 }

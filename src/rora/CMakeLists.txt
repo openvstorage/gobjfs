@@ -3,6 +3,7 @@ include_directories(${PROJECT_SOURCE_DIR}/thirdparty/msgpack/include)
 set(SOURCES 
   EdgeQueue.cpp
   ASDQueue.cpp
+  GatewayProtocol.cpp
   )
 
 set(LIBRARY_LIST
