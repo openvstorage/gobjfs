@@ -43,10 +43,11 @@ struct aio_request;
 
 struct giocb {
   std::string filename;
-  void *aio_buf;
-  off_t aio_offset;
-  size_t aio_nbytes;
-  aio_request *request_;
+  void *aio_buf{nullptr};
+  off_t aio_offset{0};
+  size_t aio_nbytes{0};
+  aio_request *request_{nullptr};
+  uintptr_t user_ctx{0}; // user-supplied context
 };
 
 /*
@@ -136,6 +137,13 @@ int gbuffer_deallocate(client_ctx_ptr ctx, gbuffer *ptr);
  */
 ssize_t read(client_ctx_ptr ctx, const std::string &filename, void *buf,
              size_t nbytes, off_t offset);
+
+
+/**
+ * @param ctx: gobjfs xio context
+ * @return: notification fd which can be added to epoll_ctl
+ */
+int aio_geteventfd(client_ctx_ptr ctx);
 
 /*
  * Suspend until asynchronous I/O operation or timeout complete

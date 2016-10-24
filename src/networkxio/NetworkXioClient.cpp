@@ -348,8 +348,11 @@ NetworkXioClient::~NetworkXioClient() {
 void NetworkXioClient::postProcess(aio_request *aio_req, ssize_t retval, int errval) {
   aio_complete_request(aio_req, retval, errval);
   update_stats(aio_req);
-  std::unique_lock<std::mutex> l(postProcessQueueMutex_);
-  postProcessQueue_.push_back(aio_req);
+  {
+    std::unique_lock<std::mutex> l(postProcessQueueMutex_);
+    postProcessQueue_.push_back(aio_req);
+    postProcessEventFD_.writefd();
+  }
 }
 
 /**
@@ -493,6 +496,7 @@ int NetworkXioClient::getevents(int32_t max, std::vector<giocb*> &giocb_vec,
   {
     std::unique_lock<std::mutex> l(postProcessQueueMutex_);
     localQueue = std::move(postProcessQueue_);
+    postProcessEventFD_.readfd();
   }
 
   // TODO use timeout param
@@ -500,6 +504,10 @@ int NetworkXioClient::getevents(int32_t max, std::vector<giocb*> &giocb_vec,
     giocb_vec.push_back(aio_req->giocbp);
   }
   return 0;
+}
+
+int NetworkXioClient::geteventFD() {
+  return (int)postProcessEventFD_;
 }
 
 int NetworkXioClient::send_msg(ClientMsg *msgPtr) {

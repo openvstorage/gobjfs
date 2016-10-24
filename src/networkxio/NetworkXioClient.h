@@ -29,6 +29,7 @@ but WITHOUT ANY WARRANTY of any kind.
 #include <exception>
 #include <util/Spinlock.h>
 #include <util/Stats.h>
+#include <util/EventFD.h>
 #include "NetworkXioProtocol.h"
 
 namespace gobjfs {
@@ -101,6 +102,11 @@ public:
   int getevents(int32_t max, std::vector<giocb*> &giocb_vec,
     const timespec* timeout);
 
+  /**
+   * add this fd to epoll_wait() to find out if requests have completed
+   */
+  int geteventFD();
+
   int waitAll(int timeout_ms = XIO_INFINITE);
 
   void stop_loop();
@@ -146,13 +152,14 @@ private:
   bool disconnected{false};
   bool disconnecting{false};
 
-  int64_t inFlightQueueLen_{0};
   int64_t maxQueueLen_{0};
-  int64_t postProcessQueueLen_{0};
+  // inflight includes requests for which no response received from server
+  int64_t inFlightQueueLen_{0};
 
   // TODO use lockfree
   std::mutex postProcessQueueMutex_;
   std::vector<aio_request*> postProcessQueue_;
+  EventFD postProcessEventFD_;
 
 public:
   size_t maxBatchSize_ = 4; // TODO dynamic

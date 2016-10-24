@@ -22,6 +22,7 @@ but WITHOUT ANY WARRANTY of any kind.
 #include <vector>
 #include <future>
 #include <thread>
+#include <sys/epoll.h>
 
 #include <gobjfs_client.h>
 #include <networkxio/gobjfs_client_common.h> // GLOG_DEBUG
@@ -32,15 +33,23 @@ using namespace gobjfs::xio;
 int32_t times = 1000;
 client_ctx_ptr ctx;
 
+int epollfd = -1;
+
 void iocompletionFunc() {
 
   int32_t doneCount = 0;
 
   while (doneCount < times) {
 
+    epoll_event events[times];
+    int n = epoll_wait(epollfd, events, times, -1);
+    if (n <= 0) {
+      continue;
+    }
+
     std::vector<giocb *> iocb_vec;
 
-    int r = aio_getevents(ctx, times, iocb_vec);
+    int r = aio_getevents(ctx, n, iocb_vec);
 
     if (r == 0) {
       for (auto &iocb : iocb_vec) {
@@ -88,6 +97,16 @@ int main(int argc, char *argv[]) {
 
   int err = ctx_init(ctx);
   assert(err == 0);
+
+  epollfd = epoll_create1(0);
+  assert(epollfd >= 0);
+
+  int efd = aio_geteventfd(ctx);
+  epoll_event event;
+  event.data.fd = efd;
+  event.events = EPOLLIN | EPOLLET;
+  int s = epoll_ctl(epollfd, EPOLL_CTL_ADD, efd, &event);
+  assert(s == 0);
 
   NetworkServerWriteReadTest();
 
