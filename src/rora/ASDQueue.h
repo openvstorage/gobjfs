@@ -20,7 +20,7 @@ class ASDQueue {
 
   std::string queueName_;
 
-  bip::message_queue *mq_{nullptr};
+  std::unique_ptr<bip::message_queue> mq_{nullptr};
   
   bool created_{false};
 

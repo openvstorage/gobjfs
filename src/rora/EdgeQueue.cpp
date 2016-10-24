@@ -42,22 +42,19 @@ EdgeQueue::EdgeQueue(int pid,
   //remove(pid);
 
   try {
-    mq_ = new bip::message_queue(bip::create_only, 
+    mq_ = gobjfs::make_unique<bip::message_queue>(bip::create_only, 
       queueName_.c_str(),
       maxQueueLen,
       maxMsgSize_);
   
-    segment_ = new bip::managed_shared_memory(bip::create_only, 
+    segment_ = gobjfs::make_unique<bip::managed_shared_memory>(bip::create_only, 
       heapName_.c_str(),
       maxQueueLen * maxAllocSize); 
     // TODO : should be total number of jobs in system
   } catch (const std::exception& e) {
 
-    delete mq_;
-    mq_ = nullptr;
-
-    delete segment_;
-    segment_ = nullptr;
+    mq_.reset();
+    segment_.reset();
 
     throw std::runtime_error(
         "failed to create edgequeue for pid=" + std::to_string(pid));
@@ -77,16 +74,13 @@ EdgeQueue::EdgeQueue(int pid) {
   heapName_ = getHeapName(pid);
 
   try {
-    mq_ = new bip::message_queue(bip::open_only, queueName_.c_str());
-    segment_ = new bip::managed_shared_memory(bip::open_only, heapName_.c_str());
+    mq_ = gobjfs::make_unique<bip::message_queue>(bip::open_only, queueName_.c_str());
+    segment_ = gobjfs::make_unique<bip::managed_shared_memory>(bip::open_only, heapName_.c_str());
     maxMsgSize_ = getMaxMsgSize();
   } catch (const std::exception& e) {
 
-    delete mq_;
-    mq_ = nullptr;
-
-    delete segment_;
-    segment_ = nullptr;
+    mq_.reset();
+    segment_.reset();
 
     throw std::runtime_error(
         "failed to open edgequeue for pid=" + std::to_string(pid));
@@ -106,9 +100,6 @@ int EdgeQueue::remove(int pid) {
 
 EdgeQueue::~EdgeQueue() {
 
-  delete segment_;
-  delete mq_;
-
   if (created_) {
     if (mq_) {
       auto ret = bip::message_queue::remove(queueName_.c_str());
@@ -123,9 +114,6 @@ EdgeQueue::~EdgeQueue() {
       }
     }
   }
-
-  segment_ = nullptr;
-  mq_ = nullptr;
 }
 
 /**

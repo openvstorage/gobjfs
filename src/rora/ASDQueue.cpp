@@ -30,15 +30,14 @@ ASDQueue::ASDQueue(const std::string& uri,
   remove(uri);
 
   try {
-    mq_ = new bip::message_queue(bip::create_only, 
+    mq_ = gobjfs::make_unique<bip::message_queue>(bip::create_only, 
       queueName_.c_str(),
       maxQueueLen,
       maxMsgSize);
   
   } catch (const std::exception& e) {
 
-    delete mq_;
-    mq_ = nullptr;
+    mq_.reset();
 
     throw std::runtime_error(
         "failed to create edgequeue for uri=" + uri);
@@ -56,11 +55,10 @@ ASDQueue::ASDQueue(const std::string &uri) {
   queueName_ = getASDQueueName(uri);
 
   try {
-    mq_ = new bip::message_queue(bip::open_only, queueName_.c_str());
+    mq_ = gobjfs::make_unique<bip::message_queue>(bip::open_only, queueName_.c_str());
     maxMsgSize_ = getMaxMsgSize();
   } catch (const std::exception& e) {
-    delete mq_;
-    mq_ = nullptr;
+    mq_.reset();
     throw std::runtime_error(
         "failed to open edgequeue for uri=" + uri);
   }
@@ -76,8 +74,6 @@ int ASDQueue::remove(const std::string& uri) {
 
 ASDQueue::~ASDQueue() {
 
-  delete mq_;
-
   if (created_) {
     if (mq_) {
       auto ret = bip::message_queue::remove(queueName_.c_str());
@@ -86,8 +82,6 @@ ASDQueue::~ASDQueue() {
       }
     }
   }
-
-  mq_ = nullptr;
 }
 
 /**

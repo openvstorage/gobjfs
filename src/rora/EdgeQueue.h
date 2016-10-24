@@ -38,8 +38,8 @@ class EdgeQueue {
 
   public:
 
-  bip::message_queue *mq_{nullptr};
-  bip::managed_shared_memory *segment_{nullptr};
+  std::unique_ptr<bip::message_queue> mq_{nullptr};
+  std::unique_ptr<bip::managed_shared_memory> segment_{nullptr};
 
   public:
   /**
