@@ -4,10 +4,12 @@ set(SOURCES
   EdgeQueue.cpp
   ASDQueue.cpp
   GatewayProtocol.cpp
+  RoraGateway.cpp
   )
 
 set(LIBRARY_LIST
-  boost_system
+  gobjfs_client_shared
+  boost_system boost_program_options
   glog
 	pthread rt z)
 
