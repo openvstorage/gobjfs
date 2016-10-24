@@ -25,7 +25,7 @@ namespace xio {
 struct client_ctx {
   TransportType transport;
   std::string host;
-  int port;
+  int port{-1};
   std::string uri;
   gobjfs::xio::NetworkXioClientPtr net_client_;
 

@@ -31,11 +31,26 @@ but WITHOUT ANY WARRANTY of any kind.
 #include <sys/types.h>
 #include <unistd.h>
 #include <boost/version.hpp>
+#include <iomanip>
 
 using gobjfs::IOExecutor;
 using gobjfs::FilerJob;
 using gobjfs::FileOp;
 using gobjfs::os::IsDirectIOAligned;
+
+
+std::string string_to_hex(const std::string& in) {
+  std::stringstream ss;
+
+  ss << std::hex << std::uppercase;
+  for (size_t i = 0; in.length() > i; ++i) {
+    ss << std::setfill('0')
+       << std::setw(2)
+       << static_cast<unsigned int>(static_cast<unsigned char>(in[i]));
+  }
+
+  return ss.str();
+}
 
 // objpool holds freelist of batches with only one fragment
 // Not used anymore
@@ -399,8 +414,8 @@ IOExecFileHandle IOExecFileOpen(IOExecServiceHandle serviceHandle,
       serviceHandle->callTranslator(fileName, fileNameLength, absFileName);
 
   if (translateRet < 0) {
-    LOG(ERROR) << "file translation failed for fileName="
-               << std::string(fileName, fileNameLength);
+    LOG(ERROR) << "file translation failed (" << translateRet << ") for fileName="
+               << string_to_hex(std::string(fileName, fileNameLength));
     return nullptr;
   }
 
@@ -517,7 +532,7 @@ int32_t IOExecFileRead(IOExecServiceHandle serviceHandle, const char *fileName,
                        IOExecEventFdHandle eventFdHandle) {
 
   auto fileHandle =
-      IOExecFileOpen(serviceHandle, fileName, fileNameLength, O_RDONLY);
+      IOExecFileOpen(serviceHandle, fileName, fileNameLength, O_DIRECT | O_RDONLY);
   if (fileHandle == nullptr) {
     return -EIO;
   }
@@ -543,8 +558,8 @@ int32_t IOExecFileDeleteSync(IOExecServiceHandle serviceHandle,
   const int translateRet =
       serviceHandle->callTranslator(fileName, fileNameLength, absFileName);
   if (translateRet < 0) {
-    LOG(ERROR) << "file translation failed for fileName="
-               << std::string(fileName, fileNameLength);
+    LOG(ERROR) << "file translation failed (" << translateRet << ") for fileName="
+               << string_to_hex(std::string(fileName, fileNameLength));
     return -EINVAL;
   }
 
@@ -577,8 +592,8 @@ int32_t IOExecFileDelete(IOExecServiceHandle serviceHandle,
   const int translateRet =
       serviceHandle->callTranslator(fileName, fileNameLength, absFileName);
   if (translateRet < 0) {
-    LOG(ERROR) << "file translation failed for fileName="
-               << std::string(fileName, fileNameLength);
+    LOG(ERROR) << "file translation failed (" << translateRet << ") for fileName="
+               << string_to_hex(std::string(fileName, fileNameLength));
     return -EINVAL;
   }
 

@@ -31,35 +31,35 @@ typedef std::function<bool(Work *)> workitem_func_t;
 
 struct Work {
   workitem_func_t func;
-  void *obj;
+  void *obj{nullptr};
 };
 
 struct NetworkXioClientData;
 
 struct NetworkXioRequest {
-  NetworkXioMsgOpcode op;
+  NetworkXioMsgOpcode op{NetworkXioMsgOpcode::Noop};
 
-  void *req_wq;
+  void *req_wq{nullptr};
 
-  void *data;
-  unsigned int data_len; // DataLen of buffer pointed by data
-  size_t size;           // Size to be written/read.
-  uint64_t offset;       // at which offset
+  void *data{nullptr};
+  unsigned int data_len{0}; // DataLen of buffer pointed by data
+  size_t size{0};           // Size to be written/read.
+  uint64_t offset{0};       // at which offset
 
-  ssize_t retval;
-  int errval;
-  uintptr_t opaque;
+  ssize_t retval{0};
+  int errval{0};
+  uintptr_t opaque{0};
 
   Work work;
 
-  xio_msg *xio_req;
+  xio_msg *xio_req{nullptr};
   xio_msg xio_reply;
   xio_reg_mem reg_mem;
-  bool from_pool;
+  bool from_pool{false};
 
-  NetworkXioClientData *pClientData;
+  NetworkXioClientData *pClientData{nullptr};
 
-  void *private_data;
+  void *private_data{nullptr};
 
   std::string s_msg;
 };

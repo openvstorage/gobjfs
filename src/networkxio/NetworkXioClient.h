@@ -82,10 +82,6 @@ public:
                              const uint64_t offset_in_bytes,
                              const void *opaque);
 
-  int allocate(xio_reg_mem *mem, const uint64_t size);
-
-  void deallocate(xio_reg_mem *reg_mem);
-
   int on_session_event(xio_session *session,
                        xio_session_event_data *event_data);
 
@@ -144,7 +140,7 @@ private:
 
   xio_session_ops ses_ops;
   bool disconnected{false};
-  bool disconnecting;
+  bool disconnecting{false};
 
   int64_t nr_req_queue{0};
   std::mutex req_queue_lock;
@@ -164,12 +160,6 @@ private:
 
   template <class E> void set_exception_ptr(E e);
 
-  static xio_connection *create_connection_control(session_data *sdata,
-                                                   const std::string &uri);
-
-  static int on_msg_control(xio_session *session, xio_msg *reply,
-                            int last_in_rqx, void *cb_user_context);
-
   static int on_msg_error_control(xio_session *session, xio_status error,
                                   xio_msg_direction direction, xio_msg *msg,
                                   void *cb_user_context);
@@ -178,13 +168,8 @@ private:
                                       xio_session_event_data *event_data,
                                       void *cb_user_context);
 
-  static void xio_submit_request(const std::string &uri, xio_ctl_s *xctl,
-                                 void *opaque);
-
   static void xio_msg_prepare(xio_msg_s *xmsg);
 
-  static void create_vec_from_buf(xio_ctl_s *xctl, xio_iovec_ex *sglist,
-                                  int vec_size);
 };
 
 typedef std::shared_ptr<NetworkXioClient> NetworkXioClientPtr;

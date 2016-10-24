@@ -40,12 +40,12 @@ MAKE_EXCEPTION(WorkQueueThreadsException);
 
 class NetworkXioWorkQueue {
 public:
-  NetworkXioWorkQueue(const std::string &name, EventFD &evfd_)
+  NetworkXioWorkQueue(const std::string &name, EventFD &evfd_, int32_t numCoresForIO)
       : name_(name), nr_threads_(0), nr_queued_work(0),
         protection_period_(5000), stopping(false), stopped(false), evfd(evfd_) {
     XXEnter();
     using namespace std;
-    int ret = create_workqueue_threads(thread::hardware_concurrency());
+    int ret = create_workqueue_threads(numCoresForIO);
     if (ret < 0) {
       throw WorkQueueThreadsException("cannot create worker threads");
     }
@@ -58,7 +58,6 @@ public:
     if (not stopped) {
       stopping = true;
       while (nr_threads_) {
-        std::unique_lock<std::mutex> lock_(inflight_lock);
         inflight_cond.notify_all();
         ::usleep(500);
       }
@@ -71,7 +70,7 @@ public:
     queued_work_inc();
     std::unique_lock<std::mutex> lock_(inflight_lock);
     if (need_to_grow()) {
-      GLOG_DEBUG("nr_threads_ are " << nr_threads_);
+      GLOG_INFO("nr_threads_ are " << nr_threads_);
       create_workqueue_threads(nr_threads_ * 2);
     }
     inflight_queue.push(req);
@@ -169,57 +168,54 @@ private:
     return false;
   }
 
-  int create_workqueue_threads(size_t nr_threads) {
+  int create_workqueue_threads(size_t requested_threads) {
 
     XXEnter();
-    GLOG_DEBUG(" nr_threads and nr_threads_ are " << nr_threads << " , "
-                                                  << nr_threads_);
-    while (nr_threads_ < nr_threads) {
+
+    while (nr_threads_ < requested_threads) {
       try {
-        GLOG_DEBUG(" creating worker thread .. " << name_);
+        GLOG_INFO(" creating worker thread .. " << name_);
         std::thread thr([&]() {
-          auto fp = std::bind(&NetworkXioWorkQueue::worker_routine, this,
-                              std::placeholders::_1);
+          auto fp = std::bind(&NetworkXioWorkQueue::worker_routine, this);
           pthread_setname_np(pthread_self(), name_.c_str());
-          fp(this);
+          fp();
         });
         thr.detach();
         nr_threads_++;
       } catch (const std::system_error &) {
-        GLOG_ERROR("cannot create worker thread; created= "
-                   << nr_threads_ << " of " << nr_threads);
+        GLOG_ERROR("cannot create any more worker thread; created "
+                   << nr_threads_ << " out of " << requested_threads);
         return -1;
       }
     }
-    GLOG_DEBUG("Now added " << nr_threads_ << " threads ");
+    GLOG_INFO("Requested=" << requested_threads << " workqueue threads. Created " << nr_threads_ << " threads ");
     XXExit();
     return 0;
   }
 
-  void worker_routine(void *arg) {
+  void worker_routine() {
     XXEnter();
-    NetworkXioWorkQueue *wq = reinterpret_cast<NetworkXioWorkQueue *>(arg);
 
     NetworkXioRequest *req;
     while (true) {
-      std::unique_lock<std::mutex> lock_(wq->inflight_lock);
-      if (wq->need_to_shrink()) {
-        wq->nr_threads_--;
-        GLOG_DEBUG("Number of threads shrunk to " << wq->nr_threads_);
+      std::unique_lock<std::mutex> lock_(inflight_lock);
+      if (need_to_shrink()) {
+        nr_threads_--;
+        GLOG_INFO("Number of threads shrunk to " << nr_threads_);
         lock_.unlock();
         break;
       }
     retry:
-      if (wq->inflight_queue.empty()) {
-        wq->inflight_cond.wait(lock_);
-        if (wq->stopping) {
-          wq->nr_threads_--;
+      if (inflight_queue.empty()) {
+        inflight_cond.wait(lock_);
+        if (stopping) {
+          nr_threads_--;
           break;
         }
         goto retry;
       }
-      req = wq->inflight_queue.front();
-      wq->inflight_queue.pop();
+      req = inflight_queue.front();
+      inflight_queue.pop();
       lock_.unlock();
       GLOG_DEBUG("Popped request from inflight queue");
       bool finishNow = true;
@@ -230,11 +226,11 @@ private:
       // push in finished queue right here
       // response is sent and request gets freed
       if (finishNow) {
-        boost::lock_guard<decltype(inflight_lock)> lock_(inflight_lock);
-        wq->finished.push(req);
+        boost::lock_guard<decltype(finished_lock)> lock_(finished_lock);
+        finished.push(req);
         GLOG_DEBUG("Pushed request to finishedqueue. ReqType is "
                    << (int)req->op);
-        xstop_loop(wq);
+        xstop_loop(this);
       }
     }
     XXExit();

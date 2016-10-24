@@ -4,13 +4,13 @@ ADD_EXECUTABLE(XioTester
   TestMultipleServers.cpp
   TestCompileByC.c
   TestStats.cpp
+  TestGetenv.cpp
   TestMain.cpp
   )
 
 TARGET_LINK_LIBRARIES(XioTester
   gobjfs_client_shared
   gobjfs_server_shared
-  gobjfs_shared
   gtest)
 
 ADD_TEST(NAME xiotester COMMAND XioTester)

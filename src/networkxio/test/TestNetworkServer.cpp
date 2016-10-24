@@ -269,7 +269,7 @@ TEST_F(NetworkXioServerTest, AsyncFileDoesntExist) {
   EXPECT_EQ(ret, 0);
 
   ret = aio_suspendv(ctx, iocb_vec, nullptr);
-  EXPECT_EQ(ret, 0);
+  EXPECT_EQ(ret, -1);
 
   for (auto &elem : iocb_vec) {
     auto retcode = aio_return(ctx, elem);

@@ -27,13 +27,21 @@ but WITHOUT ANY WARRANTY of any kind.
 #include "NetworkXioServer.h"
 #include "NetworkXioProtocol.h"
 #include "NetworkXioRequest.h"
+#include "gobjfs_getenv.h"
 
-static constexpr int POLLING_TIME_USEC = 20;
+static constexpr int POLLING_TIME_USEC_DEFAULT = 0;
+// From accelio manual
+// polling_timeout_us: Defines how much to do receive-side-polling before yielding the CPU 
+// and entering the wait/sleep mode. When the application requires latency over IOPs and 
+// willing to poll on CPU, setting polling timeout to ~15-~70 us will decrease the latency 
+// substantially, but will increase CPU cycle by consuming more power (watts).
+// http://www.accelio.org/wp-admin/accelio_doc/index.html
 
 using gobjfs::os::DirectIOSize;
 
 namespace gobjfs {
 namespace xio {
+
 
 template <class T>
 static int static_on_request(xio_session *session, xio_msg *req,
@@ -148,24 +156,30 @@ void NetworkXioServer::run(std::promise<void> &promise) {
   xio_init();
 
   xio_set_opt(NULL, XIO_OPTLEVEL_ACCELIO, XIO_OPTNAME_MAX_IN_IOVLEN, &xopt,
-              sizeof(int));
+              sizeof(xopt));
 
   xio_set_opt(NULL, XIO_OPTLEVEL_ACCELIO, XIO_OPTNAME_MAX_OUT_IOVLEN, &xopt,
-              sizeof(int));
+              sizeof(xopt));
 
   xopt = 0;
   xio_set_opt(NULL, XIO_OPTLEVEL_ACCELIO, XIO_OPTNAME_ENABLE_FLOW_CONTROL,
-              &xopt, sizeof(int));
+              &xopt, sizeof(xopt));
 
   xopt = queue_depth;
   xio_set_opt(NULL, XIO_OPTLEVEL_ACCELIO, XIO_OPTNAME_SND_QUEUE_DEPTH_MSGS,
-              &xopt, sizeof(int));
+              &xopt, sizeof(xopt));
 
   xio_set_opt(NULL, XIO_OPTLEVEL_ACCELIO, XIO_OPTNAME_RCV_QUEUE_DEPTH_MSGS,
-              &xopt, sizeof(int));
+              &xopt, sizeof(xopt));
+
+  xopt = 1;
+  xio_set_opt(NULL, XIO_OPTLEVEL_TCP, XIO_OPTNAME_TCP_NO_DELAY,
+              &xopt, sizeof(xopt));
+
+  const int polling_time_usec = getenv_with_default("GOBJFS_POLLING_TIME_USEC", POLLING_TIME_USEC_DEFAULT);
 
   ctx = std::shared_ptr<xio_context>(
-      xio_context_create(NULL, POLLING_TIME_USEC, -1),
+      xio_context_create(NULL, polling_time_usec, -1),
       xio_destroy_ctx_shutdown);
 
   if (ctx == nullptr) {
@@ -195,7 +209,7 @@ void NetworkXioServer::run(std::promise<void> &promise) {
   }
 
   try {
-    wq_ = std::make_shared<NetworkXioWorkQueue>("ovs_xio_wq", evfd);
+    wq_ = std::make_shared<NetworkXioWorkQueue>("ovs_xio_wq", evfd, numCoresForIO_);
   } catch (const WorkQueueThreadsException &) {
     GLOG_FATAL("failed to create workqueue thread pool");
     xio_context_del_ev_handler(ctx.get(), evfd);
@@ -342,20 +356,14 @@ NetworkXioRequest *
 NetworkXioServer::allocate_request(NetworkXioClientData *pClientData,
                                    xio_msg *xio_req) {
   try {
-    XXEnter();
     NetworkXioRequest *req = new NetworkXioRequest;
     req->xio_req = xio_req;
     req->pClientData = pClientData;
     req->work.obj = this;
-    req->data = NULL;
-    req->data_len = 0;
-    req->retval = 0;
-    req->errval = 0;
     req->from_pool = true;
-    XXExit();
+    req->pClientData->ncd_refcnt ++;
     return req;
   } catch (const std::bad_alloc &) {
-    XXExit();
     return NULL;
   }
 }

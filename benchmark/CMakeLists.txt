@@ -8,3 +8,5 @@ TARGET_LINK_LIBRARIES(BenchIOExecFile
   gtest
   pthread rt z)
 
+add_subdirectory(networkxio)
+

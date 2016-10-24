@@ -34,13 +34,11 @@ namespace xio {
 static constexpr int XIO_COMPLETION_DEFAULT_MAX_EVENTS = 100;
 
 static inline void pack_msg(NetworkXioRequest *req) {
-  XXEnter();
   NetworkXioMsg o_msg(req->op);
   o_msg.retval(req->retval);
   o_msg.errval(req->errval);
   o_msg.opaque(req->opaque);
   req->s_msg = o_msg.pack_msg();
-  XXExit();
 }
 
 NetworkXioIOHandler::NetworkXioIOHandler(IOExecServiceHandle serviceHandle,
@@ -50,37 +48,37 @@ NetworkXioIOHandler::NetworkXioIOHandler(IOExecServiceHandle serviceHandle,
 
     eventHandle_ = IOExecEventFdOpen(serviceHandle_);
     if (eventHandle_ == nullptr) {
-      GLOG_ERROR("ObjectFS_GetEventFd failed with error ");
+      throw std::runtime_error("failed to open event handle");
     }
 
     auto efd = IOExecEventFdGetReadFd(eventHandle_);
     if (efd == -1) {
-      GLOG_ERROR("GetReadFd failed with ret " << efd);
+      throw std::runtime_error("failed to get read fd");
     }
 
     epollfd = epoll_create1(0);
-    assert(epollfd >= 0);
+    if (epollfd < 0) {
+      throw std::runtime_error("epoll create failed with errno " + std::to_string(errno));
+    }
 
     struct epoll_event event;
     event.data.fd = efd;
     event.events = EPOLLIN;
     int err = epoll_ctl(epollfd, EPOLL_CTL_ADD, efd, &event);
     if (err != 0) {
-      GLOG_ERROR("epoll_ctl() failed with error " << errno);
-      assert(0);
+      throw std::runtime_error("epoll_ctl failed with error " + std::to_string(errno));
     }
 
     err = ioCompletionThreadShutdown.init(epollfd);
     if (err != 0) {
-      GLOG_ERROR("failed to init shutdown notifier " << err);
-      assert(0);
+      throw std::runtime_error("failed to init shutdown notifier " + std::to_string(err));
     }
 
     ioCompletionThread = std::thread(std::bind(
         &NetworkXioIOHandler::gxio_completion_handler, this, epollfd, efd));
 
-  } catch (...) {
-    GLOG_ERROR("failed to init handler");
+  } catch (std::exception& e) {
+    GLOG_ERROR("failed to init handler " << e.what());
   }
 }
 
@@ -111,7 +109,6 @@ NetworkXioIOHandler::~NetworkXioIOHandler() {
 }
 
 void NetworkXioIOHandler::handle_open(NetworkXioRequest *req) {
-  XXEnter();
   int err = 0;
   GLOG_DEBUG("trying to open volume ");
 
@@ -120,13 +117,9 @@ void NetworkXioIOHandler::handle_open(NetworkXioRequest *req) {
   req->errval = 0;
 
   pack_msg(req);
-  XXExit();
 }
 
 int NetworkXioIOHandler::gxio_completion_handler(int epollfd, int efd) {
-  int ret = 0;
-
-  XXEnter();
 
   const unsigned int max = XIO_COMPLETION_DEFAULT_MAX_EVENTS;
   epoll_event events[max];
@@ -157,13 +150,12 @@ int NetworkXioIOHandler::gxio_completion_handler(int epollfd, int efd) {
       int ret = read(efd, &iostatus, sizeof(iostatus));
 
       if (ret != sizeof(iostatus)) {
-        GLOG_ERROR("!!! Partial read .. Cant handle it ... Need to think abt. "
-                   "TBD !! ");
+        GLOG_ERROR("Partial read detected.  Actual read=" << ret << " Expected=" << sizeof(iostatus));
         continue;
       }
 
       GLOG_DEBUG("Recieved event"
-                 << " (completionId: " << (void *)iostatus.completionId
+                 << " completionId: " << (void *)iostatus.completionId
                  << " status: " << iostatus.errorCode);
 
       gIOBatch *batch = reinterpret_cast<gIOBatch *>(iostatus.completionId);
@@ -205,9 +197,8 @@ int NetworkXioIOHandler::gxio_completion_handler(int epollfd, int efd) {
       } break;
 
       default: {
-        GLOG_ERROR("Got an event for non rd/wr operation "
-                   << (int)pXioReq->op << ".. WTF ! Must fail assert");
-        assert(0);
+        GLOG_ERROR("Got an event for non-read operation "
+                   << (int)pXioReq->op);
       }
       }
     }
@@ -217,46 +208,61 @@ int NetworkXioIOHandler::gxio_completion_handler(int epollfd, int efd) {
 }
 
 void NetworkXioIOHandler::handle_close(NetworkXioRequest *req) {
-  XXEnter();
   req->op = NetworkXioMsgOpcode::CloseRsp;
   if (!serviceHandle_) {
     GLOG_ERROR("Device handle null for device ");
     req->retval = -1;
     req->errval = EIO;
+  } else {
+    req->retval = 0;
+    req->errval = 0;
   }
-  req->retval = 0;
-  req->errval = 0;
-done:
   pack_msg(req);
-  XXExit();
 }
 
 int NetworkXioIOHandler::handle_read(NetworkXioRequest *req,
                                      const std::string &filename, size_t size,
                                      off_t offset) {
-  XXEnter();
   int ret = 0;
   req->op = NetworkXioMsgOpcode::ReadRsp;
   req->req_wq = (void *)this->wq_.get();
-  GLOG_DEBUG("Received read request for object "
-             << filename << " at offset " << offset << " for size " << size);
+#ifdef BYPASS_READ
+  { 
+    req->retval = size;
+    req->errval = 0;
+    pack_msg(req);
+    return 0;
+  } 
+#endif
   if (!serviceHandle_) {
+    GLOG_ERROR("no service handle");
     req->retval = -1;
     req->errval = EIO;
-    XXDone();
+    pack_msg(req);
+    return -1;
   }
 
   ret = xio_mempool_alloc(req->pClientData->ncd_mpool, size, &req->reg_mem);
   if (ret < 0) {
+    // could not allocate from mempool, try mem alloc
     ret = xio_mem_alloc(size, &req->reg_mem);
     if (ret < 0) {
       GLOG_ERROR("cannot allocate requested buffer, size: " << size);
       req->retval = -1;
       req->errval = ENOMEM;
-      XXDone();
+      pack_msg(req);
+      return ret;
     }
     req->from_pool = false;
+  } else {
+    req->from_pool = true;
   }
+
+  GLOG_DEBUG("Received read request for object "
+     << " wq_ptr=" << req->req_wq 
+     << " file=" << filename 
+     << " at offset=" << offset 
+     << " for size=" << size);
 
   req->data = req->reg_mem.addr;
   req->data_len = size;
@@ -265,14 +271,6 @@ int NetworkXioIOHandler::handle_read(NetworkXioRequest *req,
   try {
 
     memset(static_cast<char *>(req->data), 0, req->size);
-
-    if (ret != 0) {
-      GLOG_ERROR("GetReadObjectInfo failed with error " << ret);
-      req->retval = -1;
-      req->errval = EIO;
-      XXDone();
-    }
-    GLOG_DEBUG("----- The WQ pointer is " << req->req_wq);
 
     gIOBatch *batch = gIOBatchAlloc(1);
     batch->opaque = req;
@@ -292,23 +290,20 @@ int NetworkXioIOHandler::handle_read(NetworkXioRequest *req,
       req->errval = EIO;
       frag.addr = nullptr;
       gIOBatchFree(batch);
-      XXDone();
     }
 
     // CAUTION : only touch "req" after this if ret is non-zero
     // because "req" can get freed by the other thread if the IO completed
     // leading to a "use-after-free" memory error
-    XXDone();
   } catch (...) {
     GLOG_ERROR("failed to read volume ");
     req->retval = -1;
     req->errval = EIO;
   }
-done:
+
   if (ret != 0) {
     pack_msg(req);
   }
-  XXExit();
   return ret;
 }
 
@@ -319,15 +314,16 @@ void NetworkXioIOHandler::handle_error(NetworkXioRequest *req, int errval) {
   pack_msg(req);
 }
 
+/*
+ * @returns finishNow indicates whether response can be immediately sent to client 
+ */
 bool NetworkXioIOHandler::process_request(NetworkXioRequest *req) {
   bool finishNow = true;
-  XXEnter();
   NetworkXioWorkQueue *pWorkQueue = NULL;
   xio_msg *xio_req = req->xio_req;
   xio_iovec_ex *isglist = vmsg_sglist(&xio_req->in);
   int inents = vmsg_sglist_nents(&xio_req->in);
 
-  req->pClientData->ncd_refcnt++;
   NetworkXioMsg i_msg(NetworkXioMsgOpcode::Noop);
   try {
     i_msg.unpack_msg(static_cast<char *>(xio_req->in.header.iov_base),
@@ -340,39 +336,37 @@ bool NetworkXioIOHandler::process_request(NetworkXioRequest *req) {
 
   req->opaque = i_msg.opaque();
   switch (i_msg.opcode()) {
-  case NetworkXioMsgOpcode::OpenReq: {
-    GLOG_DEBUG(" Command OpenReq");
-    handle_open(req);
-    break;
-  }
-  case NetworkXioMsgOpcode::CloseReq: {
-    GLOG_DEBUG(" Command CloseReq");
-    handle_close(req);
-    break;
-  }
-  case NetworkXioMsgOpcode::ReadReq: {
-    GLOG_DEBUG(" Command ReadReq");
-    auto ret = handle_read(req, i_msg.filename_, i_msg.size(), i_msg.offset());
-
-    if (ret == 0) {
-      finishNow = false;
+    case NetworkXioMsgOpcode::OpenReq: {
+      GLOG_DEBUG(" Command OpenReq");
+      handle_open(req);
+      break;
     }
-    break;
-  }
-  default:
-    XXExit();
-    GLOG_ERROR("Unknown command");
-    handle_error(req, EIO);
+    case NetworkXioMsgOpcode::CloseReq: {
+      GLOG_DEBUG(" Command CloseReq");
+      handle_close(req);
+      break;
+    }
+    case NetworkXioMsgOpcode::ReadReq: {
+      GLOG_DEBUG(" Command ReadReq");
+      auto ret = handle_read(req, i_msg.filename_, i_msg.size(), i_msg.offset());
+      if (ret == 0) {
+        finishNow = false;
+      }
+#ifdef BYPASS_READ
+      finishNow = true;
+#endif
+      break;
+    }
+    default:
+      GLOG_ERROR("Unknown command " << (int)i_msg.opcode());
+      handle_error(req, EIO);
   };
-  XXExit();
   return finishNow;
 }
 
 void NetworkXioIOHandler::handle_request(NetworkXioRequest *req) {
-  XXEnter();
   req->work.func = std::bind(&NetworkXioIOHandler::process_request, this, req);
   wq_->work_schedule(req);
-  XXExit();
 }
 }
 } // namespace gobjfs

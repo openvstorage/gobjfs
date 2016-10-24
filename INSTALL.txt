@@ -22,11 +22,11 @@ sudo apt-get install -y cmake git xfsprogs sysstat gdb
 # Packages to install
 
 # XIO used by networkxio
-wget http://apt.openvstorage.org/pool/main/a/accelio/libxio-dev_1.6-1_amd64.deb
-sudo dpkg -i libxio-dev_1.6-1_amd64.deb
-
 wget http://apt.openvstorage.org/pool/main/a/accelio/libxio0_1.6-1_amd64.deb
 sudo dpkg -i libxio0_1.6-1_amd64.deb
+
+wget http://apt.openvstorage.org/pool/main/a/accelio/libxio-dev_1.6-1_amd64.deb
+sudo dpkg -i libxio-dev_1.6-1_amd64.deb
 
 # not using glog anymore, and its dependent unwind lib
 # sudo apt-get install libunwind8-dev
@@ -91,7 +91,7 @@ sudo apt-get install -y cppcheck
 
 To run clang-format
 
-sudo apt-add-repository "deb http://llvm.org/apt/trusty/llvm-toolchain-trusty-3.8 main"
+sudo apt-add-repository "deb http://llvm.org/apt/trusty/ llvm-toolchain-trusty-3.8 main"
 sudo apt-get update
 sudo apt-get install -y clang-format-3.8
 
