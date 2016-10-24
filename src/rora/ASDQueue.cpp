@@ -1,4 +1,5 @@
 #include "ASDQueue.h"
+#include <rora/GatewayProtocol.h>
 #include <string>
 #include <glog/logging.h>
 #include <type_traits>
@@ -18,15 +19,15 @@ static std::string getASDQueueName(const std::string& uri) {
  */
 ASDQueue::ASDQueue(const std::string& uri,
     size_t maxQueueLen, 
-    size_t maxMsgSize) {
+    size_t maxMsgSize) :
+  maxMsgSize_(maxMsgSize) {
 
   created_ = true;
 
   queueName_ = getASDQueueName(uri);
 
-  //Should pre-existing message queue and shmem be removed ?
-  //Not doing it to catch errors
-  //remove(pid);
+  // always remove previous ASD queue
+  remove(uri);
 
   try {
     mq_ = new bip::message_queue(bip::create_only, 
@@ -56,11 +57,10 @@ ASDQueue::ASDQueue(const std::string &uri) {
 
   try {
     mq_ = new bip::message_queue(bip::open_only, queueName_.c_str());
+    maxMsgSize_ = getMaxMsgSize();
   } catch (const std::exception& e) {
-
     delete mq_;
     mq_ = nullptr;
-
     throw std::runtime_error(
         "failed to open edgequeue for uri=" + uri);
   }
@@ -93,10 +93,12 @@ ASDQueue::~ASDQueue() {
 /**
  * TODO : can throw
  */
-ssize_t ASDQueue::write(const char* buf, size_t sz) {
+int ASDQueue::write(const GatewayMsg& gmsg) {
   try {
-    mq_->send(buf, sz, 0);
-    return sz;
+    auto sendStr = gmsg.pack();
+    assert(sendStr.size() < maxMsgSize_);
+    mq_->send(sendStr.c_str(), sendStr.size(), 0);
+    return 0;
   } catch (const std::exception& e) {
     return -1;
   }
@@ -105,12 +107,14 @@ ssize_t ASDQueue::write(const char* buf, size_t sz) {
 /**
  * TODO : can throw
  */
-ssize_t ASDQueue::read(char* buf, size_t sz) {
+int ASDQueue::read(GatewayMsg& gmsg) {
   uint32_t priority;
   size_t recvdSize;
   try {
-    mq_->receive(buf, sz, recvdSize, priority);
-    return recvdSize;
+    char buf[maxMsgSize_];
+    mq_->receive(buf, maxMsgSize_, recvdSize, priority);
+    gmsg.unpack(buf, recvdSize);
+    return 0;
   } catch (const std::exception& e) {
     return -1;
   }

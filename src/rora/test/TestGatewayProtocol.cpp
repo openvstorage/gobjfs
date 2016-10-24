@@ -43,22 +43,16 @@ TEST(GatewayProtocolTest, SharedPtrInMsgPack) {
   GatewayMsg sendMsg;
   // get the handle from the ptr
   sendMsg.buf_ = creator->segment_->get_handle_from_address(sendBufPtr);
-  auto sendStr = sendMsg.pack();
-  EXPECT_LE(sendStr.size(), maxAllocSize);
-
   // write into message queue
-  creator->write(sendStr.c_str(), sendStr.size());
+  auto ret = creator->write(sendMsg);
+  EXPECT_EQ(ret, 0);
 
   EdgeQueue *reader = new EdgeQueue(pid);
 
   // read from message queue
-  char readBuf[maxAllocSize];
-  auto readSz = reader->read(readBuf, maxAllocSize);
-  EXPECT_EQ(readSz, sendStr.size());
-
-  // unpack the message
   GatewayMsg recvMsg;
-  recvMsg.unpack(readBuf, readSz);
+  ret = reader->read(recvMsg);
+  EXPECT_EQ(ret, 0);
 
   // recover the ptr from the handle
   void* recvBufPtr = reader->segment_->get_address_from_handle(recvMsg.buf_);

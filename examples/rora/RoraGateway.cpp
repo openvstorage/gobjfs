@@ -28,18 +28,15 @@ void iocompletionFunc() {
     if (r == 0) {
       for (auto& iocb : iocb_vec) {
         aio_finish(iocb);
-        //int pid = (int) iocb->userCtx_;
-        int pid = 10;
+        int pid = (int) iocb->user_ctx;
         auto edgeIter = edgeCatalog.find(pid);
         auto edgeQueue = edgeIter->second;
 
         GatewayMsg respMsg;
-        respMsg.filename_ = iocb->filename;
-        respMsg.offset_ = iocb->aio_offset;
-        respMsg.offset_ = iocb->aio_offset;
-        respMsg.size_ = iocb->aio_nbytes;
-        auto sendStr = respMsg.pack();
-        edgeQueue->write(sendStr.c_str(), sendStr.size());
+        edgeQueue->GatewayMsg_from_giocb(respMsg, *iocb);
+        LOG(INFO) << "send response for filename=" << iocb->filename;
+        auto ret = edgeQueue->write(respMsg);
+        assert(ret == 0);
       }
       doneCount = iocb_vec.size();
     }
@@ -61,49 +58,61 @@ int main(int argc, char* argv[])
   assert(err == 0);
 
   // open new
-  ASDQueue* asdQueue = new ASDQueue("127.0.0.1:12321", maxQueueLen, maxMsgSize);
+  ASDQueue* asdQueue = new ASDQueue("127.0.0.1:21321", maxQueueLen, maxMsgSize);
 
   auto fut = std::async(std::launch::async, iocompletionFunc);
 
-  while (1) 
-  {
-    char buf [maxMsgSize];
-    ssize_t recvdSize = asdQueue->read(buf, maxMsgSize);
+  bool exit = false;
+  int count = 0;
 
+  while (!exit) 
+  {
     GatewayMsg anyReq;
-    anyReq.unpack(buf, recvdSize);
+    auto ret = asdQueue->read(anyReq);
+    assert(ret == 0);
 
     switch (anyReq.opcode_) {
       case Opcode::OPEN:
         {
+          LOG(INFO) << "got open for =" << anyReq.edgePid_;
           EdgeQueue* newEdge = new EdgeQueue(anyReq.edgePid_);
           edgeCatalog.insert(std::make_pair(anyReq.edgePid_, newEdge));
           break;
         }
       case Opcode::READ:
         {
-          giocb* iocb = new giocb;
-          iocb->filename = anyReq.filename_;
-          iocb->aio_offset = anyReq.offset_;
-          iocb->aio_nbytes = anyReq.size_;
-          int pid = 10;
-          // int pid = (pid_t)iocb->userCtx_;
+          const int pid = (pid_t)anyReq.edgePid_;
           auto edgeIter = edgeCatalog.find(pid);
-          // TODO check null
-          auto edgeQueue = edgeIter->second;
-          iocb->aio_buf = edgeQueue->segment_->get_address_from_handle(anyReq.buf_);
-          //iocb->userCtx_ = anyReq.edgePid_;
-          auto aio_ret = aio_read(ctx, iocb);
-          if (aio_ret != 0) {
-            // TODO edgeQueue->write response
-            delete iocb;
+          
+          if (edgeIter != edgeCatalog.end()) {
+            LOG(INFO) << "got read for =" << anyReq.filename_;
+            auto edgeQueue = edgeIter->second;
+
+            giocb* iocb = new giocb; // freed on io completion
+            edgeQueue->giocb_from_GatewayMsg(*iocb, anyReq);
+
+            auto aio_ret = aio_read(ctx, iocb);
+            if (aio_ret != 0) {
+              anyReq.retval_ = -1;
+              anyReq.errval_ = EIO;
+              auto ret = edgeQueue->write(anyReq);
+              assert(ret == 0);
+              delete iocb;
+            } else  {
+              count ++;
+              aio_wait_all(ctx);
+            }
+          } else {
+            LOG(ERROR) << " could not find queue for pid=" << pid;
           }
+          break;
         }
       case Opcode::CLOSE:
         {
+          LOG(INFO) << "got close for =" << anyReq.edgePid_;
           size_t sz = edgeCatalog.erase(anyReq.edgePid_);
           if (sz != 1) {
-          LOG(ERROR) << "could not delete edgeQUeue for pid=" << anyReq.edgePid_;
+            LOG(ERROR) << "could not delete edgeQUeue for pid=" << anyReq.edgePid_;
           }
           break;
         }

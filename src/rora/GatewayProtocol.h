@@ -41,7 +41,7 @@ struct GatewayMsg {
   GOBJFS_DISALLOW_COPY(GatewayMsg);
   GOBJFS_DISALLOW_MOVE(GatewayMsg);
 
-  const std::string pack() {
+  const std::string pack() const {
     std::stringstream sbuf;
     msgpack::pack(sbuf, *this);
     return sbuf.str();

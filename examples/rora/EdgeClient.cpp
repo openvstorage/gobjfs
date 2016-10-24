@@ -16,7 +16,7 @@ int main(int argc, char* argv[])
   EdgeQueue* edgeQueue = new EdgeQueue(pid, maxQueueLen, maxMsgSize, blockSize);
 
   // open existing
-  ASDQueue* asdQueue = new ASDQueue("127.0.0.1:12321");
+  ASDQueue* asdQueue = new ASDQueue("127.0.0.1:21321");
 
   {
     // sending open message will cause rora gateway to open
@@ -24,33 +24,31 @@ int main(int argc, char* argv[])
     GatewayMsg openReq;
     openReq.opcode_ = Opcode::OPEN;
     openReq.edgePid_ = pid;
-    auto openStr = openReq.pack();
-    ssize_t ret = asdQueue->write(openStr.c_str(), openStr.size());
-    assert(ret == (ssize_t)openStr.size());
+    auto ret = asdQueue->write(openReq);
+    assert(ret == 0);
   }
 
   {
     // send read msg
     GatewayMsg readReq;
+    auto readBuf = edgeQueue->alloc(blockSize);
+
     readReq.opcode_ = Opcode::READ;
     readReq.edgePid_ = pid;
     readReq.filename_ = "abcd";
     readReq.size_ = blockSize;
     readReq.offset_ = 0;
-    auto readBuf = edgeQueue->alloc(blockSize);
     readReq.buf_ = edgeQueue->segment_->get_handle_from_address(readBuf);
-    auto readStr = readReq.pack();
-    ssize_t ret = asdQueue->write(readStr.c_str(), readStr.size());
-    assert(ret == (ssize_t)readStr.size());
+
+    auto ret = asdQueue->write(readReq);
+    assert(ret == 0);
   }
 
   {
     // get read response
-    char msg[maxMsgSize];
-    ssize_t readSz = edgeQueue->read(msg, maxMsgSize);
-
     GatewayMsg responseMsg;
-    responseMsg.unpack(msg, readSz);
+    auto ret = edgeQueue->read(responseMsg);
+    assert(ret == 0);
 
     // check retval, errval, filename, offset, size match
     void* respBuf = edgeQueue->segment_->get_address_from_handle(responseMsg.buf_);
@@ -65,9 +63,8 @@ int main(int argc, char* argv[])
     GatewayMsg closeReq;
     closeReq.opcode_ = Opcode::CLOSE;
     closeReq.edgePid_ = pid;
-    std::string closeStr = closeReq.pack();
-    ssize_t ret = asdQueue->write(closeStr.c_str(), closeStr.size());
-    assert(ret == (ssize_t)closeStr.size());
+    auto ret = asdQueue->write(closeReq);
+    assert(ret == 0);
   }
 
   delete asdQueue;

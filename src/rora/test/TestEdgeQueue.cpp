@@ -19,6 +19,7 @@ but WITHOUT ANY WARRANTY of any kind.
 
 #include <gtest/gtest.h>
 #include <rora/EdgeQueue.h>
+#include <rora/GatewayProtocol.h>
 
 using namespace gobjfs::rora;
 
@@ -73,27 +74,26 @@ TEST(EdgeQueueTest, ReaderWriterQueue) {
   EdgeQueue *creator = new EdgeQueue(pid, maxQueueLen, maxMsgSize, maxAllocSize);
   EdgeQueue *reader = new EdgeQueue(pid);
 
-  char wbuf[maxMsgSize];
+  GatewayMsg msg;
   for (size_t idx = 0; idx < maxQueueLen; idx ++)
   {
-    memset(wbuf, ('a' + idx) % 26, maxMsgSize);
-    auto ret = creator->write(wbuf, maxMsgSize);
-    EXPECT_EQ(ret, maxMsgSize);
+    msg.offset_ = idx;
+    msg.filename_ = "abcd";
+    auto ret = creator->write(msg);
+    EXPECT_EQ(ret, 0);
   }
 
   // both shared memory queue handles should report same queue len
   EXPECT_EQ(creator->getCurrentQueueLen(), maxMsgSize);
   EXPECT_EQ(reader->getCurrentQueueLen(), maxMsgSize);
 
-  char rbuf[maxMsgSize];
-  char cmp_buf[maxMsgSize];
   for (size_t idx = 0; idx < maxQueueLen; idx ++)
   {
-    auto ret = reader->read(rbuf, maxMsgSize);
-    EXPECT_EQ(ret, maxMsgSize);
-    memset(cmp_buf, ('a' + idx) % 26, maxMsgSize);
-    ret = memcmp(cmp_buf, rbuf, maxMsgSize);
-    ASSERT_EQ(ret, 0);
+    GatewayMsg msg;
+    auto ret = reader->read(msg);
+    EXPECT_EQ(ret, 0);
+    ASSERT_EQ(msg.offset_, idx);
+    ASSERT_EQ(msg.filename_, "abcd");
 
     EXPECT_EQ(creator->getCurrentQueueLen(), maxMsgSize - (idx + 1));
     EXPECT_EQ(reader->getCurrentQueueLen(), maxMsgSize - (idx + 1));

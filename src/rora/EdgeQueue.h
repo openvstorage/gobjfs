@@ -7,8 +7,18 @@
 
 namespace bip = boost::interprocess;
 
+// forward delaration 
+namespace gobjfs {
+  namespace xio {
+    struct giocb;
+  }
+}
+
 namespace gobjfs {
 namespace rora {
+
+class GatewayMsg;
+
 
 /**
  * An EdgeQueue combines the message queue and 
@@ -23,6 +33,8 @@ class EdgeQueue {
   std::string queueName_;
   std::string heapName_;
   bool created_{false};
+
+  size_t maxMsgSize_{0};
 
   public:
 
@@ -45,13 +57,17 @@ class EdgeQueue {
 
   ~EdgeQueue();
 
-  ssize_t write(const char* buf, size_t sz);
+  int write(const GatewayMsg& gmsg);
 
-  ssize_t read(char* buf, size_t sz);
+  int read(GatewayMsg& gmsg);
    
   void* alloc(size_t sz);
 
   int free(void* ptr);
+
+  int giocb_from_GatewayMsg(gobjfs::xio::giocb& iocb, GatewayMsg& gmsg);
+
+  int GatewayMsg_from_giocb(GatewayMsg& gmsg, gobjfs::xio::giocb& iocb);
 
   size_t getCurrentQueueLen() const;
 

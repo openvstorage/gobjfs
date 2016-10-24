@@ -1,9 +1,14 @@
-#include "EdgeQueue.h"
+#include <rora/EdgeQueue.h>
+#include <rora/GatewayProtocol.h>
+#include <gobjfs_client.h>
+
 #include <string>
 #include <glog/logging.h>
 #include <type_traits>
 
 namespace bip = boost::interprocess;
+
+using gobjfs::xio::giocb;
 
 namespace gobjfs {
 namespace rora {
@@ -24,7 +29,8 @@ static std::string getHeapName(int pid) {
 EdgeQueue::EdgeQueue(int pid, 
     size_t maxQueueLen, 
     size_t maxMsgSize,
-    size_t maxAllocSize) {
+    size_t maxAllocSize) 
+  : maxMsgSize_(maxMsgSize) {
 
   created_ = true;
 
@@ -39,7 +45,7 @@ EdgeQueue::EdgeQueue(int pid,
     mq_ = new bip::message_queue(bip::create_only, 
       queueName_.c_str(),
       maxQueueLen,
-      maxMsgSize);
+      maxMsgSize_);
   
     segment_ = new bip::managed_shared_memory(bip::create_only, 
       heapName_.c_str(),
@@ -73,6 +79,7 @@ EdgeQueue::EdgeQueue(int pid) {
   try {
     mq_ = new bip::message_queue(bip::open_only, queueName_.c_str());
     segment_ = new bip::managed_shared_memory(bip::open_only, heapName_.c_str());
+    maxMsgSize_ = getMaxMsgSize();
   } catch (const std::exception& e) {
 
     delete mq_;
@@ -124,10 +131,12 @@ EdgeQueue::~EdgeQueue() {
 /**
  * TODO : can throw
  */
-ssize_t EdgeQueue::write(const char* buf, size_t sz) {
+int EdgeQueue::write(const GatewayMsg& gmsg) {
   try {
-    mq_->send(buf, sz, 0);
-    return sz;
+    auto sendStr = gmsg.pack();
+    assert(sendStr.size() < maxMsgSize_);
+    mq_->send(sendStr.c_str(), sendStr.size(), 0);
+    return 0;
   } catch (const std::exception& e) {
     return -1;
   }
@@ -136,12 +145,14 @@ ssize_t EdgeQueue::write(const char* buf, size_t sz) {
 /**
  * TODO : can throw
  */
-ssize_t EdgeQueue::read(char* buf, size_t sz) {
+int EdgeQueue::read(GatewayMsg& msg) {
   uint32_t priority;
   size_t recvdSize;
   try {
-    mq_->receive(buf, sz, recvdSize, priority);
-    return recvdSize;
+    char buf[maxMsgSize_];
+    mq_->receive(buf, maxMsgSize_, recvdSize, priority);
+    msg.unpack(buf, recvdSize);
+    return 0;
   } catch (const std::exception& e) {
     return -1;
   }
@@ -161,6 +172,28 @@ int EdgeQueue::free(void* ptr) {
     return -EINVAL;
   }
   segment_->deallocate(ptr);
+  return 0;
+}
+
+int EdgeQueue::giocb_from_GatewayMsg(giocb& iocb, GatewayMsg& gmsg) {
+
+  iocb.filename = gmsg.filename_;
+  iocb.aio_offset = gmsg.offset_;
+  iocb.aio_nbytes = gmsg.size_;
+  iocb.aio_buf = segment_->get_address_from_handle(gmsg.buf_);
+  iocb.user_ctx = gmsg.edgePid_;
+
+  return 0;
+}
+
+int EdgeQueue::GatewayMsg_from_giocb(GatewayMsg& gmsg, giocb& iocb) {
+
+  gmsg.opcode_ = Opcode::READ;
+  gmsg.filename_ = iocb.filename;
+  gmsg.offset_ = iocb.aio_offset;
+  gmsg.size_ = iocb.aio_nbytes;
+  gmsg.buf_ = segment_->get_handle_from_address(iocb.aio_buf);
+
   return 0;
 }
 

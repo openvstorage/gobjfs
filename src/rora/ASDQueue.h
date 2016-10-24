@@ -10,6 +10,8 @@ namespace bip = boost::interprocess;
 namespace gobjfs {
 namespace rora {
 
+class GatewayMsg;
+
 /**
  * An ASDQueue abstracts the message queue and 
  * required for receiving read requests on the Gateway
@@ -22,15 +24,17 @@ class ASDQueue {
   
   bool created_{false};
 
+  size_t maxMsgSize_{0};
+
   public:
   /**
-   * create edge queue for pid
+   * create edge queue for uri
    */
   ASDQueue(const std::string& uri, size_t maxQueueLen, size_t maxMsgSize);
       
 
   /**
-   * open existing edge queue for pid
+   * open existing edge queue for uri
    */
   ASDQueue(const std::string& uri);
 
@@ -38,9 +42,9 @@ class ASDQueue {
 
   ~ASDQueue();
 
-  ssize_t write(const char* buf, size_t sz);
+  int write(const GatewayMsg& gmsg);
 
-  ssize_t read(char* buf, size_t sz);
+  int read(GatewayMsg& gmsg);
    
   size_t getCurrentQueueLen() const;
 
