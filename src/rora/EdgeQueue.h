@@ -30,6 +30,10 @@ class GatewayMsg;
  */
 class EdgeQueue {
 
+  public:
+  int pid_{-1};
+
+  private:
   std::string queueName_;
   std::string heapName_;
   bool created_{false};
@@ -83,6 +87,9 @@ class EdgeQueue {
 
   size_t getFreeMem() const;
 };
+
+typedef std::unique_ptr<EdgeQueue> EdgeQueueUPtr;
+typedef std::shared_ptr<EdgeQueue> EdgeQueueSPtr;
 
 }
 }

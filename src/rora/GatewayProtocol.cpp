@@ -24,6 +24,7 @@ int createReadRequest(GatewayMsg& gmsg,
 
   gmsg.rawbuf_ = edgeQueue->alloc(size);
   gmsg.buf_ = edgeQueue->segment_->get_handle_from_address(gmsg.rawbuf_);
+  return 0;
 }
 
 int createCloseRequest(GatewayMsg& gmsg) {

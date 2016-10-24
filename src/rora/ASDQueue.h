@@ -54,5 +54,8 @@ class ASDQueue {
 
 };
 
+typedef std::unique_ptr<ASDQueue> ASDQueueUPtr;
+typedef std::shared_ptr<ASDQueue> ASDQueueSPtr;
+
 }
 }

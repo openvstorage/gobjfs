@@ -30,7 +30,8 @@ EdgeQueue::EdgeQueue(int pid,
     size_t maxQueueLen, 
     size_t maxMsgSize,
     size_t maxAllocSize) 
-  : maxMsgSize_(maxMsgSize) {
+  : pid_(pid)
+  , maxMsgSize_(maxMsgSize) {
 
   created_ = true;
 
