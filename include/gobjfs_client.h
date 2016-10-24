@@ -43,10 +43,11 @@ struct aio_request;
 
 struct giocb {
   std::string filename;
-  void *aio_buf;
-  off_t aio_offset;
-  size_t aio_nbytes;
-  aio_request *request_;
+  void *aio_buf{nullptr};
+  off_t aio_offset{0};
+  size_t aio_nbytes{0};
+  aio_request *request_{nullptr};
+  uintptr_t user_ctx{0}; // user-supplied context
 };
 
 /*
