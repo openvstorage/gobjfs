@@ -366,6 +366,15 @@ int aio_wait_all(client_ctx_ptr ctx, int timeout_ms) {
   return ctx->net_client_->waitAll(timeout);
 }
 
+int aio_geteventfd(client_ctx_ptr ctx) {
+  int r = 0;
+  if (ctx == nullptr) {
+    errno = EINVAL;
+    return (r = -1);
+  }
+  return ctx->net_client_->geteventFD();
+}
+
 /**
  * This func can be called by a thread different from one running xio loop
  * it should not call xio_context_run_loop()
