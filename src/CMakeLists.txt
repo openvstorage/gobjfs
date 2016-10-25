@@ -10,6 +10,7 @@ set(SOURCES
   util/CpuStats.cpp
   util/SemaphoreWrapper.cpp
   util/TimerNotifier.cpp
+  util/EPoller.cpp
   )
 
 set(LIBRARY_LIST

@@ -45,9 +45,11 @@ struct EventFD {
 
   operator int() const { return evfd_; }
 
+  int getfd() const { return evfd_; }
+
   // made func static so it can be called when EventFD object not available
   static int readfd(int fd) {
-    int ret;
+    int ret = -1;
     eventfd_t value = 0;
     do {
       ret = eventfd_read(fd, &value);
@@ -66,7 +68,7 @@ struct EventFD {
 
   int writefd() {
     uint64_t u = 1;
-    int ret;
+    int ret = 0;
     do {
       ret = eventfd_write(evfd_, static_cast<eventfd_t>(u));
     } while (ret < 0 && (errno == EINTR || errno == EAGAIN));

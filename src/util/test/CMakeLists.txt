@@ -2,6 +2,7 @@
 ADD_EXECUTABLE(UtilTester
   StatsTest.cpp
   EventFDTest.cpp
+  EPollerTest.cpp
   SemaphoreWrapperTest.cpp
   OSUtilsTest.cpp
   TestMain.cpp)
