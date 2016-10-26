@@ -2,6 +2,7 @@
 
 #include <rora/EdgeQueue.h>
 #include <rora/ASDQueue.h>
+#include <util/EPoller.h>
 #include <gobjfs_client.h>
 
 #include <string>
@@ -23,15 +24,23 @@ class RoraGateway {
     // mutex protects catalog insert/delete done by multiple asd threads
     std::mutex mutex_;
 
+    // polls for completed read requests from all asds
+    gobjfs::os::EPoller epoller_;
+
     // thread listens for completed read requests across all 
     // client_ctx and sends the responses back to EdgeProcesses
     std::thread thread_;
+    bool started_{false};
+    bool stopping_{false};
+    bool stopped_{false};
 
     public:
 
     int insert(EdgeQueueSPtr edgePtr);
     int drop(int pid);
     EdgeQueueSPtr find(int pid);
+
+    // use kill(pid, 0) == ESRCH to check for dead pids to delete from catalog
     int dropDeadEdgeProcesses();
 
   };
@@ -47,8 +56,8 @@ class RoraGateway {
     // TODO for portals, there will be multiple ctx and asdThread_
     // how to configure number of threads for asd 
     gobjfs::xio::client_ctx_ptr ctx_;
-    std::thread thread_;
 
+    std::thread thread_;
     bool started_{false};
     bool stopping_{false};
     bool stopped_{false};
@@ -65,7 +74,11 @@ class RoraGateway {
   EdgeInfo edges_;
   std::list<ASDInfoUPtr> asdList_;
 
-  int asdFunc(ASDInfo* asdInfo);
+  int asdThreadFunc(ASDInfo* asdInfo);
+
+  int responseThreadFunc();
+
+  int handleReadCompletion(int fd, uintptr_t asdPtr);
 
   public:
 

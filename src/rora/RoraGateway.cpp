@@ -5,9 +5,11 @@
 #include <boost/program_options.hpp>
 #include <glog/logging.h>
 #include <util/lang_utils.h>
+#include <util/os_utils.h>
 
 namespace bpo = boost::program_options;
 using namespace gobjfs::xio;
+using gobjfs::os::EPoller;
 
 namespace gobjfs {
 namespace rora {
@@ -133,6 +135,8 @@ int RoraGateway::init(const std::string& configFileName) {
     return -1;
   }
 
+  edges_.epoller_.init();
+
   size_t numASD = config.transportVec_.size();
 
   for (size_t idx = 0; idx < numASD; idx ++) {
@@ -143,17 +147,27 @@ int RoraGateway::init(const std::string& configFileName) {
 
     auto asdp = gobjfs::make_unique<ASDInfo>(transport, ipAddress, port, config.maxMsgSize_, config.maxQueueLen_); 
 
-    asdp->thread_ = std::thread(std::bind(&RoraGateway::asdFunc, this, asdp.get()));
+    // for each ASD, add an event to monitor for read completions
+    edges_.epoller_.addEvent(reinterpret_cast<uintptr_t>(asdp.get()), 
+        aio_geteventfd(asdp->ctx_), 
+        EPOLLIN, 
+        std::bind(&RoraGateway::handleReadCompletion, this,
+          std::placeholders::_1,
+          std::placeholders::_2));
 
+    // use the asdp before std::move
     asdList_.push_back(std::move(asdp));
   }
+
 
   return ret;
 }
 
-int RoraGateway::asdFunc(ASDInfo* asdInfo) {
+int RoraGateway::asdThreadFunc(ASDInfo* asdInfo) {
 
   asdInfo->started_ = true;
+
+  LOG(INFO) << "started asd thread=" << gettid() << " for uri=" << asdInfo->ipAddress_ << ":" << asdInfo->port_;
 
   while (!asdInfo->stopping_) 
   {
@@ -209,16 +223,91 @@ int RoraGateway::asdFunc(ASDInfo* asdInfo) {
   }
 
   asdInfo->stopped_ = true;
+  LOG(INFO) << "stopped asd thread=" << gettid() << " for uri=" << asdInfo->ipAddress_ << ":" << asdInfo->port_;
+  return 0;
+}
+
+int RoraGateway::handleReadCompletion(int fd, uintptr_t ptr) {
+
+  uint64_t doneCount; // move to ASDInfo
+
+  ASDInfo* asdPtr = reinterpret_cast<ASDInfo*>(ptr);
+
+  std::vector<giocb*> iocb_vec;
+  int times = 1; // ignored right now
+  int r = aio_getevents(asdPtr->ctx_, times, iocb_vec);
+
+  if (r == 0) {
+    for (auto& iocb : iocb_vec) {
+
+      int pid = (int) iocb->user_ctx;
+
+      auto edgeIter = edges_.catalog_.find(pid);
+      if (edgeIter != edges_.catalog_.end()) {
+        auto edgeQueue = edgeIter->second;
+
+        GatewayMsg respMsg;
+        edgeQueue->GatewayMsg_from_giocb(respMsg, *iocb, 
+            aio_return(iocb), aio_error(iocb));
+        LOG(INFO) << "send response to pid=" << pid 
+          << " for filename=" << iocb->filename;
+        auto ret = edgeQueue->write(respMsg);
+        assert(ret == 0);
+      } else {
+        LOG(ERROR) << "not found edge queue for pid=" << pid;
+      }
+
+      aio_finish(iocb);
+      delete iocb;
+    }
+    doneCount += iocb_vec.size();
+  }
+  return 0;
+}
+
+/**
+ * fetch responses from all xio ctx and
+ * write them to edgeQueue
+ */
+int RoraGateway::responseThreadFunc() {
+
+  LOG(INFO) << "started edge response thread=" << gettid();
+
+  while (!edges_.stopping_) {
+    edges_.epoller_.run(1);
+  }
+
+  LOG(INFO) << "stopped edge response thread=" << gettid();
   return 0;
 }
 
 int RoraGateway::run() {
   int ret = 0;
+
+  for (auto& asdPtr : asdList_) {
+    asdPtr->thread_ = std::thread(std::bind(&RoraGateway::asdThreadFunc, this, asdPtr.get()));
+  }
+
+  edges_.thread_ = std::thread(std::bind(&RoraGateway::responseThreadFunc, this));
+
   return ret;
 }
 
 int RoraGateway::shutdown() {
   int ret = 0;
+
+  edges_.stopping_ = true;
+  edges_.epoller_.shutdown();
+
+  edges_.thread_.join();
+
+  for (auto& asdPtr : asdList_) {
+    asdPtr->stopping_ = true;
+  }
+  for (auto& asdPtr : asdList_) {
+    asdPtr->thread_.join();
+  }
+
   return ret;
 }
 

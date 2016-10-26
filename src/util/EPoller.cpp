@@ -171,6 +171,7 @@ int EPoller::processEvent(uint64_t key) {
 /**
  * can be called by any thread which wants to process 
  * events on this EPoller fd
+ * TODO support timeout
  * @param numLoops to run, default is infinite
  */
 int EPoller::run(int32_t numLoops) {
