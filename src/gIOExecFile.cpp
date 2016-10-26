@@ -379,7 +379,7 @@ int IOExecEventFdGetReadFd(IOExecEventFdHandle eventFdPtr) {
 /* internal representation of FileHandle */
 struct IOExecFileInt {
   IOExecServiceHandle serviceHandle;
-  int fd{-1};
+  int fd{gobjfs::os::FD_INVALID};
   CoreId core{CoreIdInvalid};
 
   IOExecFileInt(IOExecServiceHandle serviceHandle, int fd, CoreId core)
@@ -541,9 +541,16 @@ int32_t IOExecFileRead(IOExecServiceHandle serviceHandle, const char *fileName,
   auto ret = IOExecFileOp("read", FileOp::Read, fileHandle, closeFileHandle,
                           batch, eventFdHandle);
 
-  // close fileHandle but do not close fd which is still in use
-  // because the fd will be closed after FilerJob::reset
-  fileHandle->fd = gobjfs::os::FD_INVALID;
+  // if request submitted successfully, 
+  //   reset fd here in fileHandle
+  //   because the fd will be closed after FilerJob::reset
+  // if not successful
+  //   then close fd with fileHandle now
+  if (ret == 0) {
+    fileHandle->fd = gobjfs::os::FD_INVALID;
+  } else {
+    assert(fileHandle->fd != gobjfs::os::FD_INVALID);
+  }
   IOExecFileClose(fileHandle);
   return ret;
 }
