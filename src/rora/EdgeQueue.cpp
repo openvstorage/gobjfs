@@ -141,6 +141,9 @@ int EdgeQueue::read(GatewayMsg& msg) {
     char buf[maxMsgSize_];
     mq_->receive(buf, maxMsgSize_, recvdSize, priority);
     msg.unpack(buf, recvdSize);
+    if (msg.opcode_ == Opcode::READ) {
+      msg.rawbuf_ = segment_->get_address_from_handle(msg.buf_);
+    }
     return 0;
   } catch (const std::exception& e) {
     return -1;

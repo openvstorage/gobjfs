@@ -4,18 +4,28 @@
 namespace gobjfs {
 namespace rora {
 
-int createOpenRequest(GatewayMsg& gmsg) {
-  gmsg.opcode_ = Opcode::OPEN;
-  gmsg.edgePid_ = getpid();
-  return 0;
+const size_t GatewayMsg::MaxMsgSize = 1024;
+ 
+GatewayMsg::~GatewayMsg() {
+  // check segment was deallocated in case of READ
+  assert(rawbuf_ == nullptr);
+  assert(buf_ == 0);
 }
 
-int createReadRequest(GatewayMsg& gmsg, 
+GatewayMsg createOpenRequest() {
+  GatewayMsg gmsg;
+  gmsg.opcode_ = Opcode::OPEN;
+  gmsg.edgePid_ = getpid();
+  return gmsg;
+}
+
+GatewayMsg createReadRequest(
     EdgeQueue* edgeQueue,
     const std::string& filename, 
     off_t offset, 
     size_t size) {
 
+  GatewayMsg gmsg;
   gmsg.opcode_ = Opcode::READ;
   gmsg.edgePid_ = getpid();
   gmsg.filename_ = filename;
@@ -24,13 +34,14 @@ int createReadRequest(GatewayMsg& gmsg,
 
   gmsg.rawbuf_ = edgeQueue->alloc(size);
   gmsg.buf_ = edgeQueue->segment_->get_handle_from_address(gmsg.rawbuf_);
-  return 0;
+  return gmsg;
 }
 
-int createCloseRequest(GatewayMsg& gmsg) {
+GatewayMsg createCloseRequest() {
+  GatewayMsg gmsg;
   gmsg.opcode_ = Opcode::CLOSE;
   gmsg.edgePid_ = getpid();
-  return 0;
+  return gmsg;
 }
 
 }

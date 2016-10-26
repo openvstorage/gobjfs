@@ -23,6 +23,11 @@ class EdgeQueue;
 
 struct GatewayMsg {
 
+  // MaxMsgSize is used during message queue creation
+  // this param must be large enough to fit msgpack
+  // of filename and other items in this structure
+  static const size_t MaxMsgSize;
+
   Opcode opcode_{Opcode::INVALID};
   int edgePid_{-1};
 
@@ -31,7 +36,7 @@ struct GatewayMsg {
   off_t offset_{0};
 
   // handle is a difference_type (i.e offset within shmem segment)
-  bip::managed_shared_memory::handle_t buf_;
+  bip::managed_shared_memory::handle_t buf_{0};
 
   // rawbuf deliberately not included in msgpack
   void* rawbuf_{nullptr}; 
@@ -43,8 +48,10 @@ struct GatewayMsg {
 
   explicit GatewayMsg() {}
 
-  GOBJFS_DISALLOW_COPY(GatewayMsg);
-  GOBJFS_DISALLOW_MOVE(GatewayMsg);
+  ~GatewayMsg();
+
+  //GOBJFS_DISALLOW_COPY(GatewayMsg);
+  //GOBJFS_DISALLOW_MOVE(GatewayMsg);
 
   const std::string pack() const {
     std::stringstream sbuf;
@@ -72,15 +79,15 @@ struct GatewayMsg {
   
 };
 
-int createOpenRequest(GatewayMsg& msg);
+GatewayMsg createOpenRequest();
 
-int createReadRequest(GatewayMsg& msg, 
+GatewayMsg createReadRequest(
     EdgeQueue* edgeQueue,
     const std::string& filename, 
     off_t offset, 
     size_t size);
 
-int createCloseRequest(GatewayMsg& msg);
+GatewayMsg createCloseRequest();
 
 }
 }

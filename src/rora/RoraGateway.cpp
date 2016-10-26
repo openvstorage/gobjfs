@@ -21,7 +21,6 @@ struct Config {
   std::vector<int> portVec_;
 
   // TODO put in config
-  size_t maxMsgSize_ {1024}; 
   size_t maxQueueLen_ {256};
 
   int readConfig(const std::string& configFileName) {
@@ -145,7 +144,7 @@ int RoraGateway::init(const std::string& configFileName) {
     auto& port = config.portVec_[idx];
     auto& ipAddress = config.ipAddressVec_[idx];
 
-    auto asdp = gobjfs::make_unique<ASDInfo>(transport, ipAddress, port, config.maxMsgSize_, config.maxQueueLen_); 
+    auto asdp = gobjfs::make_unique<ASDInfo>(transport, ipAddress, port, GatewayMsg::MaxMsgSize, config.maxQueueLen_); 
 
     // for each ASD, add an event to monitor for read completions
     edges_.epoller_.addEvent(reinterpret_cast<uintptr_t>(asdp.get()), 
@@ -229,7 +228,7 @@ int RoraGateway::asdThreadFunc(ASDInfo* asdInfo) {
 
 int RoraGateway::handleReadCompletion(int fd, uintptr_t ptr) {
 
-  uint64_t doneCount; // move to ASDInfo
+  uint64_t doneCount =0; // move to ASDInfo
 
   ASDInfo* asdPtr = reinterpret_cast<ASDInfo*>(ptr);
 

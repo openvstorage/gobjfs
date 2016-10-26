@@ -149,6 +149,7 @@ int EPoller::eventHandler(int fd, uint64_t userData) {
   assert(fd == fd_);
   assert(userData == (uint64_t)this);
   run(1);
+  return 0;
 }
 
 /**

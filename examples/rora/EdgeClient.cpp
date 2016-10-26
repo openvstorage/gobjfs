@@ -21,17 +21,13 @@ int main(int argc, char* argv[])
   {
     // sending open message will cause rora gateway to open
     // the EdgeQueue for sending responses
-    GatewayMsg openReq;
-    createOpenRequest(openReq);
-    auto ret = asdQueue->write(openReq);
+    auto ret = asdQueue->write(createOpenRequest());
     assert(ret == 0);
   }
 
   {
     // send read msg
-    GatewayMsg readReq;
-    createReadRequest(readReq, edgeQueue, "abcd", 0, blockSize);
-    auto ret = asdQueue->write(readReq);
+    auto ret = asdQueue->write(createReadRequest(edgeQueue, "abcd", 0, blockSize));
     assert(ret == 0);
   }
 
@@ -51,9 +47,7 @@ int main(int argc, char* argv[])
   {
     // sending close message will cause rora gateway to close
     // the EdgeQueue for sending responses
-    GatewayMsg closeReq;
-    createCloseRequest(closeReq);
-    auto ret = asdQueue->write(closeReq);
+    auto ret = asdQueue->write(createCloseRequest());
     assert(ret == 0);
   }
 

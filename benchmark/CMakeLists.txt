@@ -9,4 +9,5 @@ TARGET_LINK_LIBRARIES(BenchIOExecFile
   pthread rt z)
 
 add_subdirectory(networkxio)
+add_subdirectory(rora)
 
