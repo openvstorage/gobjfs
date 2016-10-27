@@ -99,8 +99,7 @@ int main(int argc, char* argv[])
             LOG(INFO) << "got read for =" << anyReq.filename_;
             auto edgeQueue = edgeIter->second;
 
-            giocb* iocb = new giocb; // freed on io completion
-            edgeQueue->giocb_from_GatewayMsg(*iocb, anyReq);
+            giocb* iocb = edgeQueue->giocb_from_GatewayMsg(anyReq);
 
             auto aio_ret = aio_read(ctx, iocb);
             if (aio_ret != 0) {

@@ -69,7 +69,7 @@ class EdgeQueue {
 
   int free(void* ptr);
 
-  int giocb_from_GatewayMsg(gobjfs::xio::giocb& iocb, const GatewayMsg& gmsg);
+  gobjfs::xio::giocb* giocb_from_GatewayMsg(const GatewayMsg& gmsg);
 
   /**
    * @param retval: actual size which was read on server, or -1 in failure

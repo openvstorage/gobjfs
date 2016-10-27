@@ -192,8 +192,7 @@ int RoraGateway::asdThreadFunc(ASDInfo* asdInfo) {
           if (edgePtr) {
             LOG(DEBUG) << "got read from pid=" << pid << " for file=" << anyReq.filename_;
 
-            giocb* iocb = new giocb; // freed on io completion
-            edgePtr->giocb_from_GatewayMsg(*iocb, anyReq);
+            giocb* iocb = edgePtr->giocb_from_GatewayMsg(anyReq);
 
             auto aio_ret = aio_read(asdInfo->ctx_, iocb);
             if (aio_ret != 0) {

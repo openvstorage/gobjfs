@@ -167,15 +167,17 @@ int EdgeQueue::free(void* ptr) {
   return 0;
 }
 
-int EdgeQueue::giocb_from_GatewayMsg(giocb& iocb, const GatewayMsg& gmsg) {
+giocb* EdgeQueue::giocb_from_GatewayMsg(const GatewayMsg& gmsg) {
 
-  iocb.filename = gmsg.filename_;
-  iocb.aio_offset = gmsg.offset_;
-  iocb.aio_nbytes = gmsg.size_;
-  iocb.aio_buf = segment_->get_address_from_handle(gmsg.buf_);
-  iocb.user_ctx = gmsg.edgePid_;
+  giocb *iocb = new giocb;
 
-  return 0;
+  iocb->filename = gmsg.filename_;
+  iocb->aio_offset = gmsg.offset_;
+  iocb->aio_nbytes = gmsg.size_;
+  iocb->aio_buf = segment_->get_address_from_handle(gmsg.buf_);
+  iocb->user_ctx = gmsg.edgePid_;
+
+  return iocb;
 }
 
 int EdgeQueue::GatewayMsg_from_giocb(GatewayMsg& gmsg, 
