@@ -323,7 +323,11 @@ int main(int argc, char* argv[])
   auto fut = std::async(std::launch::async, std::bind(&RunContext::doRandomRead, &r, asdQueue));
 
   if (config.runTimeSec) {
-    sleep(config.runTimeSec);
+    // print progress count here for time-based run
+    for (int idx = 0; idx < 10; idx++) {
+      sleep(config.runTimeSec/10);
+      LOG(INFO) << " done percent=" << (idx + 1) * 10;
+    }
     r.mustExit = true;
   }
 

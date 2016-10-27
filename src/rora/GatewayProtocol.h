@@ -33,7 +33,7 @@ struct GatewayMsg {
 
   // added file number for mem check during benchmark
   // this field doesnt have any inherent functional purpose
-  uint32_t fileNumber_{-1};
+  int32_t fileNumber_{-1};
 
   std::string filename_;
   size_t size_{0};
