@@ -21,6 +21,7 @@ GatewayMsg createOpenRequest() {
 
 GatewayMsg createReadRequest(
     EdgeQueue* edgeQueue,
+    uint32_t fileNumber,
     const std::string& filename, 
     off_t offset, 
     size_t size) {
@@ -28,6 +29,7 @@ GatewayMsg createReadRequest(
   GatewayMsg gmsg;
   gmsg.opcode_ = Opcode::READ;
   gmsg.edgePid_ = getpid();
+  gmsg.fileNumber_ = fileNumber;
   gmsg.filename_ = filename;
   gmsg.offset_ = offset;
   gmsg.size_ = size;

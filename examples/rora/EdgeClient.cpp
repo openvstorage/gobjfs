@@ -27,7 +27,7 @@ int main(int argc, char* argv[])
 
   {
     // send read msg
-    auto ret = asdQueue->write(createReadRequest(edgeQueue, "abcd", 0, blockSize));
+    auto ret = asdQueue->write(createReadRequest(edgeQueue, 1, "abcd", 0, blockSize));
     assert(ret == 0);
   }
 

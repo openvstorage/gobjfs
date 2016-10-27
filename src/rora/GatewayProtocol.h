@@ -31,6 +31,10 @@ struct GatewayMsg {
   Opcode opcode_{Opcode::INVALID};
   int edgePid_{-1};
 
+  // added file number for mem check during benchmark
+  // this field doesnt have any inherent functional purpose
+  uint32_t fileNumber_{-1};
+
   std::string filename_;
   size_t size_{0};
   off_t offset_{0};
@@ -67,6 +71,7 @@ struct GatewayMsg {
 
   MSGPACK_DEFINE(opcode_,
       edgePid_,
+      fileNumber_,
       filename_,
       size_,
       offset_,
@@ -80,6 +85,7 @@ GatewayMsg createOpenRequest();
 
 GatewayMsg createReadRequest(
     EdgeQueue* edgeQueue,
+    uint32_t fileNumber,
     const std::string& filename, 
     off_t offset, 
     size_t size);
