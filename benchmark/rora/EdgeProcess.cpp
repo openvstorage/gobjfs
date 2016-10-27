@@ -1,15 +1,38 @@
 #include <rora/GatewayProtocol.h>
 #include <rora/EdgeQueue.h>
 #include <rora/ASDQueue.h>
+
+#include <util/Timer.h>
+#include <util/Stats.h>
+#include <util/os_utils.h>
+#include <gobjfs_log.h>
+
 #include <unistd.h>
-#include <glog/logging.h>
+#include <random>
+#include <future>
 
 #include <boost/program_options.hpp>
+
+#include <boost/log/trivial.hpp>
+#include <boost/log/core.hpp>
+#include <boost/log/expressions.hpp>
+#include <boost/log/utility/setup/file.hpp>
+#include <boost/log/sinks/text_file_backend.hpp>
+#include <boost/log/utility/setup/common_attributes.hpp>
+#include <boost/log/sources/severity_logger.hpp>
+#include <boost/log/sources/record_ostream.hpp>
 
 namespace bpo = boost::program_options;
 using namespace bpo;
 
 using namespace gobjfs::rora;
+using namespace gobjfs::os;
+using namespace gobjfs::stats;
+
+namespace logging = boost::log;
+namespace src = boost::log::sources;
+namespace sinks = boost::log::sinks;
+namespace keywords = boost::log::keywords;
 
 struct Config {
   uint32_t blockSize = 4096;
@@ -52,15 +75,12 @@ struct Config {
 
     if (runTimeSec && maxIO) {
       LOG(INFO) << "run_time_sec and per_thread_io both defined.  Benchmark will be run based on run_time_sec";
-      //maxIO = 0; TODO later
-    }
-
-    if (maxIO % maxOutstandingIO != 0) {
+      maxIO = 0;
+    } else if (maxIO % maxOutstandingIO != 0) {
       // truncate it so that read does not terminate with outstanding IO
       maxIO -= (maxIO % maxOutstandingIO);
       LOG(INFO) << "reduced maxIO to " << maxIO << " to keep it multiple of " << maxOutstandingIO;
     }
-
 
     LOG(INFO)
         << "================================================================="
@@ -103,9 +123,172 @@ struct Config {
 
 static Config config;
 
+// =====================
+
+struct FileManager {
+
+  std::string buildFileName(uint64_t fileNum) {
+    return "/bench" + std::to_string(fileNum) + ".data";
+  }
+  
+  std::string getFilename(uint64_t fileNum) {
+    static const auto numDir = config.dirPrefix.size();
+    return config.dirPrefix[fileNum % numDir] + buildFileName(fileNum);
+  }
+};
+
+static FileManager fileMgr;
+// =====================
+//
+EdgeQueueUPtr edgeQueue;
+
+// =====================
+
+struct RunContext {
+
+  StatsCounter<uint64_t> readLatency;
+  uint64_t failedReads{0};
+  uint64_t iops{0};
+  Timer throughputTimer;
+
+  size_t maxIO{0};
+  size_t doneCount{0};
+  size_t progressCount{0};
+  bool mustExit{false};
+
+  RunContext() {
+    maxIO = config.maxIO;
+  }
+
+  void start() {
+    throughputTimer.reset();
+  }
+
+  void finalize() {
+    checkTermination();
+    int64_t timeMilli = throughputTimer.elapsedMilliseconds();
+    iops = (doneCount * 1000) / timeMilli;
+
+    std::ostringstream s;
+    s << ":num_io=" << doneCount
+      << ":time(msec)=" << timeMilli
+      << ":iops=" << iops 
+      << ":failed_reads=" << failedReads
+      << ":read_latency(usec)=" << readLatency
+      << std::endl;
+  
+    LOG(INFO) << s.str();
+  }
+
+  bool isFinished() {
+    if (config.maxIO) {
+      // this is a max io-based run
+      if (doneCount == maxIO) {
+        mustExit = true;
+      }
+    } else {
+      // this is a time-based run
+      maxIO = doneCount;
+    }
+    return mustExit;
+  }
+
+  void incrementCount(bool hasFailed) {
+    if (hasFailed) {
+      failedReads ++;
+    }
+    doneCount ++;
+    progressCount ++;
+    if (progressCount == maxIO/10) {
+      LOG(INFO) << "thread=" << gettid() 
+        << " done percent=" << ((doneCount * 100)/maxIO);
+      progressCount = 0;
+    }
+  }
+
+  void checkTermination() {
+    assert(doneCount == maxIO);
+    assert(doneCount > 0); // must have run
+  }
+
+  void doRandomRead(ASDQueue* asdQueue);
+};
+
+void RunContext::doRandomRead(ASDQueue* asdQueue) {
+
+  std::mt19937 seedGen(getpid() + gobjfs::os::GetCpuCore());
+  std::uniform_int_distribution<decltype(config.maxFiles)> filenumGen(
+      0, config.maxFiles - 1);
+  std::uniform_int_distribution<decltype(config.maxBlocks)> blockGenerator(
+      0, config.maxBlocks - 1);
+
+  start();
+
+  while (!isFinished()) {
+
+    // send read msg 
+    // a batch may contains read offset for different files
+    for (size_t batchIdx = 0; batchIdx < config.maxOutstandingIO; batchIdx ++) {
+      const off_t off = blockGenerator(seedGen) * config.blockSize;
+      const uint32_t fileNumber = filenumGen(seedGen);
+      const std::string filename = fileMgr.getFilename(fileNumber);
+      const auto ret = asdQueue->write(createReadRequest(edgeQueue.get(), fileNumber, filename,
+        off,
+        config.blockSize));
+      assert(ret == 0);
+    }
+  
+    for (size_t batchIdx = 0; batchIdx < config.maxOutstandingIO; batchIdx ++) {
+      // get read response
+      GatewayMsg responseMsg;
+      const auto ret = edgeQueue->read(responseMsg);
+      assert(ret == 0);
+
+      responseMsg.rawbuf_ = edgeQueue->segment_->get_address_from_handle(responseMsg.buf_);
+
+      // check retval, errval, filename, offset, size match
+      if (config.doMemCheck) {
+        const std::string fileString((const char*)responseMsg.rawbuf_, 8); 
+        const std::string offsetString((const char*)responseMsg.rawbuf_ + 8, 8); 
+        assert(atoll(fileString.c_str()) == responseMsg.fileNumber_);
+        assert(atoll(offsetString.c_str()) == responseMsg.offset_);
+      }
+  
+      const bool hasFailed = (responseMsg.retval_ < 0);
+      incrementCount(hasFailed);
+  
+      // free allocated shared segment
+      edgeQueue->free(responseMsg.rawbuf_);
+      responseMsg.rawbuf_ = nullptr;
+      responseMsg.buf_ = 0;
+    }
+  }
+
+  finalize();
+}
+
 int main(int argc, char* argv[])
 {
-  google::InitGoogleLogging(argv[0]);
+  namespace logging = boost::log;
+  logging::core::get()->set_filter(logging::trivial::severity >=
+      logging::trivial::info);
+
+  std::string logFileName(argv[0]);
+  logFileName += std::to_string(getpid()) + std::string("_%N.log");
+  logging::add_file_log
+  (
+    keywords::file_name = logFileName,
+    keywords::rotation_size = 10 * 1024 * 1024,
+    keywords::time_based_rotation = sinks::file::rotation_at_time_point(0, 0, 0), 
+    keywords::auto_flush = true,
+    keywords::format = "[%TimeStamp%]: %Message%"
+  );
+
+  logging::add_common_attributes();// puts timestamp in log
+
+  std::cout << "logs in " << logFileName << std::endl;
+
+  int ret = 0;
 
   int pid = getpid();
 
@@ -113,16 +296,16 @@ int main(int argc, char* argv[])
   if (argc > 1) {
     configFileName = argv[1];
   }
-  auto ret = config.readConfig(configFileName);
+  ret = config.readConfig(configFileName);
   assert(ret == 0);
 
   std::vector<ASDQueueUPtr> asdQueueVec;
 
   // create new for this process
-  EdgeQueueUPtr edgeQueue = gobjfs::make_unique<EdgeQueue>(pid, 2 * config.maxOutstandingIO, 
+  edgeQueue = gobjfs::make_unique<EdgeQueue>(pid, 2 * config.maxOutstandingIO, 
       GatewayMsg::MaxMsgSize, config.blockSize);
 
-  // open existing
+  // open existing asd queues
   const size_t numASD = config.transportVec.size();
   for (size_t idx = 0; idx < numASD; idx ++) {
     std::string uri = config.ipAddressVec[idx] + ":" + std::to_string(config.portVec[idx]);
@@ -131,48 +314,25 @@ int main(int argc, char* argv[])
   }
 
   ASDQueue* asdQueue = asdQueueVec[0].get();
-  {
-    // sending open message will cause rora gateway to open
-    // the EdgeQueue for sending responses
-    auto ret = asdQueue->write(createOpenRequest());
-    assert(ret == 0);
+  // sending open message will cause rora gateway to open
+  // the EdgeQueue for sending responses
+  ret = asdQueue->write(createOpenRequest());
+  assert(ret == 0);
+
+  RunContext r;
+  auto fut = std::async(std::launch::async, std::bind(&RunContext::doRandomRead, &r, asdQueue));
+
+  if (config.runTimeSec) {
+    sleep(config.runTimeSec);
+    r.mustExit = true;
   }
 
-  for (size_t idx = 0; idx < config.maxIO/config.maxOutstandingIO; idx ++) {
-    // send read msg
-    for (size_t batchIdx = 0; batchIdx < config.maxOutstandingIO; batchIdx ++) {
-      off_t offset = 0;
-      auto ret = asdQueue->write(createReadRequest(edgeQueue.get(), "abcd", 
-        batchIdx * config.blockSize, 
-        config.blockSize));
-      assert(ret == 0);
-    }
-  
-    for (size_t batchIdx = 0; batchIdx < config.maxOutstandingIO; batchIdx ++) {
-      // get read response
-      GatewayMsg responseMsg;
-      auto ret = edgeQueue->read(responseMsg);
-      assert(ret == 0);
-  
-      // check retval, errval, filename, offset, size match
-      if (config.doMemCheck) {
-      }
-  
-      responseMsg.rawbuf_ = edgeQueue->segment_->get_address_from_handle(responseMsg.buf_);
+  fut.wait();
 
-      // free allocated shared segment
-      edgeQueue->free(responseMsg.rawbuf_);
-      responseMsg.rawbuf_ = nullptr;
-      responseMsg.buf_ = 0;
-    }
-  }
-
-  {
-    // sending close message will cause rora gateway to close
-    // the EdgeQueue for sending responses
-    auto ret = asdQueue->write(createCloseRequest());
-    assert(ret == 0);
-  }
+  // sending close message will cause rora gateway to close
+  // the EdgeQueue for sending responses
+  ret = asdQueue->write(createCloseRequest());
+  assert(ret == 0);
 
   asdQueueVec.clear();
   edgeQueue.reset();
