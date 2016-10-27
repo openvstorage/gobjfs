@@ -52,7 +52,7 @@ struct Config {
 
     if (runTimeSec && maxIO) {
       LOG(INFO) << "run_time_sec and per_thread_io both defined.  Benchmark will be run based on run_time_sec";
-      maxIO = 0;
+      //maxIO = 0; TODO later
     }
 
     if (maxIO % maxOutstandingIO != 0) {
@@ -105,6 +105,8 @@ static Config config;
 
 int main(int argc, char* argv[])
 {
+  google::InitGoogleLogging(argv[0]);
+
   int pid = getpid();
 
   std::string configFileName = "./edge_process.conf";
@@ -117,7 +119,7 @@ int main(int argc, char* argv[])
   std::vector<ASDQueueUPtr> asdQueueVec;
 
   // create new for this process
-  EdgeQueueUPtr edgeQueue = gobjfs::make_unique<EdgeQueue>(pid, config.maxOutstandingIO, 
+  EdgeQueueUPtr edgeQueue = gobjfs::make_unique<EdgeQueue>(pid, 2 * config.maxOutstandingIO, 
       GatewayMsg::MaxMsgSize, config.blockSize);
 
   // open existing
@@ -136,7 +138,7 @@ int main(int argc, char* argv[])
     assert(ret == 0);
   }
 
-  for (size_t idx = 0; idx < config.maxIO; idx ++) {
+  for (size_t idx = 0; idx < config.maxIO/config.maxOutstandingIO; idx ++) {
     // send read msg
     for (size_t batchIdx = 0; batchIdx < config.maxOutstandingIO; batchIdx ++) {
       off_t offset = 0;
