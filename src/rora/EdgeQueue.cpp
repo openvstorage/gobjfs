@@ -67,7 +67,7 @@ EdgeQueue::EdgeQueue(int pid,
 /**
  * this is an open
  */
-EdgeQueue::EdgeQueue(int pid) {
+EdgeQueue::EdgeQueue(int pid) : pid_(pid) {
 
   created_ =  false;
 
@@ -221,8 +221,6 @@ size_t EdgeQueue::getFreeMem() const {
   }
   return segment_->get_free_memory();
 }
-
-//size_t EdgeQueue::
 
 }
 }

@@ -8,8 +8,8 @@ const size_t GatewayMsg::MaxMsgSize = 1024;
  
 GatewayMsg::~GatewayMsg() {
   // check segment was deallocated in case of READ
-  assert(rawbuf_ == nullptr);
-  assert(buf_ == 0);
+  //assert(rawbuf_ == nullptr);
+  //assert(buf_ == 0);
 }
 
 GatewayMsg createOpenRequest() {

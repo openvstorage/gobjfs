@@ -180,6 +180,7 @@ int RoraGateway::asdThreadFunc(ASDInfo* asdInfo) {
         {
           LOG(INFO) << "got open from edge process=" << anyReq.edgePid_;
           auto newEdge = std::make_shared<EdgeQueue>(anyReq.edgePid_);
+          assert(newEdge->pid_ == anyReq.edgePid_);
           edges_.insert(newEdge);
           break;
         }
@@ -289,6 +290,13 @@ int RoraGateway::run() {
 
   edges_.thread_ = std::thread(std::bind(&RoraGateway::responseThreadFunc, this));
 
+  edges_.thread_.join();
+
+  // TODO wont exit right now because its stuck in message queue read
+  for (auto& asdPtr : asdList_) {
+    asdPtr->thread_.join();
+  }
+
   return ret;
 }
 
@@ -298,13 +306,8 @@ int RoraGateway::shutdown() {
   edges_.stopping_ = true;
   edges_.epoller_.shutdown();
 
-  edges_.thread_.join();
-
   for (auto& asdPtr : asdList_) {
     asdPtr->stopping_ = true;
-  }
-  for (auto& asdPtr : asdList_) {
-    asdPtr->thread_.join();
   }
 
   return ret;
