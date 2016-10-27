@@ -20,7 +20,6 @@ struct Config {
   std::vector<std::string> ipAddressVec_;
   std::vector<int> portVec_;
 
-  // TODO put in config
   size_t maxQueueLen_ {256};
 
   int readConfig(const std::string& configFileName) {
@@ -30,6 +29,7 @@ struct Config {
         ("ipaddress", bpo::value<std::vector<std::string>>(&ipAddressVec_)->required(), "ASD ip address")
         ("port", bpo::value<std::vector<int>>(&portVec_)->required(), "ASD port")
         ("transport", bpo::value<std::vector<std::string>>(&transportVec_)->required(), "ASD transport : tcp or rdma")
+        ("max_asd_queue", bpo::value<size_t>(&maxQueueLen_)->required(), "length of shared memory queue used to forward requests to ASD")
         ;
 
     std::ifstream configFile(configFileName);
@@ -64,6 +64,8 @@ struct Config {
           s << val << ",";
         }
         s << std::endl;
+      } else if (auto v = boost::any_cast<size_t>(&value)) {
+        s << *v << std::endl;
       } else {
         s << "cannot interpret value " << std::endl;
       }
