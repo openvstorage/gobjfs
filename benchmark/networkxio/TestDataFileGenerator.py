@@ -29,7 +29,7 @@ def main(argv):
   numblocks = int(sys.argv[2]) 
 
   for file in xrange(0, numfiles):
-    filename = str(file) + ".txt"
+    filename = "bench" + str(file) + ".data"
     with open(filename, "wb") as out:
       for off in xrange(0, numblocks):
         out.seek(off * 4096)

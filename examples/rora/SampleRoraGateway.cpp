@@ -4,7 +4,7 @@
 
 #include <gobjfs_client.h>
 
-#include <glog/logging.h>
+#include <gobjfs_log.h>
 #include <unistd.h>
 #include <thread>
 #include <future>

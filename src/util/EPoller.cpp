@@ -280,8 +280,8 @@ int EPoller::dropEvent(uint64_t userData, int eventFD) {
   bool found = false;
   {
     std::unique_lock<std::mutex> l(eventListMutex_);
-    for (auto iter = eventList_.cbegin(); 
-        iter != eventList_.cend();
+    for (auto iter = eventList_.begin(); 
+        iter != eventList_.end();
         iter ++) {
 
       EPollCtx* c = iter->get();

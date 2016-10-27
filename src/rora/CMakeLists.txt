@@ -10,7 +10,7 @@ set(SOURCES
 set(LIBRARY_LIST
   gobjfs_client_shared
   boost_system boost_program_options
-  glog
+  boost_log
 	pthread rt z)
 
 # create shared and static library from same set of sources
