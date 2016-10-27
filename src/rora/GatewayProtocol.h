@@ -35,6 +35,7 @@ struct GatewayMsg {
   // this field doesnt have any inherent functional purpose
   int32_t fileNumber_{-1};
 
+  // file, size, offset for the read request
   std::string filename_;
   size_t size_{0};
   off_t offset_{0};
@@ -45,7 +46,11 @@ struct GatewayMsg {
   // rawbuf deliberately not included in msgpack
   void* rawbuf_{nullptr}; 
 
+  // if read succeeded, this is size of block read 
+  // if read failed, it is -1
   ssize_t retval_{-1};
+
+  // this is errno seeen on the ASD server
   int errval_{-1};
 
   public:
