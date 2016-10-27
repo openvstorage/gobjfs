@@ -3,7 +3,7 @@
 #include <rora/GatewayProtocol.h>
 
 #include <boost/program_options.hpp>
-#include <glog/logging.h>
+#include <gobjfs_log.h>
 #include <util/lang_utils.h>
 #include <util/os_utils.h>
 
@@ -190,7 +190,7 @@ int RoraGateway::asdThreadFunc(ASDInfo* asdInfo) {
           auto edgePtr = edges_.find(pid);
           
           if (edgePtr) {
-            LOG(INFO) << "got read from pid=" << pid << " for file=" << anyReq.filename_;
+            LOG(DEBUG) << "got read from pid=" << pid << " for file=" << anyReq.filename_;
 
             giocb* iocb = new giocb; // freed on io completion
             edgePtr->giocb_from_GatewayMsg(*iocb, anyReq);
@@ -249,8 +249,10 @@ int RoraGateway::handleReadCompletion(int fd, uintptr_t ptr) {
         GatewayMsg respMsg;
         edgeQueue->GatewayMsg_from_giocb(respMsg, *iocb, 
             aio_return(iocb), aio_error(iocb));
-        LOG(INFO) << "send response to pid=" << pid 
-          << " for filename=" << iocb->filename;
+        LOG(DEBUG) << "send response to pid=" << pid 
+          << ",ret=" << aio_return(iocb)
+          << ",err=" << aio_error(iocb)
+          << ",filename=" << iocb->filename;
         auto ret = edgeQueue->write(respMsg);
         assert(ret == 0);
       } else {

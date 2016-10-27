@@ -1,7 +1,7 @@
 #include "ASDQueue.h"
 #include <rora/GatewayProtocol.h>
 #include <string>
-#include <glog/logging.h>
+#include <gobjfs_log.h>
 #include <type_traits>
 
 namespace bip = boost::interprocess;
