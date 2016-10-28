@@ -629,6 +629,7 @@ int NetworkXioClient::send_read_request(const std::string &filename,
 
   // TODO Check on server if data in IOV_PTR or not
   vmsg_sglist_set_nents(&msgPtr->xreq.in, 1);
+  msgPtr->xreq.in.sgl_type = XIO_SGL_TYPE_IOV;
   msgPtr->xreq.in.data_iov.sglist[0].iov_base = buf;
   msgPtr->xreq.in.data_iov.sglist[0].iov_len = size_in_bytes;
 

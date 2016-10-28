@@ -164,8 +164,7 @@ int RoraGateway::init(const std::string& configFileName) {
   return ret;
 }
 
-// change hardcode to asdInfo->ctx_->net_client->maxBatchSize
-static constexpr size_t TODO_HARDCODE = 4;
+static const size_t TODO_HARDCODE = 10;
 
 int RoraGateway::asdThreadFunc(ASDInfo* asdInfo) {
 
@@ -177,6 +176,8 @@ int RoraGateway::asdThreadFunc(ASDInfo* asdInfo) {
 
   std::vector<giocb*> pending_giocb_vec;
 
+  int idleLoop = 0;
+
   while (1) 
   {
     int ret = 0;
@@ -184,40 +185,11 @@ int RoraGateway::asdThreadFunc(ASDInfo* asdInfo) {
     if (asdInfo->stopping_ || pending_giocb_vec.size()) {
       // see if there are more read requests we can batch
       ret = asdInfo->queue_->try_read(anyReq);
-
-      // if batch size reached OR 
-      // no more coming and got some requests OR
-      // submit whatever is pending_giocb_vec
-      if ((pending_giocb_vec.size() == TODO_HARDCODE) || 
-          (ret != 0 && pending_giocb_vec.size())) {
-
-          asdInfo->stats_.submitBatchSize_ = pending_giocb_vec.size();
-          auto aio_ret = aio_readv(asdInfo->ctx_, pending_giocb_vec);
-          if (aio_ret != 0) {
-            // got an error, send back error
-            for (auto iocb : pending_giocb_vec) {
-              auto edgePtr = edges_.find(iocb->user_ctx);
-  
-              if (edgePtr) {
-                GatewayMsg respMsg;
-                edgePtr->GatewayMsg_from_giocb(respMsg, *iocb, 
-                  -1, EIO);
-                auto ret = edgePtr->write(respMsg);
-                assert(ret == 0);
-              } else {
-                LOG(ERROR) << "could not find edgeQueue for pid=" << iocb->user_ctx;
-              }
-              delete iocb;
-            }
-          } else  {
-            aio_wait_all(asdInfo->ctx_);
-          }
-          pending_giocb_vec.clear();
+      if (ret != 0) {
+        idleLoop ++;
+      } else {
+        idleLoop = 0;
       }
-      if (pending_giocb_vec.empty() && asdInfo->stopping_) {
-        break;
-      }
-
     } else {
       // if nothing in pending_giocb_vec queue, do longer wait.
       // NB -- cant do blocking wait here otherwise process termination would 
@@ -231,10 +203,14 @@ int RoraGateway::asdThreadFunc(ASDInfo* asdInfo) {
         if (timeout_ms < 1000) {
           timeout_ms = timeout_ms << 1;
         }
+        idleLoop = 0;
+        // assert cant be sleeping when there are pending requests
+        assert(pending_giocb_vec.empty());
         continue;
       } else {
-        // got a writer, reset timeout interval
+        // got a request, reset timeout interval
         timeout_ms = 1;
+        idleLoop = 0;
       }
     } 
 
@@ -273,6 +249,38 @@ int RoraGateway::asdThreadFunc(ASDInfo* asdInfo) {
       default:
         break;
     }
+      // if batch size reached OR 
+      // no more coming and got some requests OR
+      // submit whatever is pending_giocb_vec
+      if ((pending_giocb_vec.size() > TODO_HARDCODE) || 
+          (idleLoop && pending_giocb_vec.size())) {
+
+          asdInfo->stats_.submitBatchSize_ = pending_giocb_vec.size();
+          auto aio_ret = aio_readv(asdInfo->ctx_, pending_giocb_vec);
+          if (aio_ret != 0) {
+            // got an error, send back error
+            for (auto iocb : pending_giocb_vec) {
+              auto edgePtr = edges_.find(iocb->user_ctx);
+  
+              if (edgePtr) {
+                GatewayMsg respMsg;
+                edgePtr->GatewayMsg_from_giocb(respMsg, *iocb, 
+                  -1, EIO);
+                auto ret = edgePtr->write(respMsg);
+                assert(ret == 0);
+              } else {
+                LOG(ERROR) << "could not find edgeQueue for pid=" << iocb->user_ctx;
+              }
+              delete iocb;
+            }
+          } else  {
+            aio_wait_all(asdInfo->ctx_);
+          }
+          pending_giocb_vec.clear();
+      }
+      if (pending_giocb_vec.empty() && asdInfo->stopping_) {
+        break;
+      }
   }
 
   assert(pending_giocb_vec.empty());
