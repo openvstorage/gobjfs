@@ -34,6 +34,10 @@ ASDQueue::ASDQueue(const std::string& uri,
       queueName_.c_str(),
       maxQueueLen,
       maxMsgSize);
+
+    LOG(INFO) << "created asd queue=" << queueName_ 
+      << ",maxQueueLen=" << maxQueueLen
+      << ",maxMsgSize=" << maxMsgSize_;
   
   } catch (const std::exception& e) {
 
@@ -57,6 +61,8 @@ ASDQueue::ASDQueue(const std::string &uri) {
   try {
     mq_ = gobjfs::make_unique<bip::message_queue>(bip::open_only, queueName_.c_str());
     maxMsgSize_ = getMaxMsgSize();
+    LOG(INFO) << "opened asd queue=" << queueName_ 
+      << " with maxMsgSize=" << maxMsgSize_;
   } catch (const std::exception& e) {
     mq_.reset();
     throw std::runtime_error(
@@ -112,6 +118,46 @@ int ASDQueue::read(GatewayMsg& gmsg) {
   } catch (const std::exception& e) {
     return -1;
   }
+}
+
+int ASDQueue::try_read(GatewayMsg& gmsg) {
+  uint32_t priority;
+  size_t recvdSize;
+  try {
+    char buf[maxMsgSize_];
+    bool ret = mq_->try_receive(buf, maxMsgSize_, recvdSize, priority);
+    if (ret == true) {
+      gmsg.unpack(buf, recvdSize);
+      return 0;
+    } else {
+      return -EAGAIN;
+    }
+  } catch (const std::exception& e) {
+    return -1;
+  }
+}
+
+int ASDQueue::timed_read(GatewayMsg& gmsg, int millisec) {
+  uint32_t priority;
+  size_t recvdSize;
+  try {
+    char buf[maxMsgSize_];
+    boost::posix_time::ptime now(boost::posix_time::second_clock::universal_time()); 
+    bool ret = mq_->timed_receive(buf, maxMsgSize_, recvdSize, priority,
+        now + boost::posix_time::milliseconds(millisec));
+    if (ret == true) {
+      gmsg.unpack(buf, recvdSize);
+      return 0;
+    } else {
+      return -EAGAIN;
+    }
+  } catch (const std::exception& e) {
+    return -1;
+  }
+}
+
+const std::string& ASDQueue::getName() const {
+  return queueName_;
 }
  
 size_t ASDQueue::getCurrentQueueLen() const {

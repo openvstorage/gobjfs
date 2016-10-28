@@ -45,6 +45,19 @@ class ASDQueue {
   int write(const GatewayMsg& gmsg);
 
   int read(GatewayMsg& gmsg);
+
+  /**
+   * @return -EAGAIN if got nothing 
+   */
+  int try_read(GatewayMsg& gmsg);
+
+  /**
+   * @param millisec wait before returning
+   * @return -EAGAIN if got nothing 
+   */
+  int timed_read(GatewayMsg& gmsg, int millisec);
+
+  const std::string& getName() const;
    
   size_t getCurrentQueueLen() const;
 
