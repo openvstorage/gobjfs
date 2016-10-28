@@ -175,50 +175,59 @@ int RoraGateway::asdThreadFunc(ASDInfo* asdInfo) {
 
   int timeout_ms = 1;
 
-  std::vector<giocb*> pending_giocb;
+  std::vector<giocb*> pending_giocb_vec;
 
-  while (!asdInfo->stopping_) 
+  while (1) 
   {
-
     int ret = 0;
     GatewayMsg anyReq;
-    if (pending_giocb.size()) {
+    if (asdInfo->stopping_ || pending_giocb_vec.size()) {
       // see if there are more read requests we can batch
       ret = asdInfo->queue_->try_read(anyReq);
 
-      // if batch size reached or no more coming, 
-      // submit whatever is pending
-      if ((pending_giocb.size() == TODO_HARDCODE) || (ret != 0)) {
+      // if batch size reached OR 
+      // no more coming and got some requests OR
+      // submit whatever is pending_giocb_vec
+      if ((pending_giocb_vec.size() == TODO_HARDCODE) || 
+          (ret != 0 && pending_giocb_vec.size())) {
 
-        //stats_.batchSize_ = pending_giocb.size();
-
-        auto aio_ret = aio_readv(asdInfo->ctx_, pending_giocb);
-        if (aio_ret != 0) {
-          // got an error, send back error
-          for (auto iocb : pending_giocb) {
-            auto edgePtr = edges_.find(iocb->user_ctx);
-
-            if (edgePtr) {
-              GatewayMsg respMsg;
-              edgePtr->GatewayMsg_from_giocb(respMsg, *iocb, 
-                -1, EIO);
-              auto ret = edgePtr->write(respMsg);
-              assert(ret == 0);
-            } else {
-              LOG(ERROR) << "could not find edgeQueue for pid=" << iocb->user_ctx;
+          asdInfo->stats_.submitBatchSize_ = pending_giocb_vec.size();
+          auto aio_ret = aio_readv(asdInfo->ctx_, pending_giocb_vec);
+          if (aio_ret != 0) {
+            // got an error, send back error
+            for (auto iocb : pending_giocb_vec) {
+              auto edgePtr = edges_.find(iocb->user_ctx);
+  
+              if (edgePtr) {
+                GatewayMsg respMsg;
+                edgePtr->GatewayMsg_from_giocb(respMsg, *iocb, 
+                  -1, EIO);
+                auto ret = edgePtr->write(respMsg);
+                assert(ret == 0);
+              } else {
+                LOG(ERROR) << "could not find edgeQueue for pid=" << iocb->user_ctx;
+              }
+              delete iocb;
             }
-            delete iocb;
+          } else  {
+            aio_wait_all(asdInfo->ctx_);
           }
-        } else  {
-          aio_wait_all(asdInfo->ctx_);
-        }
-        pending_giocb.clear();
+          pending_giocb_vec.clear();
       }
+      if (pending_giocb_vec.empty() && asdInfo->stopping_) {
+        break;
+      }
+
     } else {
-      // if nothing in pending queue, do blocking wait
+      // if nothing in pending_giocb_vec queue, do longer wait.
+      // NB -- cant do blocking wait here otherwise process termination would 
+      // require having to write a termination message to the queue 
+      // from inside this process (from the thread calling shutdown)
       ret = asdInfo->queue_->timed_read(anyReq, timeout_ms);
       if (ret != 0) {
-        // keep doubling timeout if no writers to save CPU
+        // if no writers, keep doubling timeout to save CPU
+        // bound the timeout to max one second so process terminates
+        // quickly on being notified
         if (timeout_ms < 1000) {
           timeout_ms = timeout_ms << 1;
         }
@@ -247,8 +256,8 @@ int RoraGateway::asdThreadFunc(ASDInfo* asdInfo) {
           if (edgePtr) {
             LOG(DEBUG) << "got read from pid=" << pid << " for file=" << anyReq.filename_;
             giocb* iocb = edgePtr->giocb_from_GatewayMsg(anyReq);
-            // put iocb into pending queue
-            pending_giocb.push_back(iocb);
+            // put iocb into pending_giocb_vec queue
+            pending_giocb_vec.push_back(iocb);
           } else {
             LOG(ERROR) << " could not find queue for pid=" << pid;
           }
@@ -266,10 +275,12 @@ int RoraGateway::asdThreadFunc(ASDInfo* asdInfo) {
     }
   }
 
-  // TODO assert pending_iocb.empty()
+  assert(pending_giocb_vec.empty());
   asdInfo->stopped_ = true;
   LOG(INFO) << "stopped asd thread=" << gettid() 
-    << ",uri=" << asdInfo->ipAddress_ << ":" << asdInfo->port_;
+    << ",uri=" << asdInfo->ipAddress_ << ":" << asdInfo->port_
+    << ",submitBatchSize=" << asdInfo->stats_.submitBatchSize_
+    << ",callbackBatchSize=" << asdInfo->stats_.callbackBatchSize_;
   return 0;
 }
 
@@ -284,6 +295,7 @@ int RoraGateway::handleReadCompletion(int fd, uintptr_t ptr) {
   int r = aio_getevents(asdPtr->ctx_, times, iocb_vec);
 
   if (r == 0) {
+    asdPtr->stats_.callbackBatchSize_ = iocb_vec.size();
     for (auto& iocb : iocb_vec) {
 
       int pid = (int) iocb->user_ctx;
@@ -339,7 +351,6 @@ int RoraGateway::run() {
 
   edges_.thread_.join();
 
-  // TODO wont exit right now because its stuck in message queue read
   for (auto& asdPtr : asdList_) {
     asdPtr->thread_.join();
   }

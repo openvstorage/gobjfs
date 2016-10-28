@@ -3,6 +3,7 @@
 #include <rora/EdgeQueue.h>
 #include <rora/ASDQueue.h>
 #include <util/EPoller.h>
+#include <util/Stats.h>
 #include <gobjfs_client.h>
 
 #include <string>
@@ -62,6 +63,14 @@ class RoraGateway {
     bool stopping_{false};
     bool stopped_{false};
 
+    // per asdqueue stats
+    struct Statistics {
+      // how many requests were submitted in aio_readv
+      gobjfs::stats::StatsCounter<uint64_t> submitBatchSize_;
+      // how many responses were received together in callback
+      gobjfs::stats::StatsCounter<uint64_t> callbackBatchSize_;
+    }stats_;
+
     public:
 
     ASDInfo(const std::string& transport, const std::string& ipAddress, int port,
@@ -69,10 +78,12 @@ class RoraGateway {
 
   };
 
+
   typedef std::unique_ptr<ASDInfo> ASDInfoUPtr;
 
   EdgeInfo edges_;
   std::list<ASDInfoUPtr> asdList_;
+
 
   int asdThreadFunc(ASDInfo* asdInfo);
 
