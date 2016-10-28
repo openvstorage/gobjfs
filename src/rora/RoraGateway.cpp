@@ -87,7 +87,7 @@ RoraGateway::ASDInfo::ASDInfo(const std::string &transport,
 
   const std::string asdQueueName = ipAddress + ":" + std::to_string(port);
 
-  queue_ = gobjfs::make_unique<ASDQueue>(asdQueueName, maxMsgSize, maxQueueLen);
+  queue_ = gobjfs::make_unique<ASDQueue>(asdQueueName, maxQueueLen, maxMsgSize);
 
   auto ctx_attr_ptr = ctx_attr_new();
   ctx_attr_set_transport(ctx_attr_ptr, transport, ipAddress, port);
@@ -164,17 +164,70 @@ int RoraGateway::init(const std::string& configFileName) {
   return ret;
 }
 
+// change hardcode to asdInfo->ctx_->net_client->maxBatchSize
+static constexpr size_t TODO_HARDCODE = 4;
+
 int RoraGateway::asdThreadFunc(ASDInfo* asdInfo) {
 
   asdInfo->started_ = true;
 
   LOG(INFO) << "started asd thread=" << gettid() << " for uri=" << asdInfo->ipAddress_ << ":" << asdInfo->port_;
 
+  int timeout_ms = 1;
+
+  std::vector<giocb*> pending_giocb;
+
   while (!asdInfo->stopping_) 
   {
+
+    int ret = 0;
     GatewayMsg anyReq;
-    auto ret = asdInfo->queue_->read(anyReq);
-    assert(ret == 0);
+    if (pending_giocb.size()) {
+      // see if there are more read requests we can batch
+      ret = asdInfo->queue_->try_read(anyReq);
+
+      // if batch size reached or no more coming, 
+      // submit whatever is pending
+      if ((pending_giocb.size() == TODO_HARDCODE) || (ret != 0)) {
+
+        //stats_.batchSize_ = pending_giocb.size();
+
+        auto aio_ret = aio_readv(asdInfo->ctx_, pending_giocb);
+        if (aio_ret != 0) {
+          // got an error, send back error
+          for (auto iocb : pending_giocb) {
+            auto edgePtr = edges_.find(iocb->user_ctx);
+
+            if (edgePtr) {
+              GatewayMsg respMsg;
+              edgePtr->GatewayMsg_from_giocb(respMsg, *iocb, 
+                -1, EIO);
+              auto ret = edgePtr->write(respMsg);
+              assert(ret == 0);
+            } else {
+              LOG(ERROR) << "could not find edgeQueue for pid=" << iocb->user_ctx;
+            }
+            delete iocb;
+          }
+        } else  {
+          aio_wait_all(asdInfo->ctx_);
+        }
+        pending_giocb.clear();
+      }
+    } else {
+      // if nothing in pending queue, do blocking wait
+      ret = asdInfo->queue_->timed_read(anyReq, timeout_ms);
+      if (ret != 0) {
+        // keep doubling timeout if no writers to save CPU
+        if (timeout_ms < 1000) {
+          timeout_ms = timeout_ms << 1;
+        }
+        continue;
+      } else {
+        // got a writer, reset timeout interval
+        timeout_ms = 1;
+      }
+    } 
 
     switch (anyReq.opcode_) {
 
@@ -193,19 +246,9 @@ int RoraGateway::asdThreadFunc(ASDInfo* asdInfo) {
           
           if (edgePtr) {
             LOG(DEBUG) << "got read from pid=" << pid << " for file=" << anyReq.filename_;
-
             giocb* iocb = edgePtr->giocb_from_GatewayMsg(anyReq);
-
-            auto aio_ret = aio_read(asdInfo->ctx_, iocb);
-            if (aio_ret != 0) {
-              anyReq.retval_ = -1;
-              anyReq.errval_ = EIO;
-              auto ret = edgePtr->write(anyReq);
-              assert(ret == 0);
-              delete iocb;
-            } else  {
-              aio_wait_all(asdInfo->ctx_);
-            }
+            // put iocb into pending queue
+            pending_giocb.push_back(iocb);
           } else {
             LOG(ERROR) << " could not find queue for pid=" << pid;
           }
@@ -223,8 +266,10 @@ int RoraGateway::asdThreadFunc(ASDInfo* asdInfo) {
     }
   }
 
+  // TODO assert pending_iocb.empty()
   asdInfo->stopped_ = true;
-  LOG(INFO) << "stopped asd thread=" << gettid() << " for uri=" << asdInfo->ipAddress_ << ":" << asdInfo->port_;
+  LOG(INFO) << "stopped asd thread=" << gettid() 
+    << ",uri=" << asdInfo->ipAddress_ << ":" << asdInfo->port_;
   return 0;
 }
 
@@ -243,18 +288,17 @@ int RoraGateway::handleReadCompletion(int fd, uintptr_t ptr) {
 
       int pid = (int) iocb->user_ctx;
 
-      auto edgeIter = edges_.catalog_.find(pid);
-      if (edgeIter != edges_.catalog_.end()) {
-        auto edgeQueue = edgeIter->second;
+      auto edgePtr = edges_.find(pid);
+      if (edgePtr) {
 
         GatewayMsg respMsg;
-        edgeQueue->GatewayMsg_from_giocb(respMsg, *iocb, 
+        edgePtr->GatewayMsg_from_giocb(respMsg, *iocb, 
             aio_return(iocb), aio_error(iocb));
         LOG(DEBUG) << "send response to pid=" << pid 
           << ",ret=" << aio_return(iocb)
           << ",err=" << aio_error(iocb)
           << ",filename=" << iocb->filename;
-        auto ret = edgeQueue->write(respMsg);
+        auto ret = edgePtr->write(respMsg);
         assert(ret == 0);
       } else {
         LOG(ERROR) << "not found edge queue for pid=" << pid;
