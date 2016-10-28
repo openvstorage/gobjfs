@@ -52,6 +52,11 @@ EdgeQueue::EdgeQueue(int pid,
       heapName_.c_str(),
       maxQueueLen * maxAllocSize); 
     // TODO : should be total number of jobs in system
+    LOG(INFO) << "created edge queue=" << queueName_ 
+      << ",shmem=" << heapName_ 
+      << ",maxQueueLen=" << maxQueueLen
+      << ",maxAllocSize=" << maxAllocSize
+      << ",maxMsgSize=" << maxMsgSize_;
   } catch (const std::exception& e) {
 
     mq_.reset();
@@ -78,6 +83,9 @@ EdgeQueue::EdgeQueue(int pid) : pid_(pid) {
     mq_ = gobjfs::make_unique<bip::message_queue>(bip::open_only, queueName_.c_str());
     segment_ = gobjfs::make_unique<bip::managed_shared_memory>(bip::open_only, heapName_.c_str());
     maxMsgSize_ = getMaxMsgSize();
+    LOG(INFO) << "opened edge queue=" << queueName_ 
+      << ",shmem=" << heapName_ 
+      << ",maxMsgSize=" << maxMsgSize_;
   } catch (const std::exception& e) {
 
     mq_.reset();
