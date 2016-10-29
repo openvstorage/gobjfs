@@ -152,6 +152,19 @@ static void destroy_ctx_shutdown(xio_context* ctx) {
   xio_context_destroy(ctx);
 }
 
+template <class T>
+static int static_on_session_established(xio_session *session,
+                                   xio_new_session_rsp *event_data,
+                                   void *cb_user_context) {
+
+  T *obj = reinterpret_cast<T *>(cb_user_context);
+  if (obj == NULL) {
+    return -1;
+  }
+
+  return obj->on_session_established(session, event_data);
+}
+
 /**
  * Portal connections to same server share the same xio_session
  * For such connections, note this difference to avoid grief
@@ -235,7 +248,7 @@ NetworkXioClient::NetworkXioClient(const std::string &uri, const uint64_t qd)
   XXEnter();
 
   ses_ops.on_session_event = static_on_session_event<NetworkXioClient>;
-  ses_ops.on_session_established = NULL;
+  ses_ops.on_session_established = static_on_session_established<NetworkXioClient>;
   ses_ops.on_msg = static_on_response<NetworkXioClient>;
   ses_ops.on_msg_error = static_on_msg_error<NetworkXioClient>;
   ses_ops.on_cancel_request = NULL;
@@ -446,6 +459,13 @@ int NetworkXioClient::on_msg_error(xio_session *session __attribute__((unused)),
   delete msgPtr;
   xio_context_stop_loop(ctx.get());
   return ret;
+}
+
+int NetworkXioClient::on_session_established(xio_session *session,
+                       xio_new_session_rsp *event_data) {
+
+  GLOG_INFO("thread=" << gettid() << " got session=" << (void*)session << " established");
+  return 0;
 }
 
 int NetworkXioClient::on_session_event(xio_session *session,

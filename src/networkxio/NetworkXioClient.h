@@ -94,6 +94,9 @@ public:
   int on_session_event(xio_session *session,
                        xio_session_event_data *event_data);
 
+  int on_session_established(xio_session *session,
+                       xio_new_session_rsp *event_data);
+
   int on_response(xio_session *session, xio_msg *reply, int last_in_rxq);
 
   int on_msg_error(xio_session *session, xio_status error,
