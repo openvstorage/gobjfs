@@ -251,9 +251,13 @@ int RoraGateway::asdThreadFunc(ASDInfo* asdInfo, size_t connIdx) {
       case Opcode::OPEN:
         {
           LOG(INFO) << "got open from edge process=" << anyReq.edgePid_;
-          auto newEdge = std::make_shared<EdgeQueue>(anyReq.edgePid_);
-          assert(newEdge->pid_ == anyReq.edgePid_);
-          edges_.insert(newEdge);
+          auto edgePtr = std::make_shared<EdgeQueue>(anyReq.edgePid_);
+          assert(edgePtr->pid_ == anyReq.edgePid_);
+          edges_.insert(edgePtr);
+
+          GatewayMsg respMsg;
+          respMsg.opcode_ = Opcode::OPEN_RESP;
+          edgePtr->write(respMsg);
           break;
         }
       case Opcode::READ:
@@ -276,8 +280,19 @@ int RoraGateway::asdThreadFunc(ASDInfo* asdInfo, size_t connIdx) {
           LOG(INFO) << "got close from edge process=" << anyReq.edgePid_;
           // TODO add ref counting to ensure edge queue doesnt go away
           // while there are outstanding requests
-          int ret = edges_.drop(anyReq.edgePid_);
-          (void) ret;
+          auto edgePtr = edges_.find(anyReq.edgePid_);
+
+          if (edgePtr) {
+            GatewayMsg respMsg;
+            respMsg.opcode_ = Opcode::CLOSE_RESP;
+            edgePtr->write(respMsg);
+            int ret = edges_.drop(anyReq.edgePid_);
+            (void) ret;
+          } else {
+            LOG(ERROR) << " could not find queue for pid=" << anyReq.edgePid_;
+          }
+
+
           break;
         }
       default:
@@ -351,6 +366,7 @@ int RoraGateway::handleReadCompletion(int fd, uintptr_t ptr) {
         GatewayMsg respMsg;
         edgePtr->GatewayMsg_from_giocb(respMsg, *iocb, 
             aio_return(iocb), aio_error(iocb));
+        respMsg.opcode_ = Opcode::READ_RESP;
         LOG(DEBUG) << "send response to pid=" << pid 
           << ",ret=" << aio_return(iocb)
           << ",err=" << aio_error(iocb)
@@ -404,6 +420,7 @@ int RoraGateway::run() {
       threadInfo->thread_.join();
     }
   }
+  asdVec_.clear();
 
   return ret;
 }
@@ -419,7 +436,6 @@ int RoraGateway::shutdown() {
       threadInfo->stopping_ = true;
     }
   }
-  asdVec_.clear();
 
   return ret;
 }

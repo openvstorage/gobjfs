@@ -243,6 +243,7 @@ void RunContext::doRandomRead(ASDQueue* asdQueue) {
       GatewayMsg responseMsg;
       const auto ret = edgeQueue->read(responseMsg);
       assert(ret == 0);
+      assert(responseMsg.opcode_ == Opcode::READ_RESP);
 
       responseMsg.rawbuf_ = edgeQueue->segment_->get_address_from_handle(responseMsg.buf_);
 
@@ -319,6 +320,11 @@ int main(int argc, char* argv[])
   ret = asdQueue->write(createOpenRequest());
   assert(ret == 0);
 
+  GatewayMsg responseMsg;
+  ret = edgeQueue->read(responseMsg);
+  assert(ret == 0);
+  assert(responseMsg.opcode_ == Opcode::OPEN_RESP);
+
   RunContext r;
   auto fut = std::async(std::launch::async, std::bind(&RunContext::doRandomRead, &r, asdQueue));
 
@@ -337,6 +343,10 @@ int main(int argc, char* argv[])
   // the EdgeQueue for sending responses
   ret = asdQueue->write(createCloseRequest());
   assert(ret == 0);
+
+  ret = edgeQueue->read(responseMsg);
+  assert(ret == 0);
+  assert(responseMsg.opcode_ == Opcode::CLOSE_RESP);
 
   asdQueueVec.clear();
   edgeQueue.reset();

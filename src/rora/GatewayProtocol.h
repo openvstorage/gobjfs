@@ -14,9 +14,12 @@ namespace rora {
 
 enum Opcode {
   INVALID = 0,
-  OPEN,
+  OPEN = 1000,
   READ,
-  CLOSE
+  CLOSE,
+  OPEN_RESP = 2000,
+  READ_RESP,
+  CLOSE_RESP
 };
 
 class EdgeQueue;
