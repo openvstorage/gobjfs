@@ -256,6 +256,7 @@ static int _submit_aio_request(client_ctx_ptr ctx,
 
     if ((giocbp->aio_nbytes <= 0 || giocbp->aio_offset < 0)) {
       errno = EINVAL;
+      GLOG_ERROR("bad request");
       r = -1;
       break;
     }

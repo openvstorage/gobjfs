@@ -21,6 +21,8 @@ struct Config {
   std::vector<int> portVec_;
 
   size_t maxQueueLen_ {256};
+  // client threads to connect to multiple portals
+  size_t maxThreadsPerASD_{1}; 
 
   int readConfig(const std::string& configFileName) {
 
@@ -30,6 +32,7 @@ struct Config {
         ("port", bpo::value<std::vector<int>>(&portVec_)->required(), "ASD port")
         ("transport", bpo::value<std::vector<std::string>>(&transportVec_)->required(), "ASD transport : tcp or rdma")
         ("max_asd_queue", bpo::value<size_t>(&maxQueueLen_)->required(), "length of shared memory queue used to forward requests to ASD")
+        ("max_threads_per_asd", bpo::value<size_t>(&maxThreadsPerASD_)->required(), "max threads connecting to an ASD (exploit accelio portals)")
         ;
 
     std::ifstream configFile(configFileName);
@@ -83,7 +86,8 @@ RoraGateway::ASDInfo::ASDInfo(const std::string &transport,
     const std::string &ipAddress, 
     int port,
     size_t maxMsgSize,
-    size_t maxQueueLen) {
+    size_t maxQueueLen,
+    size_t maxThreadsPerASD) {
 
   const std::string asdQueueName = ipAddress + ":" + std::to_string(port);
 
@@ -92,11 +96,20 @@ RoraGateway::ASDInfo::ASDInfo(const std::string &transport,
   auto ctx_attr_ptr = ctx_attr_new();
   ctx_attr_set_transport(ctx_attr_ptr, transport, ipAddress, port);
 
-  ctx_ = ctx_new(ctx_attr_ptr);
-  assert(ctx_);
+  threadVec_.reserve(maxThreadsPerASD);
+  // Many threads can read from one shmem queue and 
+  // forward requests to the server independently
+  for (size_t idx = 0; idx < maxThreadsPerASD; idx ++) {
+    auto ctx = ctx_new(ctx_attr_ptr);
+    assert(ctx);
+    int err = ctx_init(ctx);
+    assert(err == 0);
 
-  int err = ctx_init(ctx_);
-  assert(err == 0);
+    auto threadInfo = std::make_shared<ThreadInfo>();
+    threadInfo->ctx_ = ctx;
+
+    threadVec_.push_back(threadInfo);
+  }
 }
 
 EdgeQueueSPtr RoraGateway::EdgeInfo::find(int pid) {
@@ -116,6 +129,11 @@ int RoraGateway::EdgeInfo::drop(int pid) {
     return -1;
   }
   return 0;
+}
+
+size_t RoraGateway::EdgeInfo::size() const {
+  std::unique_lock<std::mutex> l(mutex_);
+  return catalog_.size();
 }
 
 int RoraGateway::EdgeInfo::insert(EdgeQueueSPtr edgePtr) {
@@ -140,38 +158,52 @@ int RoraGateway::init(const std::string& configFileName) {
 
   size_t numASD = config.transportVec_.size();
 
+  asdVec_.reserve(numASD);
   for (size_t idx = 0; idx < numASD; idx ++) {
 
     auto& transport = config.transportVec_[idx];
     auto& port = config.portVec_[idx];
     auto& ipAddress = config.ipAddressVec_[idx];
 
-    auto asdp = gobjfs::make_unique<ASDInfo>(transport, ipAddress, port, GatewayMsg::MaxMsgSize, config.maxQueueLen_); 
+    auto asdp = gobjfs::make_unique<ASDInfo>(transport, ipAddress, port, 
+        GatewayMsg::MaxMsgSize, config.maxQueueLen_,
+        config.maxThreadsPerASD_); 
 
-    // for each ASD, add an event to monitor for read completions
-    edges_.epoller_.addEvent(reinterpret_cast<uintptr_t>(asdp.get()), 
-        aio_geteventfd(asdp->ctx_), 
+    // for each ASD connection, add an event to monitor for read completions
+    // TODO need to call dropEvent ?
+    for (size_t idx = 0; idx < asdp->threadVec_.size(); idx ++) {
+
+      auto callbackCtx = std::make_shared<ASDInfo::CallbackInfo>();
+      callbackCtx->asdPtr_ = asdp.get();
+      callbackCtx->connIdx_ = idx;
+
+      edges_.epoller_.addEvent(reinterpret_cast<uintptr_t>(callbackCtx.get()), 
+        aio_geteventfd(asdp->threadVec_[idx]->ctx_), 
         EPOLLIN, 
         std::bind(&RoraGateway::handleReadCompletion, this,
           std::placeholders::_1,
           std::placeholders::_2));
 
-    // use the asdp before std::move
-    asdList_.push_back(std::move(asdp));
-  }
+      asdp->callbackInfoList_.push_back(callbackCtx);
+    }
 
+    // access the asdp before std::move
+    asdVec_.push_back(std::move(asdp));
+  }
 
   return ret;
 }
 
-static const size_t TODO_HARDCODE = 10;
+int RoraGateway::asdThreadFunc(ASDInfo* asdInfo, size_t connIdx) {
 
-int RoraGateway::asdThreadFunc(ASDInfo* asdInfo) {
+  ThreadInfo* threadInfo = asdInfo->threadVec_[connIdx].get();
+  threadInfo->started_ = true;
 
-  asdInfo->started_ = true;
+  LOG(INFO) << "started asd thread=" << gettid() 
+    << ",using connection number=" << connIdx 
+    << ",uri=" << asdInfo->ipAddress_ << ":" << asdInfo->port_;
 
-  LOG(INFO) << "started asd thread=" << gettid() << " for uri=" << asdInfo->ipAddress_ << ":" << asdInfo->port_;
-
+  client_ctx_ptr ctx = threadInfo->ctx_;
   int timeout_ms = 1;
 
   std::vector<giocb*> pending_giocb_vec;
@@ -182,7 +214,7 @@ int RoraGateway::asdThreadFunc(ASDInfo* asdInfo) {
   {
     int ret = 0;
     GatewayMsg anyReq;
-    if (asdInfo->stopping_ || pending_giocb_vec.size()) {
+    if (threadInfo->stopping_ || pending_giocb_vec.size()) {
       // see if there are more read requests we can batch
       ret = asdInfo->queue_->try_read(anyReq);
       if (ret != 0) {
@@ -242,6 +274,8 @@ int RoraGateway::asdThreadFunc(ASDInfo* asdInfo) {
       case Opcode::CLOSE:
         {
           LOG(INFO) << "got close from edge process=" << anyReq.edgePid_;
+          // TODO add ref counting to ensure edge queue doesnt go away
+          // while there are outstanding requests
           int ret = edges_.drop(anyReq.edgePid_);
           (void) ret;
           break;
@@ -249,14 +283,14 @@ int RoraGateway::asdThreadFunc(ASDInfo* asdInfo) {
       default:
         break;
     }
-      // if batch size reached OR 
-      // no more coming and got some requests OR
-      // submit whatever is pending_giocb_vec
-      if ((pending_giocb_vec.size() > TODO_HARDCODE) || 
+      // submit whatever is pending_giocb_vec if
+      // (1) have as many requests as number of edges
+      // (2) idle && got some requests 
+      if ((pending_giocb_vec.size() > edges_.size()) || 
           (idleLoop && pending_giocb_vec.size())) {
 
           asdInfo->stats_.submitBatchSize_ = pending_giocb_vec.size();
-          auto aio_ret = aio_readv(asdInfo->ctx_, pending_giocb_vec);
+          auto aio_ret = aio_readv(ctx, pending_giocb_vec);
           if (aio_ret != 0) {
             // got an error, send back error
             for (auto iocb : pending_giocb_vec) {
@@ -274,18 +308,19 @@ int RoraGateway::asdThreadFunc(ASDInfo* asdInfo) {
               delete iocb;
             }
           } else  {
-            aio_wait_all(asdInfo->ctx_);
+            aio_wait_all(ctx);
           }
           pending_giocb_vec.clear();
       }
-      if (pending_giocb_vec.empty() && asdInfo->stopping_) {
+      if (pending_giocb_vec.empty() && threadInfo->stopping_) {
         break;
       }
   }
 
   assert(pending_giocb_vec.empty());
-  asdInfo->stopped_ = true;
+  threadInfo->stopped_ = true;
   LOG(INFO) << "stopped asd thread=" << gettid() 
+    << ",using connection number=" << connIdx 
     << ",uri=" << asdInfo->ipAddress_ << ":" << asdInfo->port_
     << ",submitBatchSize=" << asdInfo->stats_.submitBatchSize_
     << ",callbackBatchSize=" << asdInfo->stats_.callbackBatchSize_;
@@ -296,17 +331,19 @@ int RoraGateway::handleReadCompletion(int fd, uintptr_t ptr) {
 
   uint64_t doneCount =0; // move to ASDInfo
 
-  ASDInfo* asdPtr = reinterpret_cast<ASDInfo*>(ptr);
+  ASDInfo::CallbackInfo* callbackCtx = reinterpret_cast<ASDInfo::CallbackInfo*>(ptr);
+  ASDInfo* asdPtr = callbackCtx->asdPtr_;
+  client_ctx_ptr ctx = asdPtr->threadVec_[callbackCtx->connIdx_]->ctx_;
 
   std::vector<giocb*> iocb_vec;
   int times = 1; // ignored right now
-  int r = aio_getevents(asdPtr->ctx_, times, iocb_vec);
+  int r = aio_getevents(ctx, times, iocb_vec);
 
   if (r == 0) {
     asdPtr->stats_.callbackBatchSize_ = iocb_vec.size();
     for (auto& iocb : iocb_vec) {
 
-      int pid = (int) iocb->user_ctx;
+      const int pid = (int) iocb->user_ctx;
 
       auto edgePtr = edges_.find(pid);
       if (edgePtr) {
@@ -351,16 +388,21 @@ int RoraGateway::responseThreadFunc() {
 int RoraGateway::run() {
   int ret = 0;
 
-  for (auto& asdPtr : asdList_) {
-    asdPtr->thread_ = std::thread(std::bind(&RoraGateway::asdThreadFunc, this, asdPtr.get()));
+  for (auto& asdPtr : asdVec_) {
+    for (size_t connIdx = 0; connIdx < asdPtr->threadVec_.size(); connIdx ++) {
+      asdPtr->threadVec_[connIdx]->thread_ = std::thread(
+          std::bind(&RoraGateway::asdThreadFunc, this, asdPtr.get(), connIdx));
+    }
   }
 
   edges_.thread_ = std::thread(std::bind(&RoraGateway::responseThreadFunc, this));
 
   edges_.thread_.join();
 
-  for (auto& asdPtr : asdList_) {
-    asdPtr->thread_.join();
+  for (auto& asdPtr : asdVec_) {
+    for (auto& threadInfo : asdPtr->threadVec_) {
+      threadInfo->thread_.join();
+    }
   }
 
   return ret;
@@ -372,9 +414,12 @@ int RoraGateway::shutdown() {
   edges_.stopping_ = true;
   edges_.epoller_.shutdown();
 
-  for (auto& asdPtr : asdList_) {
-    asdPtr->stopping_ = true;
+  for (auto& asdPtr : asdVec_) {
+    for (auto& threadInfo : asdPtr->threadVec_) {
+      threadInfo->stopping_ = true;
+    }
   }
+  asdVec_.clear();
 
   return ret;
 }
