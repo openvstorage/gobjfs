@@ -128,7 +128,7 @@ client_ctx_ptr ctx_new(const client_ctx_attr_ptr attr) {
   return ctx;
 }
 
-int ctx_init(client_ctx_ptr ctx) {
+int ctx_init(client_ctx_ptr ctx, size_t xio_queue_depth) {
   int err = 0;
   XXEnter();
 
@@ -141,7 +141,7 @@ int ctx_init(client_ctx_ptr ctx) {
       ctx->transport == TransportType::TCP) {
     try {
       ctx->net_client_ =
-          std::make_shared<gobjfs::xio::NetworkXioClient>(ctx->uri, 256);
+          std::make_shared<gobjfs::xio::NetworkXioClient>(ctx->uri, xio_queue_depth);
     } catch (...) {
       XXExit();
       err = -EIO;

@@ -80,9 +80,10 @@ client_ctx_ptr ctx_new(const client_ctx_attr_ptr attr);
 /*
  * Initialize gobjfs xio context to talk to server
  * @param ctx: gobjfs xio context
+ * @param xio_queue_depth : depth of accelio connection
  * @return: zero on success, or error code on fail
  */
-int ctx_init(client_ctx_ptr ctx);
+int ctx_init(client_ctx_ptr ctx, size_t xio_queue_depth = 256);
 
 /**
  * Get stats for this connection

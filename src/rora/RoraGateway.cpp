@@ -102,7 +102,7 @@ RoraGateway::ASDInfo::ASDInfo(const std::string &transport,
   for (size_t idx = 0; idx < maxThreadsPerASD; idx ++) {
     auto ctx = ctx_new(ctx_attr_ptr);
     assert(ctx);
-    int err = ctx_init(ctx);
+    int err = ctx_init(ctx, maxQueueLen);
     assert(err == 0);
 
     auto threadInfo = std::make_shared<ThreadInfo>();
