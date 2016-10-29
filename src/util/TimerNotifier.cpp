@@ -67,12 +67,12 @@ int TimerNotifier::getFD() {
   return fd_;
 } 
 
-int32_t TimerNotifier::recv(uint64_t& count) {
+int32_t TimerNotifier::recv(int fd, uint64_t& count) {
   int ret = 0;
 
-  assert (fd_ != -1);
+  assert (fd != -1);
 
-  ssize_t readSize = read(fd_, &count, sizeof(count));
+  ssize_t readSize = read(fd, &count, sizeof(count));
 
   if (readSize != sizeof(count)) {
 
@@ -83,10 +83,14 @@ int32_t TimerNotifier::recv(uint64_t& count) {
     else
       ret = -EINVAL;
 
-    LOG(ERROR) << "failed to read fd=" << fd_ << " readSize=" << readSize
+    LOG(ERROR) << "failed to read fd=" << fd << " readSize=" << readSize
                << " expectedSize=" << sizeof(count) << " errno=" << ret;
   }
   return ret;
+}
+
+int32_t TimerNotifier::recv(uint64_t& count) {
+  return recv(fd_, count);
 }
 
 int32_t TimerNotifier::destroy() {

@@ -38,6 +38,8 @@ public:
 
   int32_t recv(uint64_t& count);
 
+  static int32_t recv(int fd, uint64_t& count);
+
   int32_t destroy();
 
   ~TimerNotifier();
