@@ -85,7 +85,7 @@ static int static_on_session_event(xio_session *session,
   int localPort = -1;
   getAddressAndPort(event_data->conn, localAddr, localPort, peerAddr, peerPort);
 
-  GLOG_INFO("got session event=" << xio_session_event_str(event_data->event)
+  GLOG_INFO("server got session event=" << xio_session_event_str(event_data->event)
       << ",reason=" << xio_strerror(event_data->reason)
       << ",conn=" << event_data->conn
       << ",is_portal=" << (tdata != nullptr)

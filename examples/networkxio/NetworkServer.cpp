@@ -66,8 +66,14 @@ int main(int argc, char *argv[]) {
 
   FileTranslatorFunc fileTranslatorFunc{nullptr};
 
+  int startCore = 1;
+  int numCores = 2;
+  int queueDepth = 200;
+
   NetworkXioServer *xs =
-      new NetworkXioServer("tcp", "127.0.0.1", 21321, 1, 2, 200, fileTranslatorFunc, newInstance);
+      new NetworkXioServer("tcp", "127.0.0.1", 21321, 
+          startCore, numCores, queueDepth, 
+          fileTranslatorFunc, newInstance);
   
   fut = pr.get_future();
 

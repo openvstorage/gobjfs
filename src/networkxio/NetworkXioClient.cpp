@@ -142,6 +142,7 @@ static SessionSPtr getSession(NetworkXioClient* client,
     retptr = iter->second;
     GLOG_INFO("session=" << (void*)retptr.get() 
         << " found for " << uri 
+        << " use count=" << retptr.use_count()
         << " by client=" << (void*)client);
   }
   return retptr;
@@ -181,7 +182,7 @@ static int static_on_session_event(xio_session *session,
   //getAddressAndPort(event_data->conn, localAddr, localPort, peerAddr, peerPort);
 
   GLOG_INFO(
-      "got session event=" << xio_session_event_str(event_data->event)
+      "client got session event=" << xio_session_event_str(event_data->event)
       << ",reason=" << xio_strerror(event_data->reason)
       << ",conn=" << event_data->conn
       << ",cb_user_ctx=" << (void*)cb_user_context
@@ -302,7 +303,7 @@ void NetworkXioClient::run() {
   cparams.session = sptr->xioptr();
   cparams.ctx = ctx.get();
   cparams.conn_user_context = this;
-  cparams.conn_idx = 0; 
+  cparams.conn_idx = 0; // let xio choose which portal
 
   conn = xio_connect(&cparams);
   if (conn == nullptr) {
