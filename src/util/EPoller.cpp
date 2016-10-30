@@ -111,7 +111,9 @@ int EPoller::shutdown() {
 
 EPoller::~EPoller() {
 
-  shutdown();
+  if (numThreads_) {
+    shutdown();
+  }
 
   {
     std::unique_lock<std::mutex> l(eventListMutex_);
