@@ -64,7 +64,7 @@ int EPoller::init() {
     if (ret < 0) {
       close(fd_);
       fd_ = -1;
-      dropEvent(shutdownKey, shutdownPtr_->getfd());
+      shutdownPtr_.reset();
       break;
     }
 
@@ -186,6 +186,7 @@ int EPoller::run(int32_t numLoops) {
     }
   }
   
+  uint64_t numConsecutiveNegativeWakeups = 0;
   while ((mustExit_ == false) && (numLoops != 0)) {
 
     epoll_event readyEvents[maxEventsPerPoll_];
@@ -195,6 +196,14 @@ int EPoller::run(int32_t numLoops) {
 
     do {
       numEvents = epoll_wait(fd_, readyEvents, maxEventsPerPoll_, -1);
+      if (numEvents < 0) {
+        numConsecutiveNegativeWakeups ++;
+        if (numConsecutiveNegativeWakeups & 100) {
+          LOG(WARNING) << "number of consecutive negative wakeups=" << numConsecutiveNegativeWakeups;
+        }
+      } else {
+        numConsecutiveNegativeWakeups = 0;
+      }
     } while ((numEvents < 0) && (errno == EINTR || errno == EAGAIN));
 
     if (numEvents < 0) {

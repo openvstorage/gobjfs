@@ -118,7 +118,7 @@ class EPoller {
    * @return 0 on success, negative errno on error
    */
 
-  int addEvent(uint64_t userData, 
+  int addEvent(uintptr_t userData, 
     int eventFD, 
     int readWrite, 
     EventHandler eventHandler);

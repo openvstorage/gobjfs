@@ -4,6 +4,7 @@
 #include <rora/ASDQueue.h>
 #include <util/EPoller.h>
 #include <util/Stats.h>
+#include <util/TimerNotifier.h>
 #include <gobjfs_client.h>
 
 #include <string>
@@ -28,7 +29,7 @@ class RoraGateway {
     // polls for completed read requests from all asds
     gobjfs::os::EPoller epoller_;
 
-    // thread listens for completed read requests across all 
+    // single thread listens for completed read requests across all ASD
     // client_ctx and sends the responses back to EdgeProcesses
     std::thread thread_;
     bool started_{false};
@@ -43,7 +44,7 @@ class RoraGateway {
     size_t size() const;
 
     // use kill(pid, 0) == ESRCH to check for dead pids to delete from catalog
-    int dropDeadEdgeProcesses();
+    int cleanupForDeadEdgeProcesses();
 
   };
 
@@ -96,15 +97,34 @@ class RoraGateway {
 
   typedef std::unique_ptr<ASDInfo> ASDInfoUPtr;
 
+  // catalog of registered edges
   EdgeInfo edges_;
+  // list of ASDs
   std::vector<ASDInfoUPtr> asdVec_;
+  // watchdog timer
+  std::unique_ptr<gobjfs::os::TimerNotifier> watchDogPtr_;
 
-
+  /**
+   * thread which forwards read requests to ASD
+   */
   int asdThreadFunc(ASDInfo* asdInfo, size_t connIdx);
 
+  /**
+   * thread which transmits read responses back to edges
+   */
   int responseThreadFunc();
 
+  /**
+   * handler for reading xio ctx queue 
+   * it is called from epoller
+   */
   int handleReadCompletion(int fd, uintptr_t asdPtr);
+
+  /**
+   * handler for cleaning up queues
+   * it is called from epoller
+   */
+  int watchDogFunc(int fd, uintptr_t userCtx);
 
   public:
 

@@ -6,10 +6,12 @@
 #include <gobjfs_log.h>
 #include <util/lang_utils.h>
 #include <util/os_utils.h>
+#include <signal.h>
 
 namespace bpo = boost::program_options;
 using namespace gobjfs::xio;
 using gobjfs::os::EPoller;
+using gobjfs::os::TimerNotifier;
 
 namespace gobjfs {
 namespace rora {
@@ -142,7 +144,21 @@ int RoraGateway::EdgeInfo::insert(EdgeQueueSPtr edgePtr) {
   return 0;
 }
 
+int RoraGateway::EdgeInfo::cleanupForDeadEdgeProcesses() {
+  std::unique_lock<std::mutex> l(mutex_, std::defer_lock);
 
+  if (!l.try_lock()) {
+    LOG(WARNING) << "failed to lock edge catalog mutex";
+  }
+  for (auto& edgeIter : catalog_) {
+    if (kill(edgeIter.second->pid_, 0) == ESRCH) {
+      LOG(ERROR) << "pid=" << edgeIter.second->pid_ << " is dead";
+      // TODO cleanup the queue
+    }
+  }
+  LOG(INFO) << "watchdog found registered edge processes=" << catalog_.size();
+  return 0;
+}
 
 int RoraGateway::init(const std::string& configFileName) {
   int ret = 0;
@@ -156,8 +172,20 @@ int RoraGateway::init(const std::string& configFileName) {
 
   edges_.epoller_.init();
 
-  size_t numASD = config.transportVec_.size();
+  const int watchDogTimeSec = 30; // TODO tunable
+  watchDogPtr_ = gobjfs::make_unique<TimerNotifier>(watchDogTimeSec, 0);
 
+  ret = edges_.epoller_.addEvent(0, watchDogPtr_->getFD(), 
+      EPOLLIN,
+      std::bind(&RoraGateway::watchDogFunc, this, 
+        std::placeholders::_1,
+        std::placeholders::_2));
+  if (ret != 0) {
+    LOG(ERROR) << "failed to add watchdog timer ret=" << ret;
+    return -1;
+  }
+
+  size_t numASD = config.transportVec_.size();
   asdVec_.reserve(numASD);
   for (size_t idx = 0; idx < numASD; idx ++) {
 
@@ -176,22 +204,48 @@ int RoraGateway::init(const std::string& configFileName) {
       auto callbackCtx = std::make_shared<ASDInfo::CallbackInfo>();
       callbackCtx->asdPtr_ = asdp.get();
       callbackCtx->connIdx_ = idx;
+      int fd_to_add = aio_geteventfd(asdp->threadVec_[idx]->ctx_), 
 
-      edges_.epoller_.addEvent(reinterpret_cast<uintptr_t>(callbackCtx.get()), 
-        aio_geteventfd(asdp->threadVec_[idx]->ctx_), 
+      ret = edges_.epoller_.addEvent(reinterpret_cast<uintptr_t>(callbackCtx.get()), 
+        fd_to_add,
         EPOLLIN, 
         std::bind(&RoraGateway::handleReadCompletion, this,
           std::placeholders::_1,
           std::placeholders::_2));
-
-      asdp->callbackInfoList_.push_back(callbackCtx);
+      if (ret != 0) {
+        LOG(ERROR) << "failed to add fd=" << fd_to_add 
+          << " for asd uri=" << ipAddress << ":" <<port 
+          << " conn_index=" << idx;
+        break;
+      } else {
+        // save callback info in a shared_ptr list so it doesnt get destroyed
+        asdp->callbackInfoList_.push_back(callbackCtx);
+      }
     }
 
-    // access the asdp before std::move
-    asdVec_.push_back(std::move(asdp));
+    if (ret == 0) {
+      // access the asdp before std::move
+      asdVec_.push_back(std::move(asdp));
+    } else {
+      break;
+    }
   }
 
   return ret;
+}
+
+/**
+ * called every 
+ */
+int RoraGateway::watchDogFunc(int fd, uintptr_t userCtx) {
+  uint64_t numPendingEvents = 0;
+  int ret = TimerNotifier::recv(fd, numPendingEvents);
+  if (ret == 0) {
+    edges_.cleanupForDeadEdgeProcesses();
+  } else {
+    LOG(ERROR) << "failed to read timer ret=" << ret;
+  }
+  return 0;
 }
 
 int RoraGateway::asdThreadFunc(ASDInfo* asdInfo, size_t connIdx) {
@@ -386,8 +440,9 @@ int RoraGateway::handleReadCompletion(int fd, uintptr_t ptr) {
 }
 
 /**
- * fetch responses from all xio ctx and
+ * 1) fetch responses from all xio ctx and
  * write them to edgeQueue
+ * 2) handle watchdog timer
  */
 int RoraGateway::responseThreadFunc() {
 
