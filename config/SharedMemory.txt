@@ -1,0 +1,35 @@
+
+Cheat sheet 
+
+show size and name of currently allocated segments
+$ ls -l /dev/shm 
+-rw-r--r-- 1 <uid> <gid>   104992 Oct 30 10:38 to_asd_127.0.0.1:12721
+
+show current segments with shmid
+$ ipcs -m
+
+show attach detach time of segments
+$ ipcs -mt 
+
+show creator and last op process id on segment
+$ ipcs -mp
+
+show limits on segments
+$ ipcs -ml
+
+show stats of current allocation
+$ ipcs -mu
+
+find processes attached to shm
+$ lsof | egrep <shmid>
+
+$ grep <shmid> /proc/*/maps
+
+-----------------
+to create shared memory segment
+$ ipcmk -M size -p permission
+
+-----------------
+
+to remove shared memory segment
+$ ipcrm -m <shmid>
