@@ -339,7 +339,7 @@ int main(int argc, char* argv[])
   GatewayMsg responseMsg;
   ret = edgeQueue->read(responseMsg);
   assert(ret == 0);
-  assert(responseMsg.opcode_ == Opcode::OPEN_RESP);
+  assert(responseMsg.opcode_ == Opcode::ADD_EDGE_RESP);
 
   RunContext r;
   auto fut = std::async(std::launch::async, std::bind(&RunContext::doRandomRead, &r, asdQueue));
@@ -362,7 +362,7 @@ int main(int argc, char* argv[])
 
   ret = edgeQueue->read(responseMsg);
   assert(ret == 0);
-  assert(responseMsg.opcode_ == Opcode::CLOSE_RESP);
+  assert(responseMsg.opcode_ == Opcode::DROP_EDGE_RESP);
 
   asdQueueVec.clear();
   edgeQueue.reset();

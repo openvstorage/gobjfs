@@ -12,17 +12,19 @@ namespace bip = boost::interprocess;
 namespace gobjfs {
 namespace rora {
 
+#define REQ_START 1000
+#define RESP_START (REQ_START + 1000)
+
 enum Opcode {
   INVALID = 0,
 
-  // relative order is significant
-  OPEN_REQ = 1000,
+  ADD_EDGE_REQ = REQ_START,
   READ_REQ,
-  CLOSE_REQ,
+  DROP_EDGE_REQ,
 
-  OPEN_RESP = 2000,
+  ADD_EDGE_RESP = RESP_START,
   READ_RESP,
-  CLOSE_RESP
+  DROP_EDGE_RESP,
 };
 
 class EdgeQueue;

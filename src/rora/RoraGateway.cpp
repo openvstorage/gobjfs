@@ -343,7 +343,7 @@ int RoraGateway::asdThreadFunc(ASDInfo* asdInfo, size_t connIdx) {
     if (ret == 0) { 
       switch (anyReq.opcode_) {
 
-      case Opcode::OPEN_REQ:
+      case Opcode::ADD_EDGE_REQ:
         {
           LOG(INFO) << "got open from edge process=" << anyReq.edgePid_;
           auto edgePtr = std::make_shared<EdgeQueue>(anyReq.edgePid_);
@@ -351,7 +351,7 @@ int RoraGateway::asdThreadFunc(ASDInfo* asdInfo, size_t connIdx) {
           edges_.insert(edgePtr);
 
           GatewayMsg respMsg;
-          respMsg.opcode_ = Opcode::OPEN_RESP;
+          respMsg.opcode_ = Opcode::ADD_EDGE_RESP;
           edgePtr->write(respMsg);
           break;
         }
@@ -370,7 +370,7 @@ int RoraGateway::asdThreadFunc(ASDInfo* asdInfo, size_t connIdx) {
           }
           break;
         }
-      case Opcode::CLOSE_REQ:
+      case Opcode::DROP_EDGE_REQ:
         {
           LOG(INFO) << "got close from edge process=" << anyReq.edgePid_;
           // TODO add ref counting to ensure edge queue doesnt go away
@@ -379,7 +379,7 @@ int RoraGateway::asdThreadFunc(ASDInfo* asdInfo, size_t connIdx) {
 
           if (edgePtr) {
             GatewayMsg respMsg;
-            respMsg.opcode_ = Opcode::CLOSE_RESP;
+            respMsg.opcode_ = Opcode::DROP_EDGE_RESP;
             edgePtr->write(respMsg);
             int ret = edges_.drop(anyReq.edgePid_);
             (void) ret;

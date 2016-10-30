@@ -14,7 +14,7 @@ GatewayMsg::~GatewayMsg() {
 
 GatewayMsg createOpenRequest() {
   GatewayMsg gmsg;
-  gmsg.opcode_ = Opcode::OPEN_REQ;
+  gmsg.opcode_ = Opcode::ADD_EDGE_REQ;
   gmsg.edgePid_ = getpid();
   return gmsg;
 }
@@ -41,7 +41,7 @@ GatewayMsg createReadRequest(
 
 GatewayMsg createCloseRequest() {
   GatewayMsg gmsg;
-  gmsg.opcode_ = Opcode::CLOSE_REQ;
+  gmsg.opcode_ = Opcode::DROP_EDGE_REQ;
   gmsg.edgePid_ = getpid();
   return gmsg;
 }
