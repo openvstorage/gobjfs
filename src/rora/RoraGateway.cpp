@@ -401,7 +401,7 @@ int RoraGateway::asdThreadFunc(ASDInfo* asdInfo, size_t connIdx) {
       // (1) have as many requests as number of edges
       // (2) got nothing on previous nonblocking read AND have some pending
       //     requests 
-      if ((pending_giocb_vec.size() > edges_.size()) || 
+      if ((pending_giocb_vec.size() >= edges_.size()) || 
           ((numIdleLoops == 1) && pending_giocb_vec.size())) {
 
           asdInfo->stats_.submitBatchSize_ = pending_giocb_vec.size();
