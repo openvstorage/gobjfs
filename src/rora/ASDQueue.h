@@ -4,6 +4,7 @@
 #include <boost/interprocess/managed_shared_memory.hpp>
 #include <string>
 #include <sys/stat.h> // mode_t
+#include <util/Stats.h>
 
 namespace bip = boost::interprocess;
 
@@ -22,9 +23,19 @@ class ASDQueue {
 
   std::unique_ptr<bip::message_queue> mq_{nullptr};
   
-  bool created_{false};
+  bool isCreator_{false};
 
   size_t maxMsgSize_{0};
+
+  struct Statistics {
+    // can have slight mismatch between various counters 
+    // since updates are not atomic
+    uint64_t count_{0};
+    gobjfs::stats::StatsCounter<uint32_t> msgSize_;
+  };
+
+  Statistics readStats_;
+  Statistics writeStats_;
 
   public:
   /**
@@ -58,6 +69,14 @@ class ASDQueue {
   int timed_read(GatewayMsg& gmsg, int millisec);
 
   const std::string& getName() const;
+
+  private:
+  void updateStats(ASDQueue::Statistics& which, size_t msgSize);
+
+  public:
+  std::string getStats() const;
+
+  void clearStats();
    
   size_t getCurrentQueueLen() const;
 

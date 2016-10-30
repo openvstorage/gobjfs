@@ -23,6 +23,11 @@ static std::string getHeapName(int pid) {
   return heapName;
 }
 
+// allocate more segments than required to compensate
+// for boost segment headers which take up space
+// segment_->get_free_memory() != allocated 
+static constexpr size_t BoostHeaderAdjustment = 5;
+
 /**
  * this is a create
  */
@@ -33,7 +38,7 @@ EdgeQueue::EdgeQueue(int pid,
   : pid_(pid)
   , maxMsgSize_(maxMsgSize) {
 
-  created_ = true;
+  isCreator_ = true;
 
   queueName_ = getEdgeQueueName(pid);
   heapName_ = getHeapName(pid);
@@ -45,12 +50,12 @@ EdgeQueue::EdgeQueue(int pid,
   try {
     mq_ = gobjfs::make_unique<bip::message_queue>(bip::create_only, 
       queueName_.c_str(),
-      maxQueueLen,
+      (BoostHeaderAdjustment + maxQueueLen),
       maxMsgSize_);
   
     segment_ = gobjfs::make_unique<bip::managed_shared_memory>(bip::create_only, 
       heapName_.c_str(),
-      maxQueueLen * maxAllocSize); 
+      (BoostHeaderAdjustment + maxQueueLen) * maxAllocSize); 
     // TODO : should be total number of jobs in system
     LOG(INFO) << "created edge queue=" << queueName_ 
       << ",shmem=" << heapName_ 
@@ -74,7 +79,7 @@ EdgeQueue::EdgeQueue(int pid,
  */
 EdgeQueue::EdgeQueue(int pid) : pid_(pid) {
 
-  created_ =  false;
+  isCreator_ =  false;
 
   queueName_ = getEdgeQueueName(pid);
   heapName_ = getHeapName(pid);
@@ -109,7 +114,7 @@ int EdgeQueue::remove(int pid) {
 
 EdgeQueue::~EdgeQueue() {
 
-  if (created_) {
+  if (isCreator_) {
     if (mq_) {
       auto ret = bip::message_queue::remove(queueName_.c_str());
       if (ret == false) {
@@ -133,6 +138,7 @@ int EdgeQueue::write(const GatewayMsg& gmsg) {
     auto sendStr = gmsg.pack();
     assert(sendStr.size() < maxMsgSize_);
     mq_->send(sendStr.c_str(), sendStr.size(), 0);
+    updateStats(writeStats_, sendStr.size());
     return 0;
   } catch (const std::exception& e) {
     return -1;
@@ -149,9 +155,20 @@ int EdgeQueue::read(GatewayMsg& msg) {
     char buf[maxMsgSize_];
     mq_->receive(buf, maxMsgSize_, recvdSize, priority);
     msg.unpack(buf, recvdSize);
-    if (msg.opcode_ == Opcode::READ) {
+    if ((msg.opcode_ == Opcode::READ_REQ) ||
+      (msg.opcode_ == Opcode::READ_RESP)) {
+
+      // as it currently stands, the process which creates
+      // the edge queue only gets read responses
+      // while the rora gateway only gets read requests
+      // encoded that check in this assert
+      assert((isCreator_ && msg.opcode_ == Opcode::READ_RESP) ||
+        (!isCreator_ && msg.opcode_ == Opcode::READ_REQ));
+
+      // convert segment offset to raw ptr within this process
       msg.rawbuf_ = segment_->get_address_from_handle(msg.buf_);
     }
+    updateStats(readStats_, recvdSize);
     return 0;
   } catch (const std::exception& e) {
     return -1;
@@ -159,7 +176,7 @@ int EdgeQueue::read(GatewayMsg& msg) {
 }
  
 void* EdgeQueue::alloc(size_t sz) {
-  if (!created_) {
+  if (!isCreator_) {
     LOG(ERROR) << "shared memory should only be alloc/freed by segment creator";
     return nullptr;
   }
@@ -167,7 +184,7 @@ void* EdgeQueue::alloc(size_t sz) {
 }
 
 int EdgeQueue::free(void* ptr) {
-  if (!created_) {
+  if (!isCreator_) {
     LOG(ERROR) << "shared memory should only be alloc/freed by segment creator";
     return -EINVAL;
   }
@@ -188,12 +205,16 @@ giocb* EdgeQueue::giocb_from_GatewayMsg(const GatewayMsg& gmsg) {
   return iocb;
 }
 
+/**
+ * called from RoraGateway to convert a read response
+ * into a GatewayMsg 
+ */
 int EdgeQueue::GatewayMsg_from_giocb(GatewayMsg& gmsg, 
     const giocb& iocb, 
     ssize_t retval, 
     int errval) {
 
-  gmsg.opcode_ = Opcode::READ;
+  gmsg.opcode_ = Opcode::READ_RESP;
   gmsg.filename_ = iocb.filename;
   gmsg.offset_ = iocb.aio_offset;
   gmsg.size_ = iocb.aio_nbytes;
@@ -202,6 +223,27 @@ int EdgeQueue::GatewayMsg_from_giocb(GatewayMsg& gmsg,
   gmsg.retval_ = retval;
 
   return 0;
+}
+
+void EdgeQueue::updateStats(Statistics& which, size_t msgSize) {
+  which.count_ ++;
+  which.msgSize_ = msgSize;
+}
+
+std::string EdgeQueue::getStats() const {
+  std::ostringstream s;
+  s 
+    << "read={count=" << readStats_.count_ << ",msg_size=" << readStats_.msgSize_ << "}"
+    << ",write={count=" << writeStats_.count_ << ",msg_size=" << writeStats_.msgSize_ << "}"
+    ;
+  return s.str();
+}
+
+void EdgeQueue::clearStats() {
+  readStats_.count_ = 0;
+  readStats_.msgSize_.reset();
+  writeStats_.count_ = 0;
+  writeStats_.msgSize_.reset();
 }
 
 size_t EdgeQueue::getCurrentQueueLen() const {

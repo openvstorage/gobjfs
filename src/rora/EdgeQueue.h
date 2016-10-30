@@ -4,6 +4,7 @@
 #include <boost/interprocess/managed_shared_memory.hpp>
 #include <string>
 #include <sys/stat.h> // mode_t
+#include <util/Stats.h> // mode_t
 
 namespace bip = boost::interprocess;
 
@@ -36,9 +37,19 @@ class EdgeQueue {
   private:
   std::string queueName_;
   std::string heapName_;
-  bool created_{false};
+  bool isCreator_{false};
 
   size_t maxMsgSize_{0};
+
+  struct Statistics {
+    // can have slight mismatch between various counters 
+    // since updates are not atomic
+    uint64_t count_{0};
+    gobjfs::stats::StatsCounter<uint32_t> msgSize_;
+  };
+
+  Statistics readStats_;
+  Statistics writeStats_;
 
   public:
 
@@ -78,6 +89,14 @@ class EdgeQueue {
   int GatewayMsg_from_giocb(GatewayMsg& gmsg, const gobjfs::xio::giocb& iocb,
     ssize_t retval, 
     int errval);
+
+  private:
+  void updateStats(EdgeQueue::Statistics& which, size_t msgSize);
+
+  public:
+  std::string getStats() const;
+
+  void clearStats();
 
   size_t getCurrentQueueLen() const;
 

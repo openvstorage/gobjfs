@@ -19,6 +19,8 @@ class RoraGateway {
 
   private:
 
+  static const int watchDogTimeSec_;
+
   struct EdgeInfo {
     // map from edge pid to edge queue
     std::map<int, EdgeQueueSPtr> catalog_;
@@ -43,7 +45,6 @@ class RoraGateway {
     EdgeQueueSPtr find(int pid);
     size_t size() const;
 
-    // use kill(pid, 0) == ESRCH to check for dead pids to delete from catalog
     int cleanupForDeadEdgeProcesses();
 
   };
@@ -93,6 +94,7 @@ class RoraGateway {
         size_t maxMsgSize, size_t maxQueueLen,
         size_t maxThreadsPerASD);
 
+    void clearStats();
   };
 
   typedef std::unique_ptr<ASDInfo> ASDInfoUPtr;

@@ -14,9 +14,12 @@ namespace rora {
 
 enum Opcode {
   INVALID = 0,
-  OPEN = 1000,
-  READ,
-  CLOSE,
+
+  // relative order is significant
+  OPEN_REQ = 1000,
+  READ_REQ,
+  CLOSE_REQ,
+
   OPEN_RESP = 2000,
   READ_RESP,
   CLOSE_RESP

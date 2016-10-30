@@ -84,12 +84,17 @@ struct Config {
   }
 };
 
+const int RoraGateway::watchDogTimeSec_ = 30;  // TODO tunable
+
 RoraGateway::ASDInfo::ASDInfo(const std::string &transport, 
     const std::string &ipAddress, 
     int port,
     size_t maxMsgSize,
     size_t maxQueueLen,
-    size_t maxThreadsPerASD) {
+    size_t maxThreadsPerASD) 
+  : transport_(transport)
+  , ipAddress_(ipAddress)
+  , port_(port) {
 
   const std::string asdQueueName = ipAddress + ":" + std::to_string(port);
 
@@ -112,6 +117,12 @@ RoraGateway::ASDInfo::ASDInfo(const std::string &transport,
 
     threadVec_.push_back(threadInfo);
   }
+}
+
+void RoraGateway::ASDInfo::clearStats() {
+  stats_.submitBatchSize_.reset();
+  stats_.callbackBatchSize_.reset();
+  queue_->clearStats();
 }
 
 EdgeQueueSPtr RoraGateway::EdgeInfo::find(int pid) {
@@ -151,10 +162,13 @@ int RoraGateway::EdgeInfo::cleanupForDeadEdgeProcesses() {
     LOG(WARNING) << "failed to obtain edge catalog mutex.  returning";
     return 0;
   }
+  if (!catalog_.size()) {
+    return 0;
+  }
   for (auto& edgeIter : catalog_) {
     if (kill(edgeIter.second->pid_, 0) == ESRCH) {
       LOG(ERROR) << "pid=" << edgeIter.second->pid_ << " is dead";
-      // TODO cleanup the queue
+      // TODO detach the EdgeQueue
     }
   }
   LOG(INFO) << "watchdog found registered edge processes=" << catalog_.size();
@@ -173,8 +187,7 @@ int RoraGateway::init(const std::string& configFileName) {
 
   edges_.epoller_.init();
 
-  const int watchDogTimeSec = 30; // TODO tunable
-  watchDogPtr_ = gobjfs::make_unique<TimerNotifier>(watchDogTimeSec, 0);
+  watchDogPtr_ = gobjfs::make_unique<TimerNotifier>(watchDogTimeSec_, 0);
 
   ret = edges_.epoller_.addEvent(0, watchDogPtr_->getFD(), 
       EPOLLIN,
@@ -236,7 +249,7 @@ int RoraGateway::init(const std::string& configFileName) {
 }
 
 /**
- * called every 
+ * TODO : enable timer when 1st edge registers, disable when none
  */
 int RoraGateway::watchDogFunc(int fd, uintptr_t userCtx) {
   uint64_t numPendingEvents = 0;
@@ -246,6 +259,33 @@ int RoraGateway::watchDogFunc(int fd, uintptr_t userCtx) {
   } else {
     LOG(ERROR) << "failed to read timer ret=" << ret;
   }
+
+  {
+    // Print stats for writes to each EdgeQueue 
+    std::unique_lock<std::mutex> l(edges_.mutex_);
+    if (edges_.catalog_.size() == 0) {
+      // return early if no registered processes
+      return 0;
+    }
+    for (auto& edgeIter : edges_.catalog_) {
+      auto& edgeQueue = edgeIter.second;
+      auto str = edgeQueue->getStats();
+      edgeQueue->clearStats();
+      LOG(INFO) << "EdgeQueue=" << edgeQueue->pid_ << ",stats=" << str;
+    }
+  }
+
+  // Print stats for reads from each ASD queue 
+  // TODO may need mutex once dynamic registration of ASD is allowed
+  for (auto& asdInfo : asdVec_) {
+    auto str = asdInfo->queue_->getStats();
+    LOG(INFO) << "ASD=" << (void*)asdInfo.get() << ":" << asdInfo->ipAddress_ << ":" << asdInfo->port_  
+      << ",queueStats=" << str
+      << ",submitBatchSize=" << asdInfo->stats_.submitBatchSize_
+      << ",callbackBatchSize=" << asdInfo->stats_.callbackBatchSize_;
+    asdInfo->clearStats();
+  }
+  
   return 0;
 }
 
@@ -263,7 +303,7 @@ int RoraGateway::asdThreadFunc(ASDInfo* asdInfo, size_t connIdx) {
 
   std::vector<giocb*> pending_giocb_vec;
 
-  int idleLoop = 0;
+  int numIdleLoops = 0;
 
   while (1) 
   {
@@ -273,37 +313,37 @@ int RoraGateway::asdThreadFunc(ASDInfo* asdInfo, size_t connIdx) {
       // see if there are more read requests we can batch
       ret = asdInfo->queue_->try_read(anyReq);
       if (ret != 0) {
-        idleLoop ++;
+        numIdleLoops ++;
       } else {
-        idleLoop = 0;
+        numIdleLoops = 0;
       }
     } else {
       // if nothing in pending_giocb_vec queue, do longer wait.
-      // NB -- cant do blocking wait here otherwise process termination would 
+      // Cannot do blocking wait here otherwise process termination would 
       // require having to write a termination message to the queue 
       // from inside this process (from the thread calling shutdown)
       ret = asdInfo->queue_->timed_read(anyReq, timeout_ms);
+      numIdleLoops = 0;
       if (ret != 0) {
         // if no writers, keep doubling timeout to save CPU
-        // bound the timeout to max one second so process terminates
-        // quickly on being notified
+        // but bound the timeout to max one second so process terminates
+        // quickly on being notified of shutdown
         if (timeout_ms < 1000) {
           timeout_ms = timeout_ms << 1;
         }
-        idleLoop = 0;
-        // assert cant be sleeping when there are pending requests
+        // assert cannot be sleeping when there are pending requests
         assert(pending_giocb_vec.empty());
         continue;
       } else {
         // got a request, reset timeout interval
         timeout_ms = 1;
-        idleLoop = 0;
       }
     } 
 
-    switch (anyReq.opcode_) {
+    if (ret == 0) { 
+      switch (anyReq.opcode_) {
 
-      case Opcode::OPEN:
+      case Opcode::OPEN_REQ:
         {
           LOG(INFO) << "got open from edge process=" << anyReq.edgePid_;
           auto edgePtr = std::make_shared<EdgeQueue>(anyReq.edgePid_);
@@ -315,7 +355,7 @@ int RoraGateway::asdThreadFunc(ASDInfo* asdInfo, size_t connIdx) {
           edgePtr->write(respMsg);
           break;
         }
-      case Opcode::READ:
+      case Opcode::READ_REQ:
         {
           const int pid = (pid_t)anyReq.edgePid_;
           auto edgePtr = edges_.find(pid);
@@ -330,7 +370,7 @@ int RoraGateway::asdThreadFunc(ASDInfo* asdInfo, size_t connIdx) {
           }
           break;
         }
-      case Opcode::CLOSE:
+      case Opcode::CLOSE_REQ:
         {
           LOG(INFO) << "got close from edge process=" << anyReq.edgePid_;
           // TODO add ref counting to ensure edge queue doesnt go away
@@ -351,18 +391,25 @@ int RoraGateway::asdThreadFunc(ASDInfo* asdInfo, size_t connIdx) {
           break;
         }
       default:
-        break;
+        {
+          LOG(ERROR) << " got unknown opcode=" << anyReq.opcode_;
+          break;
+        }
+      }
     }
       // submit whatever is pending_giocb_vec if
       // (1) have as many requests as number of edges
-      // (2) idle && got some requests 
+      // (2) got nothing on previous nonblocking read AND have some pending
+      //     requests 
       if ((pending_giocb_vec.size() > edges_.size()) || 
-          (idleLoop && pending_giocb_vec.size())) {
+          ((numIdleLoops == 1) && pending_giocb_vec.size())) {
 
           asdInfo->stats_.submitBatchSize_ = pending_giocb_vec.size();
           auto aio_ret = aio_readv(ctx, pending_giocb_vec);
           if (aio_ret != 0) {
-            // got an error, send back error
+            // got an error? send back response right now
+            // TODO : this doesnt handle case where some of the reads
+            // were submitted successfully
             for (auto iocb : pending_giocb_vec) {
               auto edgePtr = edges_.find(iocb->user_ctx);
   
@@ -391,9 +438,7 @@ int RoraGateway::asdThreadFunc(ASDInfo* asdInfo, size_t connIdx) {
   threadInfo->stopped_ = true;
   LOG(INFO) << "stopped asd thread=" << gettid() 
     << ",using connection number=" << connIdx 
-    << ",uri=" << asdInfo->ipAddress_ << ":" << asdInfo->port_
-    << ",submitBatchSize=" << asdInfo->stats_.submitBatchSize_
-    << ",callbackBatchSize=" << asdInfo->stats_.callbackBatchSize_;
+    << ",uri=" << asdInfo->ipAddress_ << ":" << asdInfo->port_;
   return 0;
 }
 
@@ -421,7 +466,6 @@ int RoraGateway::handleReadCompletion(int fd, uintptr_t ptr) {
         GatewayMsg respMsg;
         edgePtr->GatewayMsg_from_giocb(respMsg, *iocb, 
             aio_return(iocb), aio_error(iocb));
-        respMsg.opcode_ = Opcode::READ_RESP;
         LOG(DEBUG) << "send response to pid=" << pid 
           << ",ret=" << aio_return(iocb)
           << ",err=" << aio_error(iocb)

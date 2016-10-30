@@ -22,7 +22,7 @@ ASDQueue::ASDQueue(const std::string& uri,
     size_t maxMsgSize) :
   maxMsgSize_(maxMsgSize) {
 
-  created_ = true;
+  isCreator_ = true;
 
   queueName_ = getASDQueueName(uri);
 
@@ -54,7 +54,7 @@ ASDQueue::ASDQueue(const std::string& uri,
  */
 ASDQueue::ASDQueue(const std::string &uri) {
 
-  created_ =  false;
+  isCreator_ =  false;
 
   queueName_ = getASDQueueName(uri);
 
@@ -73,14 +73,16 @@ ASDQueue::ASDQueue(const std::string &uri) {
 int ASDQueue::remove(const std::string& uri) {
 
   auto queueName_ = getASDQueueName(uri);
-  bip::message_queue::remove(queueName_.c_str());
-
-  return 0;
+  auto ret = bip::message_queue::remove(queueName_.c_str());
+  if (ret == false) {
+    LOG(ERROR) << "Failed to remove message queue=" << queueName_;
+  }
+  return ret;
 }
 
 ASDQueue::~ASDQueue() {
 
-  if (created_) {
+  if (isCreator_) {
     if (mq_) {
       auto ret = bip::message_queue::remove(queueName_.c_str());
       if (ret == false) {
@@ -91,13 +93,13 @@ ASDQueue::~ASDQueue() {
 }
 
 /**
- * TODO : can throw
  */
 int ASDQueue::write(const GatewayMsg& gmsg) {
   try {
     auto sendStr = gmsg.pack();
     assert(sendStr.size() < maxMsgSize_);
     mq_->send(sendStr.c_str(), sendStr.size(), 0);
+    updateStats(writeStats_, sendStr.size());
     return 0;
   } catch (const std::exception& e) {
     return -1;
@@ -105,7 +107,6 @@ int ASDQueue::write(const GatewayMsg& gmsg) {
 }
 
 /**
- * TODO : can throw
  */
 int ASDQueue::read(GatewayMsg& gmsg) {
   uint32_t priority;
@@ -114,6 +115,7 @@ int ASDQueue::read(GatewayMsg& gmsg) {
     char buf[maxMsgSize_];
     mq_->receive(buf, maxMsgSize_, recvdSize, priority);
     gmsg.unpack(buf, recvdSize);
+    updateStats(readStats_, recvdSize);
     return 0;
   } catch (const std::exception& e) {
     return -1;
@@ -128,6 +130,7 @@ int ASDQueue::try_read(GatewayMsg& gmsg) {
     bool ret = mq_->try_receive(buf, maxMsgSize_, recvdSize, priority);
     if (ret == true) {
       gmsg.unpack(buf, recvdSize);
+      updateStats(readStats_, recvdSize);
       return 0;
     } else {
       return -EAGAIN;
@@ -147,6 +150,7 @@ int ASDQueue::timed_read(GatewayMsg& gmsg, int millisec) {
         now + boost::posix_time::milliseconds(millisec));
     if (ret == true) {
       gmsg.unpack(buf, recvdSize);
+      updateStats(readStats_, recvdSize);
       return 0;
     } else {
       return -EAGAIN;
@@ -154,6 +158,27 @@ int ASDQueue::timed_read(GatewayMsg& gmsg, int millisec) {
   } catch (const std::exception& e) {
     return -1;
   }
+}
+
+void ASDQueue::updateStats(Statistics& which, size_t msgSize) {
+  which.count_ ++;
+  which.msgSize_ = msgSize;
+}
+
+std::string ASDQueue::getStats() const {
+  std::ostringstream s;
+  s 
+    << "read={count=" << readStats_.count_ << ",msg_size=" << readStats_.msgSize_ << "}"
+    << ",write={count=" << writeStats_.count_ << ",msg_size=" << writeStats_.msgSize_ << "}"
+    ;
+  return s.str();
+}
+
+void ASDQueue::clearStats() {
+  readStats_.count_ = 0;
+  readStats_.msgSize_.reset();
+  writeStats_.count_ = 0;
+  writeStats_.msgSize_.reset();
 }
 
 const std::string& ASDQueue::getName() const {

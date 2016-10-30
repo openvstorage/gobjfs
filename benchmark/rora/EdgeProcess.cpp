@@ -245,9 +245,6 @@ void RunContext::doRandomRead(ASDQueue* asdQueue) {
       GatewayMsg responseMsg;
       const auto ret = edgeQueue->read(responseMsg);
       assert(ret == 0);
-      assert(responseMsg.opcode_ == Opcode::READ_RESP);
-
-      responseMsg.rawbuf_ = edgeQueue->segment_->get_address_from_handle(responseMsg.buf_);
 
       // check retval, errval, filename, offset, size match
       if (config.doMemCheck) {

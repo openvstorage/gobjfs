@@ -7,14 +7,14 @@ namespace rora {
 const size_t GatewayMsg::MaxMsgSize = 1024;
  
 GatewayMsg::~GatewayMsg() {
-  // check segment was deallocated in case of READ
+  // check segment was deallocated in case of READ_REQ
   //assert(rawbuf_ == nullptr);
   //assert(buf_ == 0);
 }
 
 GatewayMsg createOpenRequest() {
   GatewayMsg gmsg;
-  gmsg.opcode_ = Opcode::OPEN;
+  gmsg.opcode_ = Opcode::OPEN_REQ;
   gmsg.edgePid_ = getpid();
   return gmsg;
 }
@@ -27,7 +27,7 @@ GatewayMsg createReadRequest(
     size_t size) {
 
   GatewayMsg gmsg;
-  gmsg.opcode_ = Opcode::READ;
+  gmsg.opcode_ = Opcode::READ_REQ;
   gmsg.edgePid_ = getpid();
   gmsg.fileNumber_ = fileNumber;
   gmsg.filename_ = filename;
@@ -41,7 +41,7 @@ GatewayMsg createReadRequest(
 
 GatewayMsg createCloseRequest() {
   GatewayMsg gmsg;
-  gmsg.opcode_ = Opcode::CLOSE;
+  gmsg.opcode_ = Opcode::CLOSE_REQ;
   gmsg.edgePid_ = getpid();
   return gmsg;
 }
