@@ -279,7 +279,7 @@ void RunContext::doRandomRead(ASDQueue* asdQueue) {
 
 int main(int argc, char* argv[])
 {
-  if (argc != 3) {
+  if (argc < 3) {
     std::cout << argv[0] << " <runIdentifier(string)> <number of concurrent edge processes>" << std::endl;
     exit(1);
   }
@@ -310,8 +310,8 @@ int main(int argc, char* argv[])
   int pid = getpid();
 
   std::string configFileName = "./edge_process.conf";
-  if (argc > 1) {
-    configFileName = argv[1];
+  if (argc > 3) {
+    configFileName = argv[3];
   }
   ret = config.readConfig(configFileName);
   assert(ret == 0);
