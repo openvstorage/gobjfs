@@ -139,8 +139,12 @@ struct FileManager {
 
 static FileManager fileMgr;
 // =====================
-//
 EdgeQueueUPtr edgeQueue;
+
+// record run identifier and number of concurrent edge processes, 
+// for purpose of benchmark - for easier grep thru text files
+static std::string runIdentifier; 
+static int numEdgeProcesses = 0;
 
 // =====================
 
@@ -170,7 +174,11 @@ struct RunContext {
     iops = (doneCount * 1000) / timeMilli;
 
     std::ostringstream s;
-    s << ":num_io=" << doneCount
+    s 
+      << "runid=" << runIdentifier
+      << ",num_edges=" << numEdgeProcesses
+      << ":batch_size=" << config.maxOutstandingIO
+      << ":num_io=" << doneCount
       << ":time(msec)=" << timeMilli
       << ":iops=" << iops 
       << ":failed_reads=" << failedReads
@@ -271,6 +279,13 @@ void RunContext::doRandomRead(ASDQueue* asdQueue) {
 
 int main(int argc, char* argv[])
 {
+  if (argc != 3) {
+    std::cout << argv[0] << " <runIdentifier(string)> <number of concurrent edge processes>" << std::endl;
+    exit(1);
+  }
+  runIdentifier = argv[1];
+  numEdgeProcesses = atoi(argv[2]);
+
   namespace logging = boost::log;
   logging::core::get()->set_filter(logging::trivial::severity >=
       logging::trivial::info);
