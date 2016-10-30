@@ -90,17 +90,21 @@ int EPoller::shutdown() {
       // notification?
       // then the thread calling shutdown() could get stuck waiting 
       // to prevent that, this thread waits with a timeout
+      int waitingTime = 1;
       while (numThreads_) {
 
-        LOG(INFO) << "num threads remaining=" << numThreads_;
+        LOG(INFO) << "epoller=" << (void*)this << " shutting down.  Num threads remaining=" << numThreads_;
         shutdownPtr_->writefd();
 
-        exitCondition_.pause();
+        sleep(waitingTime);
+        waitingTime = waitingTime << 1;
       }
     }
     // reset ptr AFTER thread has exited
     shutdownPtr_.reset();
     LOG(INFO) << "shutting down epoller=" << (void*)this;
+  } else {
+    LOG(WARNING) << "did not find shutdown event fd for epoller=" << (void*)this;
   }
   return 0;
 }
@@ -222,9 +226,6 @@ int EPoller::run(int32_t numLoops) {
     }
   }
 
-  if (mustExit_) {
-    exitCondition_.wakeup();
-  }
   numThreads_ --;
   return 0;
 }

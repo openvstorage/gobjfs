@@ -47,7 +47,6 @@ class EPoller {
   bool mustExit_ = false;
 
   std::atomic<uint32_t> numThreads_{ 0 };
-  ConditionWrapper exitCondition_;
 
   // handles will get fd and ctx as args
   typedef std::function<int(int, uintptr_t)> EventHandler;
