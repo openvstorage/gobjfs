@@ -145,10 +145,11 @@ int RoraGateway::EdgeInfo::insert(EdgeQueueSPtr edgePtr) {
 }
 
 int RoraGateway::EdgeInfo::cleanupForDeadEdgeProcesses() {
-  std::unique_lock<std::mutex> l(mutex_, std::defer_lock);
+  std::unique_lock<std::mutex> l(mutex_, std::try_to_lock);
 
-  if (!l.try_lock()) {
-    LOG(WARNING) << "failed to lock edge catalog mutex";
+  if (!l.owns_lock()) {
+    LOG(WARNING) << "failed to obtain edge catalog mutex.  returning";
+    return 0;
   }
   for (auto& edgeIter : catalog_) {
     if (kill(edgeIter.second->pid_, 0) == ESRCH) {
