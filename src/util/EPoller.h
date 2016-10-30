@@ -55,11 +55,11 @@ class EPoller {
 
   struct EPollCtx {
     const EventHandler handler_;
-    const uint64_t userData_;
+    const uintptr_t userData_;
     const int fd_;
     const int magic_ = MAGIC;
 
-    EPollCtx(const EventHandler& handler, uint64_t userData, int fd)
+    EPollCtx(const EventHandler& handler, uintptr_t userData, int fd)
       : handler_(handler), userData_(userData), fd_(fd) {}
   };
 
@@ -95,12 +95,12 @@ class EPoller {
    * @param fd
    * @param userData
    */
-  int eventHandler(int fd, uint64_t userData);
+  int eventHandler(int fd, uintptr_t userData);
 
   /**
    * @param key
    */
-  int processEvent(uint64_t key);
+  int processEvent(uintptr_t key);
 
   /**
    * This method can be called by any thread which wants to process 
@@ -127,7 +127,7 @@ class EPoller {
    * @param eventFD which was used in addEvent
    * @return 0 on success, negative errno on error
    */
-  int dropEvent(uint64_t userData, int eventFD);
+  int dropEvent(uintptr_t userData, int eventFD);
 
   int addTimer();
 

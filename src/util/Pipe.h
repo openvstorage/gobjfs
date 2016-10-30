@@ -15,7 +15,7 @@ class Pipe
   {
     int ret = pipe2(fd_, O_NONBLOCK | O_CLOEXEC);
     if (ret != 0) {
-      GLOG_ERROR("failed to create pipe errno=" << errno);
+      LOG(ERROR) << "failed to create pipe errno=" << errno;
       throw std::runtime_error("failed to create pipe");
     }
   }
@@ -33,8 +33,8 @@ class Pipe
     int ret = close(fd_[1]);
     ret = close(fd_[0]);
     if (ret != 0) {
-      GLOG_ERROR("failed to close pipes=" << static_cast<int32_t>(fd_[0]) 
-          << "," << static_cast<int32_t>(fd_[1]));
+      LOG(ERROR) << "failed to close pipes=" << static_cast<int32_t>(fd_[0]) 
+          << "," << static_cast<int32_t>(fd_[1]);
     }
   }
 };

@@ -6,6 +6,7 @@
 #include <util/EventFD.h>
 #include <util/TimerNotifier.h>
 #include <util/EPoller.h>
+#include <util/Pipe.h>
 #include <util/lang_utils.h>
 
 
@@ -52,7 +53,7 @@ TEST(EPoller, shutdown) {
   // test succeeds if it exits !
 }
 
-static int readfunc(int fd, uint64_t userData) {
+static int readfunc(int fd, uintptr_t userData) {
   int* numTimesPtr = reinterpret_cast<int*>(userData);
   *numTimesPtr += EventFD::readfd(fd);
   return 0;
@@ -97,8 +98,8 @@ TEST(EPoller, WithEventFD) {
   EXPECT_EQ(ret, 0);
 }
 
-static int timerfunc(int fd, uint64_t userData) {
-  int* numTimesPtr = reinterpret_cast<int*>(userData);
+static int timerfunc(int fd, uintptr_t userData) {
+  uint64_t* numTimesPtr = reinterpret_cast<uint64_t*>(userData);
   uint64_t count = 0;
   int ret = TimerNotifier::recv(fd, count);
   if (ret == 0) {

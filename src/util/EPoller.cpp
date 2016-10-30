@@ -55,7 +55,7 @@ int EPoller::init() {
       break;
     }
 
-    const uint64_t shutdownKey = reinterpret_cast<uint64_t>(shutdownPtr_.get());
+    const uintptr_t shutdownKey = reinterpret_cast<uintptr_t>(shutdownPtr_.get());
 
     ret = addEvent(shutdownKey, shutdownPtr_->getfd(), EPOLLIN, 
         std::bind(&EPoller::shutdownHandler, this, 
@@ -140,7 +140,7 @@ int EPoller::addToAnotherEPoller(EPoller& other) {
       std::placeholders::_1,
       std::placeholders::_2);
 
-  return other.addEvent(reinterpret_cast<uint64_t>(this),
+  return other.addEvent(reinterpret_cast<uintptr_t>(this),
     getFD(),
     EPOLLIN | EPOLLOUT,
     std::move(handler));
@@ -151,9 +151,9 @@ int EPoller::addToAnotherEPoller(EPoller& other) {
  * @param fd
  * @param userData
  */
-int EPoller::eventHandler(int fd, uint64_t userData) {
+int EPoller::eventHandler(int fd, uintptr_t userData) {
   assert(fd == fd_);
-  assert(userData == (uint64_t)this);
+  assert(userData == (uintptr_t)this);
   run(1);
   return 0;
 }
@@ -161,7 +161,7 @@ int EPoller::eventHandler(int fd, uint64_t userData) {
 /**
  * @param key
  */
-int EPoller::processEvent(uint64_t key) {
+int EPoller::processEvent(uintptr_t key) {
 
   int handlerRet = 0;
 
@@ -241,7 +241,7 @@ int EPoller::run(int32_t numLoops) {
  * @return 0 on success, negative errno on error
  */
 
-int EPoller::addEvent(uint64_t userData, 
+int EPoller::addEvent(uintptr_t userData, 
   int eventFD, 
   int readWrite, 
   EventHandler eventHandler) {
@@ -258,7 +258,7 @@ int EPoller::addEvent(uint64_t userData,
   bzero(&eventInfo, sizeof(eventInfo));
 
   eventInfo.events = readWrite | EPOLLET;
-  eventInfo.data.u64 = reinterpret_cast<uint64_t>(ctxptr.get());
+  eventInfo.data.u64 = reinterpret_cast<uintptr_t>(ctxptr.get());
 
   int ret = epoll_ctl(fd_, EPOLL_CTL_ADD, eventFD, &eventInfo);
   if (ret < 0) {
@@ -277,7 +277,7 @@ int EPoller::addEvent(uint64_t userData,
  * @param eventFD which was used in addEvent
  * @return 0 on success, negative errno on error
  */
-int EPoller::dropEvent(uint64_t userData, int eventFD) {
+int EPoller::dropEvent(uintptr_t userData, int eventFD) {
 
   int delRet = epoll_ctl(fd_, EPOLL_CTL_DEL, eventFD, nullptr);
 
