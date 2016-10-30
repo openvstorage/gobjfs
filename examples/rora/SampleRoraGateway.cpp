@@ -83,14 +83,14 @@ int main(int argc, char* argv[])
     assert(ret == 0);
 
     switch (anyReq.opcode_) {
-      case Opcode::OPEN:
+      case Opcode::OPEN_REQ:
         {
           LOG(INFO) << "got open for =" << anyReq.edgePid_;
           EdgeQueue* newEdge = new EdgeQueue(anyReq.edgePid_);
           edgeCatalog.insert(std::make_pair(anyReq.edgePid_, newEdge));
           break;
         }
-      case Opcode::READ:
+      case Opcode::READ_REQ:
         {
           const int pid = (pid_t)anyReq.edgePid_;
           auto edgeIter = edgeCatalog.find(pid);
@@ -117,7 +117,7 @@ int main(int argc, char* argv[])
           }
           break;
         }
-      case Opcode::CLOSE:
+      case Opcode::CLOSE_REQ:
         {
           LOG(INFO) << "got close for =" << anyReq.edgePid_;
           size_t sz = edgeCatalog.erase(anyReq.edgePid_);
