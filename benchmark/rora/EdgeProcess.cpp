@@ -226,6 +226,8 @@ void RunContext::doRandomRead(ASDQueue* asdQueue) {
 
   while (!isFinished()) {
 
+    Timer latencyTimer(true); // one timer for all batch
+
     // send read msg 
     // a batch may contains read offset for different files
     for (size_t batchIdx = 0; batchIdx < config.maxOutstandingIO; batchIdx ++) {
@@ -263,6 +265,8 @@ void RunContext::doRandomRead(ASDQueue* asdQueue) {
       responseMsg.rawbuf_ = nullptr;
       responseMsg.buf_ = 0;
     }
+
+    readLatency = latencyTimer.elapsedMicroseconds();
   }
 
   finalize();
