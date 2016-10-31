@@ -270,7 +270,42 @@ void NetworkXioClient::stop_loop() {
 }
 
 void NetworkXioClient::run() {
-  int xopt = 0;
+
+  int ret = 0;
+  int xopt = maxBatchSize_;
+
+  ret = xio_set_opt(NULL, XIO_OPTLEVEL_ACCELIO, XIO_OPTNAME_MAX_IN_IOVLEN, &xopt,
+              sizeof(xopt));
+  if (ret != 0) {
+    int xopt_len = 0;
+    ret = xio_get_opt(NULL, XIO_OPTLEVEL_ACCELIO, XIO_OPTNAME_MAX_IN_IOVLEN, &xopt,
+              &xopt_len);
+    if (ret == 0) {
+      maxBatchSize_ = std::min(maxBatchSize_, (size_t)xopt);
+    }
+  }
+
+  ret = xio_set_opt(NULL, XIO_OPTLEVEL_ACCELIO, XIO_OPTNAME_MAX_OUT_IOVLEN, &xopt,
+              sizeof(xopt));
+  if (ret != 0) {
+    int xopt_len = 0;
+    ret = xio_get_opt(NULL, XIO_OPTLEVEL_ACCELIO, XIO_OPTNAME_MAX_IN_IOVLEN, &xopt,
+              &xopt_len);
+    if (ret == 0) {
+      maxBatchSize_ = std::min(maxBatchSize_, (size_t)xopt);
+    }
+  }
+
+  GLOG_INFO("max number of read requests packed in one accelio transport request=" << maxBatchSize_);
+
+  xopt = maxBatchSize_ * MAX_INLINE_HEADER_OR_DATA; 
+  ret = xio_set_opt(NULL, XIO_OPTLEVEL_ACCELIO, XIO_OPTNAME_MAX_INLINE_XIO_HEADER,
+              &xopt, sizeof(xopt));
+
+  ret = xio_set_opt(NULL, XIO_OPTLEVEL_ACCELIO, XIO_OPTNAME_MAX_INLINE_XIO_DATA,
+              &xopt, sizeof(xopt));
+
+  xopt = 0;
   xio_set_opt(NULL, XIO_OPTLEVEL_ACCELIO, XIO_OPTNAME_ENABLE_FLOW_CONTROL,
               &xopt, sizeof(xopt));
 

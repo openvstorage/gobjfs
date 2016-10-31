@@ -24,6 +24,9 @@
 namespace gobjfs {
 namespace xio {
 
+// assume each request requires 256 byte header (i.e. length of filename)
+static constexpr size_t MAX_INLINE_HEADER_OR_DATA = 256;
+
 /**
  *  DATA MODEL
  *

@@ -165,7 +165,7 @@ private:
   EventFD postProcessEventFD_;
 
 public:
-  size_t maxBatchSize_ = 4; // TODO dynamic
+  size_t maxBatchSize_ = 8; // TODO dynamic
 
 private:
 
