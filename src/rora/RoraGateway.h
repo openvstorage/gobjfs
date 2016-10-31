@@ -90,7 +90,8 @@ class RoraGateway {
 
     public:
 
-    ASDInfo(const std::string& transport, const std::string& ipAddress, int port,
+    ASDInfo(RoraGateway* rgPtr,
+        const std::string& transport, const std::string& ipAddress, int port,
         size_t maxMsgSize, size_t maxQueueLen,
         size_t maxThreadsPerASD);
 
@@ -131,6 +132,17 @@ class RoraGateway {
   public:
 
   int init(const std::string &configFileName);
+
+  int addASD(const std::string& transport,
+    const std::string& ipAddress,
+    const int port,
+    const size_t maxMsgSize,
+    const size_t maxQueueLen,
+    const size_t maxPortals);
+
+  int dropASD(const std::string& transport,
+    const std::string& ipAddress,
+    const int port);
 
   int run();
 

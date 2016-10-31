@@ -85,8 +85,11 @@ struct Config {
 };
 
 const int RoraGateway::watchDogTimeSec_ = 30;  // TODO tunable
+//
+// ============== ASDINFO ===========================
 
-RoraGateway::ASDInfo::ASDInfo(const std::string &transport, 
+RoraGateway::ASDInfo::ASDInfo(RoraGateway* rgPtr,
+    const std::string &transport, 
     const std::string &ipAddress, 
     int port,
     size_t maxMsgSize,
@@ -95,6 +98,8 @@ RoraGateway::ASDInfo::ASDInfo(const std::string &transport,
   : transport_(transport)
   , ipAddress_(ipAddress)
   , port_(port) {
+
+  int ret = 0;
 
   const std::string asdQueueName = ipAddress + ":" + std::to_string(port);
 
@@ -116,7 +121,33 @@ RoraGateway::ASDInfo::ASDInfo(const std::string &transport,
     threadInfo->ctx_ = ctx;
 
     threadVec_.push_back(threadInfo);
+
+    // for each ASD connection, add an event to monitor for read completions
+    // TODO need to call dropEvent ?
+
+    auto callbackCtx = std::make_shared<ASDInfo::CallbackInfo>();
+    callbackCtx->asdPtr_ = this;
+    callbackCtx->connIdx_ = idx;
+    const int fd_to_add = aio_geteventfd(ctx);
+
+    ret = rgPtr->edges_.epoller_.addEvent(reinterpret_cast<uintptr_t>(callbackCtx.get()), 
+      fd_to_add,
+      EPOLLIN, 
+      std::bind(&RoraGateway::handleReadCompletion, rgPtr,
+        std::placeholders::_1,
+        std::placeholders::_2));
+
+    if (ret != 0) {
+      LOG(ERROR) << "failed to add fd=" << fd_to_add 
+        << " for asd uri=" << ipAddress << ":" << port 
+        << " conn_index=" << idx;
+    } else {
+      // save callback info in a shared_ptr list so it doesnt get destroyed
+      callbackInfoList_.push_back(callbackCtx);
+    }
   }
+
+  // TODO clean everything & throw if ret != 0
 }
 
 void RoraGateway::ASDInfo::clearStats() {
@@ -124,6 +155,8 @@ void RoraGateway::ASDInfo::clearStats() {
   stats_.callbackBatchSize_.reset();
   queue_->clearStats();
 }
+
+// ============== EDGEINFO ===========================
 
 EdgeQueueSPtr RoraGateway::EdgeInfo::find(int pid) {
   std::unique_lock<std::mutex> l(mutex_);
@@ -174,6 +207,8 @@ int RoraGateway::EdgeInfo::cleanupForDeadEdgeProcesses() {
   LOG(INFO) << "watchdog found registered edge processes=" << catalog_.size();
   return 0;
 }
+//
+// ============== RORAGATEWAY ===========================
 
 int RoraGateway::init(const std::string& configFileName) {
   int ret = 0;
@@ -207,40 +242,71 @@ int RoraGateway::init(const std::string& configFileName) {
     auto& port = config.portVec_[idx];
     auto& ipAddress = config.ipAddressVec_[idx];
 
-    auto asdp = gobjfs::make_unique<ASDInfo>(transport, ipAddress, port, 
+    ret = addASD(transport, ipAddress, port, 
         GatewayMsg::MaxMsgSize, config.maxQueueLen_,
         config.maxThreadsPerASD_); 
+  }
 
-    // for each ASD connection, add an event to monitor for read completions
-    // TODO need to call dropEvent ?
-    for (size_t idx = 0; idx < asdp->threadVec_.size(); idx ++) {
+  return ret;
+}
 
-      auto callbackCtx = std::make_shared<ASDInfo::CallbackInfo>();
-      callbackCtx->asdPtr_ = asdp.get();
-      callbackCtx->connIdx_ = idx;
-      int fd_to_add = aio_geteventfd(asdp->threadVec_[idx]->ctx_), 
+int RoraGateway::addASD(const std::string& transport,
+    const std::string& ipAddress,
+    const int port,
+    const size_t maxMsgSize,
+    const size_t maxQueueLen,
+    const size_t maxPortals) {
 
-      ret = edges_.epoller_.addEvent(reinterpret_cast<uintptr_t>(callbackCtx.get()), 
-        fd_to_add,
-        EPOLLIN, 
-        std::bind(&RoraGateway::handleReadCompletion, this,
-          std::placeholders::_1,
-          std::placeholders::_2));
-      if (ret != 0) {
-        LOG(ERROR) << "failed to add fd=" << fd_to_add 
-          << " for asd uri=" << ipAddress << ":" <<port 
-          << " conn_index=" << idx;
-        break;
-      } else {
-        // save callback info in a shared_ptr list so it doesnt get destroyed
-        asdp->callbackInfoList_.push_back(callbackCtx);
+  int ret = 0;
+
+  try {
+    auto asdp = gobjfs::make_unique<ASDInfo>(this,
+      transport, ipAddress, port, 
+      maxMsgSize, maxQueueLen,
+      maxPortals); 
+
+    asdVec_.push_back(std::move(asdp));
+
+  } catch (const std::exception& e) {
+    LOG(ERROR) << "failed to add connection to ASD=" << ipAddress << ":" << port;
+    ret = -1;
+  }
+
+  return ret;
+}
+
+int RoraGateway::dropASD(const std::string& transport,
+    const std::string& ipAddress,
+    const int port) {
+
+  int ret = -1;
+  decltype(asdVec_)::iterator iter = asdVec_.begin();
+  decltype(asdVec_)::iterator end = asdVec_.end();
+
+  for (; iter != end; ++ iter) {
+    ASDInfo* asd = iter->get();
+    if ((asd->transport_ == transport) && 
+        (asd->ipAddress_ == ipAddress) && 
+        (asd->port_ == port)) {
+      LOG(INFO) << "deleting asd=" << ipAddress << ":" << port;
+      // shut down threads
+      for (auto threadInfo : asd->threadVec_) {
+        threadInfo->stopping_ = true;
+        threadInfo->thread_.join();
       }
-    }
+      // shut down connections
+      for (auto threadInfo : asd->threadVec_) {
+        threadInfo->ctx_.reset();
+      }
+      // shut down the queue
+      asd->queue_.reset();
 
-    if (ret == 0) {
-      // access the asdp before std::move
-      asdVec_.push_back(std::move(asdp));
-    } else {
+      // remove the entry from list of registered ASDs
+      asdVec_.erase(iter);
+
+      ret = 0;
+
+      LOG(INFO) << "deleted asd=" << ipAddress << ":" << port;
       break;
     }
   }
