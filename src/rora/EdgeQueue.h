@@ -3,6 +3,7 @@
 #include <boost/interprocess/ipc/message_queue.hpp>
 #include <boost/interprocess/managed_shared_memory.hpp>
 #include <string>
+#include <deque>
 #include <sys/stat.h> // mode_t
 #include <util/Stats.h> // mode_t
 
@@ -40,6 +41,9 @@ class EdgeQueue {
   bool isCreator_{false};
 
   size_t maxMsgSize_{0};
+
+  // allocated cached blocks
+  std::deque<void*> cachedBlocks_;
 
   struct Statistics {
     // can have slight mismatch between various counters 

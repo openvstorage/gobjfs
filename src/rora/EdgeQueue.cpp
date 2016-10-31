@@ -56,6 +56,12 @@ EdgeQueue::EdgeQueue(int pid,
     segment_ = gobjfs::make_unique<bip::managed_shared_memory>(bip::create_only, 
       heapName_.c_str(),
       (BoostHeaderAdjustment + maxQueueLen) * maxAllocSize); 
+
+    // preallocate all the required blocks from the segment
+    for (size_t idx = 0; idx < maxQueueLen; idx ++) {
+      cachedBlocks_.push_back(segment_->allocate(maxAllocSize));
+    }
+
     // TODO : should be total number of jobs in system
     LOG(INFO) << "created edge queue=" << queueName_ 
       << ",shmem=" << heapName_ 
@@ -122,6 +128,11 @@ EdgeQueue::~EdgeQueue() {
       }
     }
     if (segment_) {
+      // deallocate all the preallocated blocks
+      for (auto ptr : cachedBlocks_) {
+        segment_->deallocate(ptr);
+      }
+      cachedBlocks_.clear();
       auto ret = bip::shared_memory_object::remove(heapName_.c_str());
       if (ret == false) {
         LOG(ERROR) << "Failed to remove shmem segment=" << heapName_;
@@ -175,20 +186,41 @@ int EdgeQueue::read(GatewayMsg& msg) {
   }
 }
  
+/**
+ * Will be called only from EdgeProcess
+ * Assume only one thread calls it
+ * Therefore, Not thread-safe right now
+ */
 void* EdgeQueue::alloc(size_t sz) {
+  void* retPtr = nullptr;
   if (!isCreator_) {
     LOG(ERROR) << "shared memory should only be alloc/freed by segment creator";
-    return nullptr;
+  } else {
+    if (not cachedBlocks_.empty()) {
+      // first check if any preallocated blocks exist
+      // TODO : bzero the returned ptr ?
+      retPtr = cachedBlocks_.front();
+      cachedBlocks_.pop_front();
+    } else {
+      retPtr = segment_->allocate(sz);
+    }
   }
-  return segment_->allocate(sz);
+  return retPtr;
 }
 
+/**
+ * Will be called only from EdgeProcess
+ * Assume only one thread calls it
+ * Therefore, Not thread-safe right now
+ */
 int EdgeQueue::free(void* ptr) {
   if (!isCreator_) {
     LOG(ERROR) << "shared memory should only be alloc/freed by segment creator";
     return -EINVAL;
   }
-  segment_->deallocate(ptr);
+  // keep the freed block in cached list
+  //segment_->deallocate(ptr);
+  cachedBlocks_.push_back(ptr);
   return 0;
 }
 
