@@ -48,6 +48,7 @@ static int static_runEventHandler(gIOStatus& iostatus, void* ctx);
 struct TimerPrint {
   const uint64_t ops_;
   const size_t submitSize_;
+  const float processedInLoop_;
   const size_t externalFlushes_;
   const size_t inlineFlushes_;
   const size_t completionFlushes_;
