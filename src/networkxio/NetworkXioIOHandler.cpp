@@ -239,6 +239,7 @@ void NetworkXioIOHandler::runTimerHandler()
         TimerPrint t{currentOps, 
           ioexecPtr_->minSubmitSize(),
           ioexecPtr_->stats_.numProcessedInLoop_.mean(),
+          ioexecPtr_->stats_.interArrivalNsec_.mean(),
           ioexecPtr_->stats_.numExternalFlushes_,
           ioexecPtr_->stats_.numInlineFlushes_,
           ioexecPtr_->stats_.numCompletionFlushes_};
@@ -276,9 +277,10 @@ void NetworkXioIOHandler::runTimerHandler()
 
       for (auto& op : opsRecord_) {
         os << ",p=" << pt_->coreId_ 
-          << ",o=" << op.ops_ 
           << ",s=" << op.submitSize_ 
-          << ",lp=" << op.processedInLoop_
+          << ",o=" << op.ops_ 
+          << ",pl=" << op.processedInLoop_
+          << ",ia=" << op.interArrivalNsec_
           << ",ef=" << op.externalFlushes_ 
           << ",if=" << op.inlineFlushes_ 
           << ",cf=" << op.completionFlushes_ 

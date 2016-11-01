@@ -49,6 +49,7 @@ struct TimerPrint {
   const uint64_t ops_;
   const size_t submitSize_;
   const float processedInLoop_;
+  const float interArrivalNsec_;
   const size_t externalFlushes_;
   const size_t inlineFlushes_;
   const size_t completionFlushes_;
