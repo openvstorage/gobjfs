@@ -45,6 +45,12 @@ class NetworkXioMsg;
 
 static int static_runEventHandler(gIOStatus& iostatus, void* ctx);
 
+struct TimerPrint {
+  uint64_t ops_;
+  size_t submitSize_;
+};
+
+
 class NetworkXioIOHandler {
 public:
   NetworkXioIOHandler(PortalThreadData* pt);
@@ -113,7 +119,9 @@ private:
   uint64_t prevOps_{0};
   int incrDirection_{1}; // -1 or +1
   int timerCalled_{0}; 
+
   gobjfs::stats::StatsCounter<uint32_t> minSubmitSizeStats_;
+  std::vector<TimerPrint> opsRecord_;
 
 public:
   IOExecutor* ioexecPtr_{nullptr};

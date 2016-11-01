@@ -233,6 +233,12 @@ void NetworkXioIOHandler::runTimerHandler()
     if (currentOps != 0) {
       if (prevOps_ != 0) { 
 
+        if (opsRecord_.empty()) {
+          opsRecord_.reserve(60);
+        }
+        TimerPrint t{currentOps, ioexecPtr_->minSubmitSize()};
+        opsRecord_.push_back(std::move(t));
+
         int inversePercChange = 50; // 2 perc change in iops
         //bool smallChange = std::abs(currentOps - prevOps_) < (prevOps_/inversePercChange); // only change if difference is not due to jitter
         bool smallChange = false; // this works better
@@ -256,8 +262,22 @@ void NetworkXioIOHandler::runTimerHandler()
         << ",current_minSubmitSize=" << ioexecPtr_->minSubmitSize()
         << ",stats_minSubmitSize=" << minSubmitSizeStats_
         << ",ioexec=" << ioexecPtr_->stats_.getState());
+
       timerCalled_ = 0;
       minSubmitSizeStats_.reset();
+
+      std::ostringstream os;
+
+      for (auto& op : opsRecord_) {
+        os << ",p=" << pt_->coreId_ 
+          << ",o=" << op.ops_ 
+          << ",s=" << op.submitSize_ << std::endl;
+      }
+
+      GLOG_INFO(os.str());
+
+      opsRecord_.clear();
+      opsRecord_.reserve(60);
     }
   }
 
