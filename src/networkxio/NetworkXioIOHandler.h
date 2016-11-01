@@ -46,8 +46,11 @@ class NetworkXioMsg;
 static int static_runEventHandler(gIOStatus& iostatus, void* ctx);
 
 struct TimerPrint {
-  uint64_t ops_;
-  size_t submitSize_;
+  const uint64_t ops_;
+  const size_t submitSize_;
+  const size_t externalFlushes_;
+  const size_t inlineFlushes_;
+  const size_t completionFlushes_;
 };
 
 
