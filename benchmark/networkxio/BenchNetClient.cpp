@@ -72,7 +72,6 @@ struct Config {
   uint32_t maxBlocks = 10000;
   uint64_t perThreadIO = 10000;
   uint32_t runTimeSec = 1;
-  bool sharedCtxBetweenThreads = false;
   uint64_t maxOutstandingIO = 1;
   bool doMemCheck = false;
   uint32_t maxThr = 1;
@@ -95,7 +94,6 @@ struct Config {
         ("per_thread_max_io", value<uint64_t>(&perThreadIO)->required(), "number of ops to execute")
         ("run_time_sec", value<uint32_t>(&runTimeSec)->required(), "number of secs to run")
         ("max_outstanding_io", value<uint64_t>(&maxOutstandingIO)->required(), "max outstanding io")
-        ("shared_ctx_between_threads", value<bool>(&sharedCtxBetweenThreads)->required(), "should all threads share same accelio ctx")
         ("read_style", value<std::string>(&readStyle)->required(), "aio_read or aio_readv")
         ("max_threads", value<uint32_t>(&maxThr)->required(), "max threads")
         ("shorten_file_size", value<uint32_t>(&shortenFileSize), "shorten the size by this much to test nonaliged reads")
@@ -221,12 +219,9 @@ struct ThreadCtx {
   BenchInfo benchInfo;
 
   explicit ThreadCtx(int index,
-    const Config& conf,
-    client_ctx_attr_ptr in_ctx_attr_ptr,
-    client_ctx_ptr in_ctx_ptr) 
-    : index_(index)
-    , ctx_attr_ptr(in_ctx_attr_ptr)
-    , ctx_ptr(in_ctx_ptr) {
+    const Config& conf)
+    : index_(index) {
+
     minFiles = 0;
     maxFiles = conf.maxFiles;
     maxBlocks = conf.maxBlocks;
@@ -247,7 +242,7 @@ struct ThreadCtx {
   }
 
   bool isFinished() {
-    if (perThreadIO) {
+    if (config.perThreadIO) {
       if (doneCount == perThreadIO) {
         mustExit = true;
       }
@@ -268,21 +263,14 @@ void ThreadCtx::doRandomRead() {
   std::uniform_int_distribution<decltype(maxBlocks)> blockGenerator(
       0, maxBlocks - 1);
 
-  if (config.sharedCtxBetweenThreads) {
-    assert(ctx_attr_ptr.use_count());
-    assert(ctx_ptr.use_count());
-  } else {
-    assert(ctx_attr_ptr.use_count() == 0);
-
-    ctx_attr_ptr = ctx_attr_new();
-    ctx_attr_set_transport(ctx_attr_ptr, config.transport, config.ipAddress, config.port);
+  ctx_attr_ptr = ctx_attr_new();
+  ctx_attr_set_transport(ctx_attr_ptr, config.transport, config.ipAddress, config.port);
   
-    ctx_ptr = ctx_new(ctx_attr_ptr);
-    assert(ctx_ptr);
+  ctx_ptr = ctx_new(ctx_attr_ptr);
+  assert(ctx_ptr);
 
-    int err = ctx_init(ctx_ptr);
-    assert(err == 0);
-  }
+  int err = ctx_init(ctx_ptr);
+  assert(err == 0);
 
   startTogether.wakeup();
   startTogether.pause();
@@ -475,20 +463,6 @@ int main(int argc, char *argv[]) {
     exit(1);
   }
 
-  client_ctx_attr_ptr ctx_attr_ptr; 
-  client_ctx_ptr ctx_ptr; 
-
-  if (config.sharedCtxBetweenThreads) {
-    ctx_attr_ptr = ctx_attr_new();
-    ctx_attr_set_transport(ctx_attr_ptr, config.transport, config.ipAddress, config.port);
-  
-    ctx_ptr = ctx_new(ctx_attr_ptr);
-    assert(ctx_ptr);
-
-    int err = ctx_init(ctx_ptr);
-    assert(err == 0);
-  }
-
   fileMgr.init();
 
   gobjfs::os::CpuStats startCpuStats;
@@ -501,18 +475,17 @@ int main(int argc, char *argv[]) {
   startTogether.init(config.maxThr, -1);
 
   for (decltype(config.maxThr) thr = 0; thr < config.maxThr; thr++) {
-    ThreadCtx *ctx = new ThreadCtx(thr, config, ctx_attr_ptr, ctx_ptr);
+    ThreadCtx *ctx = new ThreadCtx(thr, config);
     auto f = std::async(std::launch::async, std::bind(&ThreadCtx::doRandomRead, ctx));
 
     futVec.emplace_back(std::move(f));
-    ctxVec.push_back(ctx);
   }
 
   if (config.runTimeSec) {
     // wait till benchmark runs for N seconds
     sleep(config.runTimeSec);
-    for (auto elem : ctxVec) {
-      elem->mustExit = true;
+    for (auto ctx : ctxVec) {
+      ctx->mustExit = true;
     }
   }
 
