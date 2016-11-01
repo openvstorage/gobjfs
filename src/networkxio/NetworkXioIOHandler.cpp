@@ -249,7 +249,7 @@ void NetworkXioIOHandler::runTimerHandler()
         //bool smallChange = std::abs(currentOps - prevOps_) < (prevOps_/inversePercChange); // only change if difference is not due to jitter
         bool smallChange = false; // this works better
         if (not smallChange) {
-          incrDirection_ = (currentOps < prevOps_) ? -1 : 1;
+          incrDirection_ = (currentOps < prevOps_) ? -2 : 2;
           const size_t minSubmitSz = ioexecPtr_->minSubmitSize() + incrDirection_;
           if (minSubmitSz > 0) {
             ioexecPtr_->setMinSubmitSize(minSubmitSz);
