@@ -51,7 +51,6 @@ class RoraGateway {
 
   // each thread serves one connection to same ASD
   struct ThreadInfo {
-    gobjfs::xio::client_ctx_ptr ctx_;
     std::thread thread_;
     bool started_{false};
     bool stopping_{false};
@@ -62,10 +61,14 @@ class RoraGateway {
 
     const std::string transport_;
     const std::string ipAddress_;
-    int port_;
+    int port_{-1};
+
+    size_t maxThreadsPerASD_{0};
+    size_t maxConnPerASD_{0};
 
     ASDQueueUPtr queue_;
 
+    std::vector<gobjfs::xio::client_ctx_ptr> ctxVec_;
     std::vector<std::shared_ptr<ThreadInfo>> threadVec_;
 
     // info passed to EPoller.addEvent
@@ -93,7 +96,7 @@ class RoraGateway {
     ASDInfo(RoraGateway* rgPtr,
         const std::string& transport, const std::string& ipAddress, int port,
         size_t maxMsgSize, size_t maxQueueLen,
-        size_t maxThreadsPerASD);
+        size_t maxConnPerASD);
 
     void clearStats();
   };
