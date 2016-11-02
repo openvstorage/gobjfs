@@ -98,7 +98,7 @@ RoraGateway::ASDInfo::ASDInfo(RoraGateway* rgPtr,
   : transport_(transport)
   , ipAddress_(ipAddress)
   , port_(port) 
-  , maxThreadsPerASD_(1)
+  , maxThreadsPerASD_(maxConnPerASD)
   , maxConnPerASD_(maxConnPerASD) {
 
   int ret = 0;
@@ -369,7 +369,7 @@ int RoraGateway::asdThreadFunc(ASDInfo* asdInfo, size_t thrIdx) {
   std::vector<giocb*> pending_giocb_vec;
 
   int numIdleLoops = 0;
-  size_t nextConnIdx = 0;
+  size_t nextConnIdx = thrIdx;
 
   while (1) {
 
@@ -498,7 +498,7 @@ int RoraGateway::asdThreadFunc(ASDInfo* asdInfo, size_t thrIdx) {
           }
           pending_giocb_vec.clear();
           // rotate the connection used
-          nextConnIdx = (nextConnIdx + 1) % asdInfo->ctxVec_.size();
+          //nextConnIdx = (nextConnIdx + 1) % asdInfo->ctxVec_.size();
       }
       if (pending_giocb_vec.empty() && threadInfo->stopping_) {
         break;
@@ -577,8 +577,8 @@ int RoraGateway::run() {
 
   for (auto& asdPtr : asdVec_) {
     for (size_t thrIdx = 0; thrIdx < asdPtr->maxThreadsPerASD_; thrIdx ++) {
-    asdPtr->threadVec_.push_back(std::make_shared<ThreadInfo>());
-    asdPtr->threadVec_[thrIdx]->thread_ = std::thread(
+      asdPtr->threadVec_.push_back(std::make_shared<ThreadInfo>());
+      asdPtr->threadVec_[thrIdx]->thread_ = std::thread(
           std::bind(&RoraGateway::asdThreadFunc, this, asdPtr.get(), thrIdx));
     }
   }
