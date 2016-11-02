@@ -24,6 +24,7 @@ but WITHOUT ANY WARRANTY of any kind.
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <iostream>
+#include <string>
 #include <assert.h>
 #include <list>
 
@@ -48,6 +49,7 @@ static int static_runEventHandler(gIOStatus& iostatus, void* ctx);
 struct TimerPrint {
   const uint64_t ops_;
   const size_t submitSize_;
+  const std::string cond_;
   const float processedInLoop_;
   const float interArrivalNsec_;
   const size_t externalFlushes_;
@@ -120,7 +122,7 @@ private:
   // pointer to parent 
   PortalThreadData* pt_;
 
-  float prevBatchSize_{0.0f};
+  size_t prevMinSubmitSz_;
   uint64_t prevOps_{0};
   int incrDirection_{1}; // -1 or +1
   int timerCalled_{0}; 
