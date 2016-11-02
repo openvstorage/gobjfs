@@ -20,6 +20,7 @@ ASDQueueUPtr asdQueue;
 const std::string asdQueueName = "bench_asd_queue";
 size_t maxAllocSize = 4096;
 size_t maxQueueLen = 10;
+StatsCounter<int64_t> latMilli;
 
 int main(int argc, char* argv[])
 {
@@ -58,6 +59,12 @@ int main(int argc, char* argv[])
 
   for (doneCount = 0; doneCount < totalCount; doneCount ++) {
 
+    Timer latencyTimer;
+
+    if (doneCount % 100 == 0) {
+      latencyTimer.reset();
+    }
+
     GatewayMsg reqMsg;
     reqMsg.edgePid_ = pid;
     ret = asdQueue->write(reqMsg);
@@ -66,6 +73,10 @@ int main(int argc, char* argv[])
     GatewayMsg respMsg;
     ret = edgeQueue->read(respMsg);
     assert(ret == 0);
+
+    if (doneCount % 100 == 0) {
+      latMilli = latencyTimer.elapsedMicroseconds();
+    }
   }
 
   int64_t timeMilli = throughputTimer.elapsedMilliseconds();
@@ -85,5 +96,5 @@ int main(int argc, char* argv[])
 
   edgeQueue.reset();
 
-  std::cout << "iops=" << iops << std::endl;
+  std::cout << "iops=" << iops << ",lat=" << latMilli << std::endl;
 }
