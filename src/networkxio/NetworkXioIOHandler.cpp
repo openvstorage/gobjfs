@@ -239,8 +239,50 @@ void NetworkXioIOHandler::runTimerHandler()
 
         size_t minSubmitSz = ioexecPtr_->minSubmitSize();
         auto numProcessedInLoopAvg = ioexecPtr_->stats_.numProcessedInLoop_.mean();
+
+        //bool smallChange = std::abs(currentOps - prevOps_) < (prevOps_/inversePercChange); // only change if difference is not due to jitter
+		std::string cond;
+        {
+		  float submitDiff = ((float)minSubmitSz - numProcessedInLoopAvg);
+          if (submitDiff > 1.0f) {
+            minSubmitSz -= (size_t)submitDiff;
+			// batchSize set too high
+			// load has decreased ? 
+			cond = "too_high";
+          } else if (ioexecPtr_->stats_.numExternalFlushes_ > (ioexecPtr_->stats_.numInlineFlushes_/3)) {
+            minSubmitSz -= 1;
+			// flushes after timeout too high, reduce batchsize
+			cond = "timeouts";
+          } else {
+		    ssize_t diffOps = currentOps - prevOps_;
+			size_t diff = std::abs(diffOps);
+			if (diff > prevOps_/10) {
+			  ssize_t diffSubmitSz = minSubmitSz - prevMinSubmitSz_;
+			  // if ops incr after submitSz incr
+			  // or ops decr after submitSz decr 
+			  // then incr submitSz further
+              if (((diffOps > 0) && (diffSubmitSz > 0)) || 
+			    ((diffOps < 0) && (diffSubmitSz < 0))) {
+				minSubmitSz += 2;	  	 
+			    cond = "diffp";
+			  } else {
+			  	minSubmitSz -= 2;
+			    cond = "diffn";
+			  }
+			} else {
+              minSubmitSz += 1;
+			  cond = "rand";
+			}
+          }
+          if (minSubmitSz > 0) {
+		    prevMinSubmitSz_ = ioexecPtr_->minSubmitSize();
+            ioexecPtr_->setMinSubmitSize(minSubmitSz);
+            minSubmitSizeStats_ = minSubmitSz;
+          }
+        }
         TimerPrint t{currentOps, 
-          ioexecPtr_->minSubmitSize(),
+          prevMinSubmitSz_,
+		  cond,
           numProcessedInLoopAvg,
           ioexecPtr_->stats_.interArrivalNsec_.variance(),
           ioexecPtr_->stats_.numExternalFlushes_,
@@ -248,25 +290,8 @@ void NetworkXioIOHandler::runTimerHandler()
           ioexecPtr_->stats_.numCompletionFlushes_};
 
         opsRecord_.push_back(std::move(t));
-
-        int inversePercChange = 50; // 2 perc change in iops
-        //bool smallChange = std::abs(currentOps - prevOps_) < (prevOps_/inversePercChange); // only change if difference is not due to jitter
-        bool smallChange = false; // this works better
-        if (not smallChange) {
-          if ((float)minSubmitSz - numProcessedInLoopAvg > 1.0f) {
-            minSubmitSz -= 2;
-          } else if (ioexecPtr_->stats_.numExternalFlushes_ > (ioexecPtr_->stats_.numInlineFlushes_/3)) {
-            minSubmitSz -= 2;
-          } else {
-            size_t incrDirection_ = (currentOps < prevOps_) ? -4 : 4;
-            minSubmitSz += incrDirection_;
-          }
-          if (minSubmitSz > 0) {
-            ioexecPtr_->setMinSubmitSize(minSubmitSz);
-            minSubmitSizeStats_ = minSubmitSz;
-          }
-        }
       }
+	  // prevOps at prevMinSubmitSz
       prevOps_ = currentOps;
     }
 
@@ -288,6 +313,7 @@ void NetworkXioIOHandler::runTimerHandler()
         os << ",p=" << pt_->coreId_ 
           << ",s=" << op.submitSize_ 
           << ",o=" << op.ops_ 
+		  << ",cond=" << op.cond_
           << ",pl=" << op.processedInLoop_
           << ",ia=" << op.interArrivalNsec_
           << ",ef=" << op.externalFlushes_ 
