@@ -236,10 +236,13 @@ void NetworkXioIOHandler::runTimerHandler()
         if (opsRecord_.empty()) {
           opsRecord_.reserve(60);
         }
+
+        size_t minSubmitSz = ioexecPtr_->minSubmitSize();
+        auto numProcessedInLoopAvg = ioexecPtr_->stats_.numProcessedInLoop_.mean();
         TimerPrint t{currentOps, 
           ioexecPtr_->minSubmitSize(),
-          ioexecPtr_->stats_.numProcessedInLoop_.mean(),
-          ioexecPtr_->stats_.interArrivalNsec_.mean(),
+          numProcessedInLoopAvg,
+          ioexecPtr_->stats_.interArrivalNsec_.variance(),
           ioexecPtr_->stats_.numExternalFlushes_,
           ioexecPtr_->stats_.numInlineFlushes_,
           ioexecPtr_->stats_.numCompletionFlushes_};
@@ -250,8 +253,14 @@ void NetworkXioIOHandler::runTimerHandler()
         //bool smallChange = std::abs(currentOps - prevOps_) < (prevOps_/inversePercChange); // only change if difference is not due to jitter
         bool smallChange = false; // this works better
         if (not smallChange) {
-          incrDirection_ = (currentOps < prevOps_) ? -2 : 2;
-          const size_t minSubmitSz = ioexecPtr_->minSubmitSize() + incrDirection_;
+          if ((float)minSubmitSz - numProcessedInLoopAvg > 1.0f) {
+            minSubmitSz -= 2;
+          } else if (ioexecPtr_->stats_.numExternalFlushes_ > (ioexecPtr_->stats_.numInlineFlushes_/3)) {
+            minSubmitSz -= 2;
+          } else {
+            size_t incrDirection_ = (currentOps < prevOps_) ? -4 : 4;
+            minSubmitSz += incrDirection_;
+          }
           if (minSubmitSz > 0) {
             ioexecPtr_->setMinSubmitSize(minSubmitSz);
             minSubmitSizeStats_ = minSubmitSz;
