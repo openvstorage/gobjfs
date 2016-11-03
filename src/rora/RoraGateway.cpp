@@ -113,11 +113,9 @@ RoraGateway::ASDInfo::ASDInfo(RoraGateway* rgPtr,
   auto ctx_attr_ptr = ctx_attr_new();
   ctx_attr_set_transport(ctx_attr_ptr, transport, ipAddress, port);
 
-  // ensure maxConn is even number
-  if (maxConnPerASD_ & 0x01) {
-    maxConnPerASD_ &= (~0x01);
-  }
   // check maxConn = integer multiple of maxThreads
+  // so that each thread can service connections by
+  // arithmetic progression
   if (maxConnPerASD_ % maxThreadsPerASD_ != 0) {
     maxConnPerASD_ -= (maxConnPerASD_ % maxThreadsPerASD_);
   }
