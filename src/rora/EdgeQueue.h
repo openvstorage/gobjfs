@@ -87,12 +87,10 @@ class EdgeQueue {
   gobjfs::xio::giocb* giocb_from_GatewayMsg(const GatewayMsg& gmsg);
 
   /**
-   * @param retval: actual size which was read on server, or -1 in failure
-   * @param errval: value of errno in case retval is -1, else 0
+   * @param retval: actual size which was read on server, or -errno in failure
    */
   int GatewayMsg_from_giocb(GatewayMsg& gmsg, const gobjfs::xio::giocb& iocb,
-    ssize_t retval, 
-    int errval);
+    ssize_t retval);
 
   private:
   void updateStats(EdgeQueue::Statistics& which, size_t msgSize);

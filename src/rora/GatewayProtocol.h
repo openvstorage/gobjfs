@@ -55,11 +55,8 @@ struct GatewayMsg {
   void* rawbuf_{nullptr}; 
 
   // if read succeeded, this is size of block read 
-  // if read failed, it is -1
+  // if read failed, it is errno
   ssize_t retval_{-1};
-
-  // this is errno seeen on the ASD server
-  int errval_{-1};
 
   public:
 
@@ -89,8 +86,7 @@ struct GatewayMsg {
       size_,
       offset_,
       buf_,
-      retval_,
-      errval_);
+      retval_);
   
 };
 

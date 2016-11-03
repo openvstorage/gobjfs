@@ -484,8 +484,7 @@ int RoraGateway::asdThreadFunc(ASDInfo* asdInfo, size_t thrIdx) {
   
               if (edgePtr) {
                 GatewayMsg respMsg;
-                edgePtr->GatewayMsg_from_giocb(respMsg, *iocb, 
-                  -1, EIO);
+                edgePtr->GatewayMsg_from_giocb(respMsg, *iocb, -EIO);
                 auto ret = edgePtr->write(respMsg);
                 assert(ret == 0);
               } else {
@@ -536,10 +535,9 @@ int RoraGateway::handleReadCompletion(int fd, uintptr_t ptr) {
 
         GatewayMsg respMsg;
         edgePtr->GatewayMsg_from_giocb(respMsg, *iocb, 
-            aio_return(iocb), aio_error(iocb));
+            aio_return(iocb));
         LOG(DEBUG) << "send response to pid=" << pid 
           << ",ret=" << aio_return(iocb)
-          << ",err=" << aio_error(iocb)
           << ",filename=" << iocb->filename;
         auto ret = edgePtr->write(respMsg);
         assert(ret == 0);

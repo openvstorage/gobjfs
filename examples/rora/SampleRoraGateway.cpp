@@ -37,7 +37,7 @@ void iocompletionFunc() {
 
           GatewayMsg respMsg;
           edgeQueue->GatewayMsg_from_giocb(respMsg, *iocb, 
-              aio_return(iocb), aio_error(iocb));
+              aio_return(iocb));
           LOG(INFO) << "send response to pid=" << pid 
             << " for filename=" << iocb->filename;
           auto ret = edgeQueue->write(respMsg);
@@ -104,7 +104,6 @@ int main(int argc, char* argv[])
             auto aio_ret = aio_read(ctx, iocb);
             if (aio_ret != 0) {
               anyReq.retval_ = -1;
-              anyReq.errval_ = EIO;
               auto ret = edgeQueue->write(anyReq);
               assert(ret == 0);
               delete iocb;

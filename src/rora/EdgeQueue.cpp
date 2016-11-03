@@ -243,15 +243,13 @@ giocb* EdgeQueue::giocb_from_GatewayMsg(const GatewayMsg& gmsg) {
  */
 int EdgeQueue::GatewayMsg_from_giocb(GatewayMsg& gmsg, 
     const giocb& iocb, 
-    ssize_t retval, 
-    int errval) {
+    ssize_t retval) {
 
   gmsg.opcode_ = Opcode::READ_RESP;
   gmsg.filename_ = iocb.filename;
   gmsg.offset_ = iocb.aio_offset;
   gmsg.size_ = iocb.aio_nbytes;
   gmsg.buf_ = segment_->get_handle_from_address(iocb.aio_buf);
-  gmsg.errval_ = errval;
   gmsg.retval_ = retval;
 
   return 0;
