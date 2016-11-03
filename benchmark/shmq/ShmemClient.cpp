@@ -26,7 +26,7 @@ int main(int argc, char* argv[])
 {
   int ret = 0;
 
-  int totalCount = 1000000;
+  int totalCount = 10000;
   if (argc > 1) {
     totalCount = atoi(argv[1]);
   }
@@ -76,6 +76,9 @@ int main(int argc, char* argv[])
 
     if (doneCount % 100 == 0) {
       latMilli = latencyTimer.elapsedMicroseconds();
+      if (doneCount % 1000 == 0) {
+        std::cout << "done=" << doneCount << std::endl;
+      }
     }
   }
 

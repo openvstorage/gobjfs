@@ -26,70 +26,95 @@ void asdThreadFunc() {
 
   std::cout << "started thread=" << gettid() << std::endl;
 
+  std::vector<int> pidVec;
+  int idle = 0;
+
   while (1) {
 
     GatewayMsg reqMsg;
-    ret = asdQueue->read(reqMsg);
-    assert(ret == 0);
-
-    switch (reqMsg.opcode_) { 
-
-      case ADD_EDGE_REQ : 
-        {
-          auto edgeQueue = gobjfs::make_unique<EdgeQueue>(reqMsg.edgePid_);
-          auto edgeQueuePtr = edgeQueue.get();
-      
-          {
-            std::unique_lock<std::mutex> l(edgeQueueMutex);
-            edgeQueueMap.insert(std::make_pair(reqMsg.edgePid_, std::move(edgeQueue)));
-          }
-
-          std::cout << "added edgeQueue for pid=" << reqMsg.edgePid_ << std::endl;
-
-          GatewayMsg respMsg;
-          ret = edgeQueuePtr->write(respMsg);
-          assert(ret == 0);
-
-          break;
-        }
-      case DROP_EDGE_REQ : 
-        {
-          decltype(edgeQueueMap)::iterator iter;
-          {
-            std::unique_lock<std::mutex> l(edgeQueueMutex);
-            iter = edgeQueueMap.find(reqMsg.edgePid_);
-          }
-          assert(iter != edgeQueueMap.end());
-          auto& edgeQueue = iter->second;
-
-          GatewayMsg respMsg;
-          ret = edgeQueue->write(respMsg);
-          assert(ret == 0);
-
-          {
-            std::unique_lock<std::mutex> l(edgeQueueMutex);
-            edgeQueueMap.erase(iter);
-          }
-          std::cout << "dropped edgeQueue for pid=" << reqMsg.edgePid_ << std::endl;
-          break;
-        }
-      default : 
-        {
-          decltype(edgeQueueMap)::iterator iter;
-          {
-            std::unique_lock<std::mutex> l(edgeQueueMutex);
-            iter = edgeQueueMap.find(reqMsg.edgePid_);
-          }
-          assert(iter != edgeQueueMap.end());
-          auto& edgeQueue = iter->second;
-
-          GatewayMsg respMsg;
-          ret = edgeQueue->write(respMsg);
-          assert(ret == 0);
-          break;
-        }
+    if (pidVec.size()) {
+      ret = asdQueue->try_read(reqMsg);
+      if (ret != 0) {
+        idle ++;
+      } 
+    } else {
+      ret = asdQueue->read(reqMsg);
+      assert(ret == 0);
     }
-  }
+
+    if (ret == 0) {
+      switch (reqMsg.opcode_) { 
+
+        case ADD_EDGE_REQ : 
+          {
+            auto edgeQueue = gobjfs::make_unique<EdgeQueue>(reqMsg.edgePid_);
+            auto edgeQueuePtr = edgeQueue.get();
+        
+            {
+              std::unique_lock<std::mutex> l(edgeQueueMutex);
+              edgeQueueMap.insert(std::make_pair(reqMsg.edgePid_, std::move(edgeQueue)));
+            }
+
+            std::cout << "added edgeQueue for pid=" << reqMsg.edgePid_ << std::endl;
+
+            GatewayMsg respMsg;
+            ret = edgeQueuePtr->write(respMsg);
+            assert(ret == 0);
+
+            break;
+          }
+        case DROP_EDGE_REQ : 
+          {
+            decltype(edgeQueueMap)::iterator iter;
+            {
+              std::unique_lock<std::mutex> l(edgeQueueMutex);
+              iter = edgeQueueMap.find(reqMsg.edgePid_);
+            }
+            assert(iter != edgeQueueMap.end());
+            auto& edgeQueue = iter->second;
+
+            GatewayMsg respMsg;
+            ret = edgeQueue->write(respMsg);
+            assert(ret == 0);
+
+            {
+              std::unique_lock<std::mutex> l(edgeQueueMutex);
+              edgeQueueMap.erase(iter);
+            }
+            std::cout << "dropped edgeQueue for pid=" << reqMsg.edgePid_ << std::endl;
+            break;
+          }
+        default : 
+          {
+            pidVec.push_back(reqMsg.edgePid_);
+          }
+      } // switch
+    } // if
+
+    if (((idle == 1) && pidVec.size()) || 
+        (pidVec.size() >= edgeQueueMap.size())) {
+
+      for (auto pid : pidVec) {
+
+        decltype(edgeQueueMap)::iterator iter;
+        {
+          std::unique_lock<std::mutex> l(edgeQueueMutex);
+          iter = edgeQueueMap.find(pid);
+        }
+        assert(iter != edgeQueueMap.end());
+        auto& edgeQueue = iter->second;
+  
+        GatewayMsg respMsg;
+        ret = edgeQueue->write(respMsg);
+        assert(ret == 0);
+      }
+  
+      if (idle == 1) {
+        idle = 0;
+      }
+      pidVec.clear();
+    }
+  } // while
 }
 
 int main(int argc, char* argv[])
