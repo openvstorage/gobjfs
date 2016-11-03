@@ -84,7 +84,7 @@ class EdgeQueue {
 
   int free(void* ptr);
 
-  gobjfs::xio::giocb* giocb_from_GatewayMsg(const GatewayMsg& gmsg);
+  std::vector<gobjfs::xio::giocb*> giocb_from_GatewayMsg(const GatewayMsg& gmsg);
 
   /**
    * @param retval: actual size which was read on server, or -errno in failure

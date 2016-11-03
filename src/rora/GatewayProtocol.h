@@ -43,26 +43,30 @@ struct GatewayMsg {
   // this field doesnt have any inherent functional purpose
   int32_t fileNumber_{-1};
 
+  size_t numElems_{0};
+
   // file, size, offset for the read request
-  std::string filename_;
-  size_t size_{0};
-  off_t offset_{0};
+  std::vector<std::string> filenameVec_;
+  std::vector<size_t> sizeVec_;
+  std::vector<off_t> offsetVec_;
 
   // handle is a difference_type (i.e offset within shmem segment)
-  bip::managed_shared_memory::handle_t buf_{0};
+  std::vector<bip::managed_shared_memory::handle_t> bufVec_;
 
   // rawbuf deliberately not included in msgpack
-  void* rawbuf_{nullptr}; 
+  std::vector<void*> rawbufVec_;
 
   // if read succeeded, this is size of block read 
   // if read failed, it is errno
-  ssize_t retval_{-1};
+  std::vector<ssize_t> retvalVec_;
 
   public:
 
-  explicit GatewayMsg() {}
+  explicit GatewayMsg(const size_t numRequests = 0);
 
   ~GatewayMsg();
+
+  size_t numElems() const { return numElems_; }
 
   const std::string pack() const {
     std::stringstream sbuf;
@@ -82,11 +86,12 @@ struct GatewayMsg {
   MSGPACK_DEFINE(opcode_,
       edgePid_,
       fileNumber_,
-      filename_,
-      size_,
-      offset_,
-      buf_,
-      retval_);
+      numElems_,
+      filenameVec_,
+      sizeVec_,
+      offsetVec_,
+      bufVec_,
+      retvalVec_);
   
 };
 
@@ -98,6 +103,13 @@ GatewayMsg createReadRequest(
     const std::string& filename, 
     off_t offset, 
     size_t size);
+
+GatewayMsg createReadRequest(
+    EdgeQueue* edgeQueue,
+    uint32_t fileNumber,
+    const std::vector<std::string> &filenameVec, 
+    std::vector<off_t> &offsetVec, 
+    std::vector<size_t> &sizeVec);
 
 GatewayMsg createCloseRequest();
 

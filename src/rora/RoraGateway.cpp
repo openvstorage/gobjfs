@@ -446,10 +446,19 @@ int RoraGateway::asdThreadFunc(ASDInfo* asdInfo, size_t thrIdx) {
           auto edgePtr = edges_.find(pid);
           
           if (edgePtr) {
-            LOG(DEBUG) << "got read from pid=" << pid << " for file=" << anyReq.filename_;
-            giocb* iocb = edgePtr->giocb_from_GatewayMsg(anyReq);
+            LOG(DEBUG) << "got read from pid=" << pid << " for number=" << anyReq.numElems();
+            auto giocb_vec = edgePtr->giocb_from_GatewayMsg(anyReq);
             // put iocb into pending_giocb_vec queue
-            pending_giocb_vec.push_back(iocb);
+            if (pending_giocb_vec.empty()) {
+              pending_giocb_vec = std::move(giocb_vec);
+            } else {
+              pending_giocb_vec.reserve(
+                pending_giocb_vec.size() + giocb_vec.size());
+              std::move(std::begin(giocb_vec),
+                std::end(giocb_vec),
+                std::back_inserter(pending_giocb_vec));
+              giocb_vec.clear();
+            }
           } else {
             LOG(ERROR) << " could not find queue for pid=" << pid;
           }

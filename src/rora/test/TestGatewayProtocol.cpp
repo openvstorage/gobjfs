@@ -42,7 +42,7 @@ TEST(GatewayProtocolTest, SharedPtrInMsgPack) {
 
   GatewayMsg sendMsg;
   // get the handle from the ptr
-  sendMsg.buf_ = creator->segment_->get_handle_from_address(sendBufPtr);
+  sendMsg.bufVec_.push_back(creator->segment_->get_handle_from_address(sendBufPtr));
   // write into message queue
   auto ret = creator->write(sendMsg);
   EXPECT_EQ(ret, 0);
@@ -55,7 +55,7 @@ TEST(GatewayProtocolTest, SharedPtrInMsgPack) {
   EXPECT_EQ(ret, 0);
 
   // recover the ptr from the handle
-  void* recvBufPtr = reader->segment_->get_address_from_handle(recvMsg.buf_);
+  void* recvBufPtr = reader->segment_->get_address_from_handle(recvMsg.bufVec_[0]);
 
   // check if it has the same memory contents
   int mem_ret = memcmp(recvBufPtr, sendBufPtr, maxAllocSize);

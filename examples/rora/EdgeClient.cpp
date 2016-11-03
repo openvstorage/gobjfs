@@ -38,10 +38,12 @@ int main(int argc, char* argv[])
     assert(ret == 0);
 
     // check retval, errval, filename, offset, size match
-    responseMsg.rawbuf_ = edgeQueue->segment_->get_address_from_handle(responseMsg.buf_);
+    responseMsg.rawbufVec_.push_back(edgeQueue->segment_->get_address_from_handle(responseMsg.bufVec_[0]));
 
     // free allocated shared segment
-    edgeQueue->free(responseMsg.rawbuf_);
+    for (auto ptr : responseMsg.rawbufVec_) {
+      edgeQueue->free(ptr);
+    }
   }
 
   {

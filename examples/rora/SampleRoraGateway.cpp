@@ -96,17 +96,20 @@ int main(int argc, char* argv[])
           auto edgeIter = edgeCatalog.find(pid);
           
           if (edgeIter != edgeCatalog.end()) {
-            LOG(INFO) << "got read for =" << anyReq.filename_;
+            LOG(INFO) << "got num read =" << anyReq.numElems();
             auto edgeQueue = edgeIter->second;
 
-            giocb* iocb = edgeQueue->giocb_from_GatewayMsg(anyReq);
+            auto giocb_vec = edgeQueue->giocb_from_GatewayMsg(anyReq);
 
-            auto aio_ret = aio_read(ctx, iocb);
+            auto aio_ret = aio_readv(ctx, giocb_vec);
             if (aio_ret != 0) {
-              anyReq.retval_ = -1;
+              anyReq.retvalVec_.push_back(-1);
               auto ret = edgeQueue->write(anyReq);
               assert(ret == 0);
-              delete iocb;
+              for (auto giocb : giocb_vec) {
+                delete giocb;
+              }
+              giocb_vec.clear();
             } else  {
               count ++;
               aio_wait_all(ctx);

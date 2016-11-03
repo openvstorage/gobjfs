@@ -177,7 +177,9 @@ int EdgeQueue::read(GatewayMsg& msg) {
         (!isCreator_ && msg.opcode_ == Opcode::READ_REQ));
 
       // convert segment offset to raw ptr within this process
-      msg.rawbuf_ = segment_->get_address_from_handle(msg.buf_);
+      for (size_t idx = 0; idx < msg.numElems(); idx ++) {
+        msg.rawbufVec_.push_back(segment_->get_address_from_handle(msg.bufVec_[idx]));
+      }
     }
     updateStats(readStats_, recvdSize);
     return 0;
@@ -224,17 +226,24 @@ int EdgeQueue::free(void* ptr) {
   return 0;
 }
 
-giocb* EdgeQueue::giocb_from_GatewayMsg(const GatewayMsg& gmsg) {
+std::vector<giocb*> EdgeQueue::giocb_from_GatewayMsg(const GatewayMsg& gmsg) {
 
-  giocb *iocb = new giocb;
+  std::vector<giocb*> giocb_vec;
+  giocb_vec.reserve(gmsg.numElems());
 
-  iocb->filename = gmsg.filename_;
-  iocb->aio_offset = gmsg.offset_;
-  iocb->aio_nbytes = gmsg.size_;
-  iocb->aio_buf = segment_->get_address_from_handle(gmsg.buf_);
-  iocb->user_ctx = gmsg.edgePid_;
+  for (size_t idx = 0; idx < gmsg.numElems(); idx ++) {
+    giocb *iocb = new giocb;
 
-  return iocb;
+    iocb->filename = gmsg.filenameVec_[idx];
+    iocb->aio_offset = gmsg.offsetVec_[idx];
+    iocb->aio_nbytes = gmsg.sizeVec_[idx];
+    iocb->aio_buf = segment_->get_address_from_handle(gmsg.bufVec_[idx]);
+    iocb->user_ctx = gmsg.edgePid_;
+
+    giocb_vec.push_back(iocb);
+  }
+
+  return giocb_vec;
 }
 
 /**
@@ -246,11 +255,12 @@ int EdgeQueue::GatewayMsg_from_giocb(GatewayMsg& gmsg,
     ssize_t retval) {
 
   gmsg.opcode_ = Opcode::READ_RESP;
-  gmsg.filename_ = iocb.filename;
-  gmsg.offset_ = iocb.aio_offset;
-  gmsg.size_ = iocb.aio_nbytes;
-  gmsg.buf_ = segment_->get_handle_from_address(iocb.aio_buf);
-  gmsg.retval_ = retval;
+  gmsg.filenameVec_.push_back(iocb.filename);
+  gmsg.offsetVec_.push_back(iocb.aio_offset);
+  gmsg.sizeVec_.push_back(iocb.aio_nbytes);
+  gmsg.bufVec_.push_back(segment_->get_handle_from_address(iocb.aio_buf));
+  gmsg.retvalVec_.push_back(retval);
+  gmsg.numElems_ ++;
 
   return 0;
 }

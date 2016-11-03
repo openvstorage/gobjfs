@@ -236,39 +236,45 @@ void RunContext::doRandomRead(ASDQueue* asdQueue) {
 
     Timer latencyTimer(true); // one timer for all batch
 
+    std::vector<off_t> offsetVec;
+    std::vector<size_t> sizeVec;
+    std::vector<std::string> filenameVec;
     // send read msg 
     // a batch may contains read offset for different files
     for (size_t batchIdx = 0; batchIdx < config.maxOutstandingIO; batchIdx ++) {
-      const off_t off = blockGenerator(seedGen) * config.blockSize;
       const uint32_t fileNumber = filenumGen(seedGen);
-      const std::string filename = fileMgr.getFilename(fileNumber);
-      const auto ret = asdQueue->write(createReadRequest(edgeQueue.get(), fileNumber, filename,
-        off,
-        config.blockSize));
-      assert(ret == 0);
+      filenameVec.push_back(fileMgr.getFilename(fileNumber));
+      sizeVec.push_back(config.blockSize);
+      offsetVec.push_back(blockGenerator(seedGen) * config.blockSize);
     }
+
+    const auto ret = asdQueue->write(createReadRequest(edgeQueue.get(), 1, filenameVec,
+      offsetVec,
+      sizeVec));
+    assert(ret == 0);
   
     for (size_t batchIdx = 0; batchIdx < config.maxOutstandingIO; batchIdx ++) {
       // get read response
-      GatewayMsg responseMsg;
+      GatewayMsg responseMsg(1);
       const auto ret = edgeQueue->read(responseMsg);
       assert(ret == 0);
 
       // check retval, errval, filename, offset, size match
       if (config.doMemCheck) {
+        /*
         const std::string fileString((const char*)responseMsg.rawbuf_, 8); 
         const std::string offsetString((const char*)responseMsg.rawbuf_ + 8, 8); 
         assert(atoll(fileString.c_str()) == responseMsg.fileNumber_);
         assert(atoll(offsetString.c_str()) == responseMsg.offset_);
+        */
       }
   
-      const bool hasFailed = (responseMsg.retval_ < 0);
-      incrementCount(hasFailed);
-  
-      // free allocated shared segment
-      edgeQueue->free(responseMsg.rawbuf_);
-      responseMsg.rawbuf_ = nullptr;
-      responseMsg.buf_ = 0;
+      for (size_t idx = 0; idx < responseMsg.numElems(); idx ++) {
+        const bool hasFailed = (responseMsg.retvalVec_[idx] < 0);
+        incrementCount(hasFailed);
+        // free allocated shared segment
+        edgeQueue->free(responseMsg.rawbufVec_[idx]);
+      }
     }
 
     readLatency = latencyTimer.elapsedMicroseconds();

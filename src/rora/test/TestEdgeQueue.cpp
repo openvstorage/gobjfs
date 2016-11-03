@@ -77,8 +77,8 @@ TEST(EdgeQueueTest, ReaderWriterQueue) {
   GatewayMsg msg;
   for (size_t idx = 0; idx < maxQueueLen; idx ++)
   {
-    msg.offset_ = idx;
-    msg.filename_ = "abcd";
+    msg.offsetVec_.push_back(idx);
+    msg.filenameVec_.push_back("abcd");
     auto ret = creator->write(msg);
     EXPECT_EQ(ret, 0);
   }
@@ -92,8 +92,8 @@ TEST(EdgeQueueTest, ReaderWriterQueue) {
     GatewayMsg msg;
     auto ret = reader->read(msg);
     EXPECT_EQ(ret, 0);
-    ASSERT_EQ(msg.offset_, idx);
-    ASSERT_EQ(msg.filename_, "abcd");
+    ASSERT_EQ(msg.offsetVec_[0], idx);
+    ASSERT_EQ(msg.filenameVec_[0], "abcd");
 
     EXPECT_EQ(creator->getCurrentQueueLen(), maxMsgSize - (idx + 1));
     EXPECT_EQ(reader->getCurrentQueueLen(), maxMsgSize - (idx + 1));
