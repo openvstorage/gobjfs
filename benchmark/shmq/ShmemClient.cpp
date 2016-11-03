@@ -33,7 +33,7 @@ int main(int argc, char* argv[])
 
 
   int pid = getpid();
-  std::cout << "pid=" << pid << std::endl;
+  LOG(INFO) << "pid=" << pid << std::endl;
 
   // create new for this process
   edgeQueue = gobjfs::make_unique<EdgeQueue>(pid, maxQueueLen,
@@ -76,9 +76,6 @@ int main(int argc, char* argv[])
 
     if (doneCount % 100 == 0) {
       latMilli = latencyTimer.elapsedMicroseconds();
-      if (doneCount % 1000 == 0) {
-        std::cout << "done=" << doneCount << std::endl;
-      }
     }
   }
 
@@ -99,5 +96,5 @@ int main(int argc, char* argv[])
 
   edgeQueue.reset();
 
-  std::cout << "iops=" << iops << ",lat=" << latMilli << std::endl;
+  LOG(INFO) << "iops=" << iops << ",lat=" << latMilli << std::endl;
 }

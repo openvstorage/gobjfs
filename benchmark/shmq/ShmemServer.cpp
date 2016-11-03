@@ -5,7 +5,7 @@
 #include <util/Timer.h>
 #include <util/Stats.h>
 #include <util/os_utils.h>
-#include <gobjfs_log.h>
+#include <glog/logging.h>
 
 #include <unistd.h>
 #include <random>
@@ -19,15 +19,23 @@ std::mutex edgeQueueMutex;
 std::map<int, EdgeQueueUPtr> edgeQueueMap;
 ASDQueueUPtr asdQueue;
 const size_t maxQueueLen = 256;
+const size_t maxBatchSize = 8; // same as IOV_LEN in xio
 const std::string asdQueueName = "bench_asd_queue";
 
 void asdThreadFunc() {
+
+  size_t cond1_count = 0;
+  size_t cond2_count = 0;
+  size_t total_count = 0;
+  StatsCounter<int64_t> subSize;
+
   int ret = 0;
 
-  std::cout << "started thread=" << gettid() << std::endl;
+  LOG(INFO) << "started thread=" << gettid() << std::endl;
 
   std::vector<int> pidVec;
   int idle = 0;
+  size_t actualBatchSize = maxBatchSize;
 
   while (1) {
 
@@ -55,11 +63,13 @@ void asdThreadFunc() {
               edgeQueueMap.insert(std::make_pair(reqMsg.edgePid_, std::move(edgeQueue)));
             }
 
-            std::cout << "added edgeQueue for pid=" << reqMsg.edgePid_ << std::endl;
+            LOG(INFO) << "added edgeQueue for pid=" << reqMsg.edgePid_ << std::endl;
 
             GatewayMsg respMsg;
             ret = edgeQueuePtr->write(respMsg);
             assert(ret == 0);
+
+	    actualBatchSize = std::min(maxBatchSize, edgeQueueMap.size());
 
             break;
           }
@@ -81,7 +91,8 @@ void asdThreadFunc() {
               std::unique_lock<std::mutex> l(edgeQueueMutex);
               edgeQueueMap.erase(iter);
             }
-            std::cout << "dropped edgeQueue for pid=" << reqMsg.edgePid_ << std::endl;
+	    actualBatchSize = std::min(maxBatchSize, edgeQueueMap.size());
+            LOG(INFO) << "dropped edgeQueue for pid=" << reqMsg.edgePid_ << std::endl;
             break;
           }
         default : 
@@ -91,8 +102,25 @@ void asdThreadFunc() {
       } // switch
     } // if
 
-    if (((idle == 1) && pidVec.size()) || 
-        (pidVec.size() >= edgeQueueMap.size())) {
+    bool cond1 = ((idle >= 1) && pidVec.size());
+    bool cond2 = (pidVec.size() >= actualBatchSize);
+    if (cond1) {
+      cond1_count ++;
+    } 
+    if (cond2) {
+      cond2_count ++;
+    }
+    if (cond1 || cond2) {
+    
+      total_count ++;
+      subSize = pidVec.size();
+      if (total_count >= 1000) {
+        LOG(INFO) << "batch=" << subSize << ":idle=" << cond1_count << ":full=" << cond2_count << std::endl;
+        total_count = 0;
+        cond1_count = 0;
+        cond2_count = 0;
+        subSize.reset();
+      }
 
       for (auto pid : pidVec) {
 
@@ -119,6 +147,8 @@ void asdThreadFunc() {
 
 int main(int argc, char* argv[])
 {
+  google::InitGoogleLogging(argv[0]);
+
   asdQueue = gobjfs::make_unique<ASDQueue>(asdQueueName, maxQueueLen, GatewayMsg::MaxMsgSize);
 
   std::vector<std::future<void>> futVec;
