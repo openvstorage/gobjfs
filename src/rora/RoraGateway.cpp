@@ -25,6 +25,7 @@ struct Config {
   size_t maxQueueLen_ {256};
   // client threads to connect to multiple portals
   size_t maxThreadsPerASD_{1}; 
+  size_t maxConnPerASD_{1}; 
 
   int readConfig(const std::string& configFileName) {
 
@@ -34,7 +35,8 @@ struct Config {
         ("port", bpo::value<std::vector<int>>(&portVec_)->required(), "ASD port")
         ("transport", bpo::value<std::vector<std::string>>(&transportVec_)->required(), "ASD transport : tcp or rdma")
         ("max_asd_queue", bpo::value<size_t>(&maxQueueLen_)->required(), "length of shared memory queue used to forward requests to ASD")
-        ("max_threads_per_asd", bpo::value<size_t>(&maxThreadsPerASD_)->required(), "max threads connecting to an ASD (exploit accelio portals)")
+        ("max_threads_per_asd", bpo::value<size_t>(&maxThreadsPerASD_)->required(), "max threads which service all connections")
+        ("max_conn_per_asd", bpo::value<size_t>(&maxConnPerASD_)->required(), "max connections to an ASD (exploit accelio portals)")
         ;
 
     std::ifstream configFile(configFileName);
@@ -94,11 +96,12 @@ RoraGateway::ASDInfo::ASDInfo(RoraGateway* rgPtr,
     int port,
     size_t maxMsgSize,
     size_t maxQueueLen,
+    size_t maxThreadsPerASD,
     size_t maxConnPerASD) 
   : transport_(transport)
   , ipAddress_(ipAddress)
   , port_(port) 
-  , maxThreadsPerASD_(maxConnPerASD)
+  , maxThreadsPerASD_(maxThreadsPerASD)
   , maxConnPerASD_(maxConnPerASD) {
 
   int ret = 0;
@@ -109,6 +112,19 @@ RoraGateway::ASDInfo::ASDInfo(RoraGateway* rgPtr,
 
   auto ctx_attr_ptr = ctx_attr_new();
   ctx_attr_set_transport(ctx_attr_ptr, transport, ipAddress, port);
+
+  // ensure maxConn is even number
+  if (maxConnPerASD_ & 0x01) {
+    maxConnPerASD_ &= (~0x01);
+  }
+  // check maxConn = integer multiple of maxThreads
+  if (maxConnPerASD_ % maxThreadsPerASD_ != 0) {
+    maxConnPerASD_ -= (maxConnPerASD_ % maxThreadsPerASD_);
+  }
+
+  LOG(INFO) << "uri=" << ipAddress_ << ":" << port_
+    << ",maxConn=" << maxConnPerASD_
+    << ",maxThreads=" << maxThreadsPerASD_;
 
   ctxVec_.reserve(maxConnPerASD_);
   threadVec_.reserve(maxThreadsPerASD_);
@@ -244,7 +260,8 @@ int RoraGateway::init(const std::string& configFileName) {
 
     ret = addASD(transport, ipAddress, port, 
         GatewayMsg::MaxMsgSize, config.maxQueueLen_,
-        config.maxThreadsPerASD_); 
+        config.maxThreadsPerASD_,
+        config.maxConnPerASD_); 
   }
 
   return ret;
@@ -255,6 +272,7 @@ int RoraGateway::addASD(const std::string& transport,
     const int port,
     const size_t maxMsgSize,
     const size_t maxQueueLen,
+    const size_t maxThreadsPerASD,
     const size_t maxPortals) {
 
   int ret = 0;
@@ -263,6 +281,7 @@ int RoraGateway::addASD(const std::string& transport,
     auto asdp = gobjfs::make_unique<ASDInfo>(this,
       transport, ipAddress, port, 
       maxMsgSize, maxQueueLen,
+      maxThreadsPerASD,
       maxPortals); 
 
     asdVec_.push_back(std::move(asdp));
@@ -497,7 +516,12 @@ int RoraGateway::asdThreadFunc(ASDInfo* asdInfo, size_t thrIdx) {
           }
           pending_giocb_vec.clear();
           // rotate the connection used
-          //nextConnIdx = (nextConnIdx + 1) % asdInfo->ctxVec_.size();
+          // maxConn, maxThr, thread should use these connections
+          //   8       1         (1, 2, 3, 4, ..)
+          //   8       2         (1, 3, 5, 7)
+          //   8       4         (1, 5)
+          //   8       8         (1)
+          nextConnIdx = (nextConnIdx + asdInfo->maxThreadsPerASD_) % asdInfo->ctxVec_.size();
       }
       if (pending_giocb_vec.empty() && threadInfo->stopping_) {
         break;
@@ -573,6 +597,7 @@ int RoraGateway::responseThreadFunc() {
 int RoraGateway::run() {
   int ret = 0;
 
+  // start all the configured threads
   for (auto& asdPtr : asdVec_) {
     for (size_t thrIdx = 0; thrIdx < asdPtr->maxThreadsPerASD_; thrIdx ++) {
       asdPtr->threadVec_.push_back(std::make_shared<ThreadInfo>());
