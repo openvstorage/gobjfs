@@ -97,7 +97,6 @@ int EPoller::shutdown() {
         shutdownPtr_->writefd();
 
         sleep(waitingTime);
-        waitingTime = waitingTime << 1;
       }
     }
     // reset ptr AFTER thread has exited
