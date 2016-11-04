@@ -11,6 +11,7 @@ set(SOURCES
   util/SemaphoreWrapper.cpp
   util/TimerNotifier.cpp
   util/EPoller.cpp
+  util/EventFD.cpp
   )
 
 set(LIBRARY_LIST

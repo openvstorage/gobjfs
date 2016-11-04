@@ -17,27 +17,26 @@ but WITHOUT ANY WARRANTY of any kind.
 */
 #pragma once
 
-#include <sys/eventfd.h>
 #include <cstdint>
-#include <unistd.h>
+
+#include <util/Stats.h>
 
 
 // cannot use namespace because this class used in typedef in gIOExecFile.h
 
 struct EventFD {
-  EventFD() {
-    evfd_ = eventfd(0, EFD_NONBLOCK);
-    if (evfd_ < 0) {
-      throw std::runtime_error("failed to create eventfd");
-    }
-  }
 
-  ~EventFD() {
-    if (evfd_ != -1) {
-      close(evfd_);
-      evfd_ = -1;
-    }
-  }
+  struct Statistics {
+    uint64_t eintr_{0}; // how many times EINTR hit
+    uint64_t eagain_{0}; // how many times EAGAIN hit 
+    gobjfs::stats::StatsCounter<int64_t> ctr_; // average read value
+
+    void clear();
+  } stats_;
+
+  EventFD();
+
+  ~EventFD();
 
   EventFD(const EventFD &) = delete;
 
@@ -48,37 +47,15 @@ struct EventFD {
   int getfd() const { return evfd_; }
 
   // made func static so it can be called when EventFD object not available
-  static int readfd(int fd) {
-    int ret = -1;
-    eventfd_t value = 0;
-    do {
-      ret = eventfd_read(fd, &value);
-    } while (ret < 0 && errno == EINTR);
-    if (ret == 0) {
-      ret = value;
-    } else if (errno != EAGAIN) {
-      throw std::runtime_error("failed to read eventfd=" + std::to_string(fd));
-    }
-    return ret;
-  }
+  static int readfd(int fd, EventFD* evfd = nullptr);
 
-  int readfd() {
-    return readfd(evfd_);
-  }
+  int readfd();
 
-  int writefd() {
-    uint64_t u = 1;
-    int ret = 0;
-    do {
-      ret = eventfd_write(evfd_, static_cast<eventfd_t>(u));
-    } while (ret < 0 && (errno == EINTR || errno == EAGAIN));
-    if (ret < 0) {
-      throw std::runtime_error("failed to write eventfd=" + std::to_string(evfd_));
-    }
-    return ret;
-  }
+  int writefd();
 
 private:
+
   int evfd_{-1};
+
 };
 
