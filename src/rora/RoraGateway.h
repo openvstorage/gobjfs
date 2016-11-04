@@ -9,6 +9,7 @@
 
 #include <string>
 #include <thread>
+#include <vector>
 #include <mutex>
 #include <map>
 
@@ -20,6 +21,16 @@ class RoraGateway {
   private:
 
   static const int watchDogTimeSec_;
+
+  // per thread info
+  struct ThreadInfo {
+    std::thread thread_;
+    bool started_{false};
+    bool stopping_{false};
+    bool stopped_{false};
+  };
+
+  size_t maxEPollerThreads_{1};
 
   struct EdgeInfo {
     // map from edge pid to edge queue
@@ -33,10 +44,7 @@ class RoraGateway {
 
     // single thread listens for completed read requests across all ASD
     // client_ctx and sends the responses back to EdgeProcesses
-    std::thread thread_;
-    bool started_{false};
-    bool stopping_{false};
-    bool stopped_{false};
+    std::vector<std::shared_ptr<ThreadInfo>> epollerThreadsVec_;
 
     public:
 
@@ -47,14 +55,6 @@ class RoraGateway {
 
     int cleanupForDeadEdgeProcesses();
 
-  };
-
-  // each thread serves one connection to same ASD
-  struct ThreadInfo {
-    std::thread thread_;
-    bool started_{false};
-    bool stopping_{false};
-    bool stopped_{false};
   };
 
   struct ASDInfo {
@@ -114,12 +114,12 @@ class RoraGateway {
   /**
    * thread which forwards read requests to ASD
    */
-  int asdThreadFunc(ASDInfo* asdInfo, size_t connIdx);
+  int asdThreadFunc(ASDInfo* asdInfo, size_t thrIdx);
 
   /**
    * thread which transmits read responses back to edges
    */
-  int responseThreadFunc();
+  int responseThreadFunc(size_t thrIdx);
 
   /**
    * handler for reading xio ctx queue 

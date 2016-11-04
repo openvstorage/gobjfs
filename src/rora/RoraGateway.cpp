@@ -24,6 +24,7 @@ struct Config {
 
   size_t maxQueueLen_ {256};
   // client threads to connect to multiple portals
+  size_t maxEPollerThreads_{1}; 
   size_t maxThreadsPerASD_{1}; 
   size_t maxConnPerASD_{1}; 
 
@@ -37,6 +38,7 @@ struct Config {
         ("max_asd_queue", bpo::value<size_t>(&maxQueueLen_)->required(), "length of shared memory queue used to forward requests to ASD")
         ("max_threads_per_asd", bpo::value<size_t>(&maxThreadsPerASD_)->required(), "max threads which service all connections")
         ("max_conn_per_asd", bpo::value<size_t>(&maxConnPerASD_)->required(), "max connections to an ASD (exploit accelio portals)")
+        ("max_epoller_threads", bpo::value<size_t>(&maxEPollerThreads_)->required(), "max threads for epoll")
         ;
 
     std::ifstream configFile(configFileName);
@@ -233,6 +235,8 @@ int RoraGateway::init(const std::string& configFileName) {
     LOG(ERROR) << "failed to read config=" << configFileName;
     return -1;
   }
+
+  maxEPollerThreads_ = config.maxEPollerThreads_;
 
   edges_.epoller_.init();
 
@@ -585,19 +589,20 @@ int RoraGateway::handleReadCompletion(int fd, uintptr_t ptr) {
 }
 
 /**
- * 1) fetch responses from all xio ctx and
- * write them to edgeQueue
+ * 1) fetch responses from all xio ctx and write them to edgeQueue
  * 2) handle watchdog timer
  */
-int RoraGateway::responseThreadFunc() {
+int RoraGateway::responseThreadFunc(size_t thrIdx) {
 
-  LOG(INFO) << "started edge response thread=" << gettid();
+  edges_.epollerThreadsVec_[thrIdx]->started_ = true;
+  LOG(INFO) << "started edge response thread=" << gettid() << " idx=" << thrIdx;
 
-  while (!edges_.stopping_) {
+  while (!edges_.epollerThreadsVec_[thrIdx]->stopping_) {
     edges_.epoller_.run(1);
   }
 
-  LOG(INFO) << "stopped edge response thread=" << gettid();
+  LOG(INFO) << "stopped edge response thread=" << gettid() << " idx=" << thrIdx;
+  edges_.epollerThreadsVec_[thrIdx]->stopped_ = true;
   return 0;
 }
 
@@ -613,9 +618,14 @@ int RoraGateway::run() {
     }
   }
 
-  edges_.thread_ = std::thread(std::bind(&RoraGateway::responseThreadFunc, this));
+  for (size_t idx = 0; idx < maxEPollerThreads_; idx ++) {
+    edges_.epollerThreadsVec_.push_back(std::make_shared<ThreadInfo>()); 
+    edges_.epollerThreadsVec_[idx]->thread_ = std::thread(std::bind(&RoraGateway::responseThreadFunc, this, idx));
+  }
 
-  edges_.thread_.join();
+  for (auto& thrInfo : edges_.epollerThreadsVec_) {
+    thrInfo->thread_.join();
+  }
 
   for (auto& asdPtr : asdVec_) {
     for (auto& threadInfo : asdPtr->threadVec_) {
@@ -630,7 +640,10 @@ int RoraGateway::run() {
 int RoraGateway::shutdown() {
   int ret = 0;
 
-  edges_.stopping_ = true;
+  for (auto& thrInfo : edges_.epollerThreadsVec_) {
+    thrInfo->stopping_ = true;
+  }
+
   edges_.epoller_.shutdown();
 
   for (auto& asdPtr : asdVec_) {
