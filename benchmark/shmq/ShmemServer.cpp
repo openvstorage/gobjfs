@@ -5,7 +5,7 @@
 #include <util/Timer.h>
 #include <util/Stats.h>
 #include <util/os_utils.h>
-#include <glog/logging.h>
+#include <gobjfs_log.h>
 
 #include <unistd.h>
 #include <random>
@@ -147,8 +147,6 @@ void asdThreadFunc() {
 
 int main(int argc, char* argv[])
 {
-  google::InitGoogleLogging(argv[0]);
-
   asdQueue = gobjfs::make_unique<ASDQueue>(asdQueueName, maxQueueLen, GatewayMsg::MaxMsgSize);
 
   std::vector<std::future<void>> futVec;
