@@ -3,6 +3,7 @@
 #include <boost/interprocess/ipc/message_queue.hpp>
 #include <boost/interprocess/managed_shared_memory.hpp>
 #include <string>
+#include <vector>
 #include <deque>
 #include <sys/stat.h> // mode_t
 #include <util/Stats.h> // mode_t
