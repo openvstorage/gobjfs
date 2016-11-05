@@ -593,11 +593,13 @@ int NetworkXioClient::send_msg(ClientMsg *msgPtr) {
   }
 
   if (ret < 0) { 
+    int xio_error = xio_errno();
+    GLOG_ERROR("error on send=" << xio_error << ":" << xio_strerror(xio_error));
     NetworkXioMsg& requestHeader = msgPtr->msg;
     const size_t numElem = requestHeader.numElems_;
     for (size_t idx = 0; idx < numElem; idx ++) {
       auto aio_req = msgPtr->aioReqVec_[idx];
-      postProcess(aio_req, -1, EIO);
+      postProcess(aio_req, -1, xio_error);
     }
     delete msgPtr;
   } else {
