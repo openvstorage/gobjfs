@@ -391,11 +391,8 @@ int aio_getevents(client_ctx_ptr ctx, int32_t max, std::vector<giocb *> &giocbp_
   do {
     r = ctx->net_client_->getevents(max, giocbp_vec, timeout);
     // if r = etimeout, reset r = 0
-    // if r = eagain, retry
-    if (r != 0) {
-      break;
-    }
-  } while (giocbp_vec.empty());
+    // if r = eagain, retry TODO
+  } while (0);
 
   return r;
 }
