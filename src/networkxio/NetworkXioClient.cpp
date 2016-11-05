@@ -474,19 +474,19 @@ int NetworkXioClient::on_msg_error(xio_session *session __attribute__((unused)),
         << "num elements in retval=" << responseHeader.retvalVec_.size() 
         << " or num elements in errval=" << responseHeader.errvalVec_.size());
     ret = -1;
+    // insert dummy values for postProcess to use
+    responseHeader.retvalVec_.assign(numElem, -1);
+    responseHeader.errvalVec_.assign(numElem, EIO);
   }
 
   ClientMsg *msgPtr = reinterpret_cast<ClientMsg *>(responseHeader.clientMsgPtr_);
 
-  if (ret == 0) {
+  for (size_t idx = 0; idx < numElem; idx ++) {
 
-    for (size_t idx = 0; idx < numElem; idx ++) {
-  
-      auto aio_req = msgPtr->aioReqVec_[idx];
-      postProcess(aio_req,
-          responseHeader.retvalVec_[idx], 
-          responseHeader.errvalVec_[idx]);
-    }
+    auto aio_req = msgPtr->aioReqVec_[idx];
+    postProcess(aio_req,
+      responseHeader.retvalVec_[idx], 
+      responseHeader.errvalVec_[idx]);
   }
 
   inFlightQueueLen_ --;
