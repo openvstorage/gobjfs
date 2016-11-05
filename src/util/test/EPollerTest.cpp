@@ -7,6 +7,7 @@
 #include <util/TimerNotifier.h>
 #include <util/EPoller.h>
 #include <util/Pipe.h>
+#include <util/os_utils.h>
 #include <util/lang_utils.h>
 
 
@@ -56,6 +57,7 @@ TEST(EPoller, shutdown) {
 static int readfunc(int fd, uintptr_t userData) {
   int* numTimesPtr = reinterpret_cast<int*>(userData);
   *numTimesPtr += EventFD::readfd(fd);
+  std::cout << gettid() << std::endl;
   return 0;
 }
 
@@ -240,7 +242,10 @@ TEST(EPoller, MultiThrWithEventFD) {
   }
 
   // write once
-  evfd.writefd();
+  int numWrites = 100;
+  while (numWrites--) {
+    evfd.writefd();
+  }
 
   // sleep for a modest time
   sleep(3);
@@ -265,7 +270,7 @@ TEST(EPoller, MultiThrWithEventFD) {
   EXPECT_LE(evfd.stats_.ctr_.numSamples_, 1);
 
   // check if read handler was called
-  EXPECT_EQ(numTimesCalled, 1);
+  EXPECT_LE(numTimesCalled, numWrites);
 
   // drop event which was added
   ret = e1.dropEvent(reinterpret_cast<uintptr_t>(&numTimesCalled), (int)evfd);
