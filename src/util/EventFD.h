@@ -18,6 +18,8 @@ but WITHOUT ANY WARRANTY of any kind.
 #pragma once
 
 #include <cstdint>
+#include <atomic>
+#include <string>
 
 #include <util/Stats.h>
 
@@ -27,11 +29,16 @@ but WITHOUT ANY WARRANTY of any kind.
 struct EventFD {
 
   struct Statistics {
-    uint64_t eintr_{0}; // how many times EINTR hit
-    uint64_t eagain_{0}; // how many times EAGAIN hit 
-    gobjfs::stats::StatsCounter<int64_t> ctr_; // average read value
+    std::atomic<uint64_t> read_eintr_{0}; // how many times EINTR hit on read
+    std::atomic<uint64_t> read_eagain_{0}; // how many times EAGAIN hit  on read
+    gobjfs::stats::StatsCounter<int64_t> read_ctr_; // average read value
+
+    std::atomic<uint64_t> write_eintr_{0}; // how many times EAGAIN hit  on write
+    std::atomic<uint64_t> write_eagain_{0}; // how many times EAGAIN hit  on read
+    std::atomic<uint64_t> write_ctr_{0}; // how many times write called
 
     void clear();
+    std::string ToString() const;
   } stats_;
 
   EventFD();

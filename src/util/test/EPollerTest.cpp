@@ -54,10 +54,16 @@ TEST(EPoller, shutdown) {
   // test succeeds if it exits !
 }
 
+
 static int readfunc(int fd, uintptr_t userData) {
-  int* numTimesPtr = reinterpret_cast<int*>(userData);
-  *numTimesPtr += EventFD::readfd(fd);
-  std::cout << gettid() << std::endl;
+  uint64_t* numTimesPtr = reinterpret_cast<uint64_t*>(userData);
+  int ret = EventFD::readfd(fd);
+  if (ret  >= 0) {
+    (*numTimesPtr) += ret;
+  }
+  std::ostringstream os;
+  os << gettid() << " sees " << (*numTimesPtr) << "," << ret << std::endl;
+  std::cout << os.str();
   return 0;
 }
 
@@ -215,6 +221,23 @@ void epollFunc(EPoller *e1, bool *stopping) {
   }
 }
 
+struct MultiThrTestCtx {
+  uint64_t numTimesCalled = 0;
+  EventFD evfd;
+};
+
+static int multithr_readfunc(int fd, uintptr_t userData) {
+  MultiThrTestCtx* ctx = reinterpret_cast<MultiThrTestCtx*>(userData);
+  int ret = EventFD::readfd(fd, &ctx->evfd);
+  if (ret  >= 0) {
+    ctx->numTimesCalled += ret;
+  }
+  std::ostringstream os;
+  os << gettid() << " sees " << ctx->numTimesCalled << "," << ret << std::endl;
+  std::cout << os.str();
+  return 0;
+}
+
 /**
  * Check if multiple threads can use same EventFD with EPoller
  */
@@ -225,11 +248,9 @@ TEST(EPoller, MultiThrWithEventFD) {
   int ret = e1.init();
   EXPECT_EQ(ret, 0);
 
-  EventFD evfd;
+  MultiThrTestCtx ctx;
 
-  uint64_t numTimesCalled = 0;
-
-  ret = e1.addEvent(reinterpret_cast<uintptr_t>(&numTimesCalled), (int)evfd, EPOLLIN, readfunc);
+  ret = e1.addEvent(reinterpret_cast<uintptr_t>(&ctx), (int)ctx.evfd, EPOLLIN, multithr_readfunc);
   EXPECT_EQ(ret, 0);
 
   int numThr = 10;
@@ -241,14 +262,15 @@ TEST(EPoller, MultiThrWithEventFD) {
     futVec.push_back(std::move(fut));
   }
 
-  // write once
   int numWrites = 100;
-  while (numWrites--) {
-    evfd.writefd();
+  int numTimes = 5;
+  // write eventfd
+  for (int i = 0; i < numTimes; i++) {
+    for (int j = 0; j < numWrites; j++) {
+      ctx.evfd.writefd();
+    }
+    sleep(1);
   }
-
-  // sleep for a modest time
-  sleep(3);
 
   stopping = true;
   // first shutdown the epoller
@@ -261,19 +283,18 @@ TEST(EPoller, MultiThrWithEventFD) {
   }
   futVec.clear();
 
-  std::cout << "EAGAIN=" << evfd.stats_.eintr_ << std::endl;
-  std::cout << "EINTR=" << evfd.stats_.eagain_ << std::endl;
-  // eintr and eagains should not be more than numThr started
-  EXPECT_LE(evfd.stats_.eintr_, numThr);
-  EXPECT_LE(evfd.stats_.eagain_, numThr);
+  std::cout << ctx.evfd.stats_.ToString() << std::endl;
+
+  EXPECT_LE(ctx.evfd.stats_.read_eintr_, numThr);
+  EXPECT_LE(ctx.evfd.stats_.read_eagain_, numTimes * numThr);
   // assert that only one read should occur corresponding to one write 
-  EXPECT_LE(evfd.stats_.ctr_.numSamples_, 1);
+  EXPECT_LE(ctx.evfd.stats_.read_ctr_.numSamples_, numTimes * numWrites);
 
   // check if read handler was called
-  EXPECT_LE(numTimesCalled, numWrites);
+  EXPECT_LE(ctx.numTimesCalled, numTimes * numWrites);
 
   // drop event which was added
-  ret = e1.dropEvent(reinterpret_cast<uintptr_t>(&numTimesCalled), (int)evfd);
+  ret = e1.dropEvent(reinterpret_cast<uintptr_t>(&ctx.numTimesCalled), (int)ctx.evfd);
   EXPECT_EQ(ret, 0);
 
 }

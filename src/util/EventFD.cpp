@@ -19,10 +19,28 @@ but WITHOUT ANY WARRANTY of any kind.
 #include <util/EventFD.h>
 #include <sys/eventfd.h>
 #include <unistd.h>
+#include <sstream>
 
 void EventFD::Statistics::clear() {
-  ctr_.reset();
-  eagain_ = 0;
+  read_ctr_.reset();
+  read_eagain_ = 0;
+  read_eintr_ = 0;
+
+  write_ctr_ = 0;
+  write_eagain_ = 0;
+  write_eintr_ = 0;
+}
+
+std::string EventFD::Statistics::ToString() const {
+  std::ostringstream os;
+  os 
+    << "read_ctr=" << read_ctr_ 
+    << ",read_eintr=" << read_eintr_
+    << ",read_eagain=" << read_eagain_
+    << ",write_ctr=" << write_ctr_
+    << ",write_eintr=" << write_eintr_
+    << ",write_eagain=" << write_eagain_;
+  return os.str();
 }
 
 EventFD::EventFD() {
@@ -50,20 +68,20 @@ int EventFD::readfd(int fd, EventFD* evfd) {
   } while (ret < 0 && errno == EINTR);
 
   if (evfd) {
-    evfd->stats_.eintr_ = numIntrLoops;
+    evfd->stats_.read_eintr_ = numIntrLoops;
   }
 
   if (ret == 0) {
     ret = value;
     if (evfd) { 
-      evfd->stats_.ctr_ = value; 
+      evfd->stats_.read_ctr_ = value; 
     }
   } else if (errno != EAGAIN) {
     throw std::runtime_error("failed to read eventfd=" + std::to_string(fd));
   } else {
     // it must be eagain !
     if (evfd) { 
-      evfd->stats_.eagain_ ++;
+      evfd->stats_.read_eagain_ ++;
     }
   }
   return ret;
@@ -78,9 +96,15 @@ int EventFD::writefd() {
   int ret = 0;
   do {
     ret = eventfd_write(evfd_, static_cast<eventfd_t>(u));
+    if (errno == EINTR) {
+      stats_.write_eintr_ ++;
+    } else if (errno == EAGAIN) {
+      stats_.read_eintr_ ++;
+    }
   } while (ret < 0 && (errno == EINTR || errno == EAGAIN));
   if (ret < 0) {
     throw std::runtime_error("failed to write eventfd=" + std::to_string(evfd_));
   }
+  stats_.write_ctr_ ++; 
   return ret;
 }
