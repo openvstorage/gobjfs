@@ -1,0 +1,12 @@
+# How to find which files are in buffer cache
+
+git clone https://github.com/hoytech/vmtouch.git
+
+cd vmtouch
+make
+sudo make install
+
+vmtouch -I <filepattern>
+
+# you can also try fincore which uses same mincore() syscall
+# http://linux-ip.net/sw/fincore/README
