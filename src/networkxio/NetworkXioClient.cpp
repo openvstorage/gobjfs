@@ -90,20 +90,22 @@ struct Session {
     initer = xioIniter;
     s = xio_session_create(&sparams);
     assert(s);
-    GLOG_INFO("thread=" << gettid() << " created session=" << s);
     clients.push_back(client);
   }
 
   void stopAll()
   {
     for (auto client : clients) {
+      GLOG_INFO("thread=" << gettid() << " stopping xio_session=" << s 
+          << " session=" << (void*)this 
+          << " for client=" << client);
       client->stop_loop();
     }
   }
 
   ~Session()
   {
-    GLOG_INFO("thread=" << gettid() << " destroying session=" << s);
+    GLOG_INFO("thread=" << gettid() << " destroying xio_session=" << s << " session=" << (void*)this);
     xio_session_destroy(s);
     s = nullptr;
   }
@@ -133,11 +135,15 @@ static SessionSPtr getSession(NetworkXioClient* client,
     // session does not exist, create one
     auto sptr = std::make_shared<Session>(client, uri, session_params);
     auto insertIter = sessionMap.insert(std::make_pair(uri, sptr));
-    assert(insertIter.second == true); // insert succeeded
-    GLOG_INFO("session=" << (void*)sptr.get() 
+    if (insertIter.second == true) {
+      GLOG_INFO("session=" << (void*)sptr.get() 
         << " created for " << uri 
         << " by client=" << (void*)client);
-    retptr = sptr;
+      retptr = sptr;
+    } else {
+      GLOG_ERROR("failed to create session for " << uri 
+        << " by client=" << (void*)client);
+    }
   } else {
     retptr = iter->second;
     GLOG_INFO("session=" << (void*)retptr.get() 
@@ -351,7 +357,9 @@ void NetworkXioClient::run() {
   cparams.session = sptr->xioptr();
   cparams.ctx = ctx.get();
   cparams.conn_user_context = this;
-  cparams.conn_idx = 0; // let xio choose which portal
+  // set conn_idx=0 to allow xio to choose portal
+  // the client-side xio library uses the info received from server to decide
+  cparams.conn_idx = 0; 
 
   conn = xio_connect(&cparams);
   if (conn == nullptr) {
@@ -499,7 +507,7 @@ int NetworkXioClient::on_msg_error(xio_session *session __attribute__((unused)),
 int NetworkXioClient::on_session_established(xio_session *session,
                        xio_new_session_rsp *event_data) {
 
-  GLOG_INFO("thread=" << gettid() << " got session=" << (void*)session << " established");
+  GLOG_INFO("thread=" << gettid() << " got xio_session=" << (void*)session << " established");
   return 0;
 }
 
@@ -522,6 +530,7 @@ int NetworkXioClient::on_session_event(xio_session *session,
     break;
 
   case XIO_SESSION_TEARDOWN_EVENT:
+    GLOG_INFO("thread=" << gettid() << " destroying session=" << sptr.get());
     sptr->stopAll();
     break;
   default:
