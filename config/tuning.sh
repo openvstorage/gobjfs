@@ -22,8 +22,8 @@ sudo sh -c "echo 16 > /sys/block/nvme0n1/queue/read_ahead_kb"
 
 # ======================================================
 
-# If you want to drop filesystem caches
-sudo sh -c 'echo 3 > /proc/sys/vm/drop_caches'
+# If you want to drop filesystem caches, first sync
+sync && sudo sh -c 'echo 3 > /proc/sys/vm/drop_caches'
 
 # check the kernel caches
 cat /proc/slabinfo
