@@ -40,6 +40,7 @@ struct Config {
   uint32_t maxBlocks = 10000;
   uint64_t maxIO = 10000;
   uint64_t maxOutstandingIO = 1;
+  uint32_t numQueuePerASD = 1;
   uint32_t runTimeSec = 1;
   bool doMemCheck = false;
   uint32_t shortenFileSize = 0;
@@ -59,6 +60,7 @@ struct Config {
         ("max_file_blocks", value<uint32_t>(&maxBlocks)->required(), "number of [blocksize] blocks in file")
         ("max_io", value<uint64_t>(&maxIO)->required(), "number of ops to execute")
         ("max_outstanding_io", value<uint64_t>(&maxOutstandingIO)->required(), "max outstanding io")
+        ("num_asd_queue", value<uint32_t>(&numQueuePerASD)->required(), "number of queues per ASD")
         ("run_time_sec", value<uint32_t>(&runTimeSec)->required(), "number of secs to run")
         ("do_mem_check", value<bool>(&doMemCheck)->required(), "compare read buffer")
         ("shorten_file_size", value<uint32_t>(&shortenFileSize), "shorten the size by this much to test nonaliged reads")
@@ -248,7 +250,7 @@ void RunContext::doRandomRead(ASDQueue* asdQueue) {
       offsetVec.push_back(blockGenerator(seedGen) * config.blockSize);
     }
 
-    const auto ret = asdQueue->write(createReadRequest(edgeQueue.get(), 1, filenameVec,
+    const auto ret = asdQueue->write(createReadRequest(edgeQueue.get(), 1/*filenum*/, filenameVec,
       offsetVec,
       sizeVec));
     assert(ret == 0);
@@ -325,14 +327,16 @@ int main(int argc, char* argv[])
   std::vector<ASDQueueUPtr> asdQueueVec;
 
   // create new for this process
-  edgeQueue = gobjfs::make_unique<EdgeQueue>(pid, 2 * config.maxOutstandingIO, 
-      GatewayMsg::MaxMsgSize, config.blockSize);
+  edgeQueue = gobjfs::make_unique<EdgeQueue>(pid, 
+      2 * config.maxOutstandingIO, 
+      GatewayMsg::MaxMsgSize, 
+      config.blockSize);
 
   // open existing asd queues
   const size_t numASD = config.transportVec.size();
   for (size_t idx = 0; idx < numASD; idx ++) {
     std::string uri = config.ipAddressVec[idx] + ":" + std::to_string(config.portVec[idx]);
-    auto asdPtr = gobjfs::make_unique<ASDQueue>(uri);
+    auto asdPtr = gobjfs::make_unique<ASDQueue>(uri, config.numQueuePerASD);
     asdQueueVec.push_back(std::move(asdPtr));
   }
 

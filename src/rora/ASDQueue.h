@@ -19,12 +19,9 @@ class GatewayMsg;
  */
 class ASDQueue {
 
-  std::string queueName_;
-
-  std::unique_ptr<bip::message_queue> mq_{nullptr};
-  
   bool isCreator_{false};
 
+  size_t numQueues_{0};
   size_t maxMsgSize_{0};
 
   struct Statistics {
@@ -34,22 +31,28 @@ class ASDQueue {
     gobjfs::stats::StatsCounter<uint32_t> msgSize_;
   };
 
-  Statistics readStats_;
-  Statistics writeStats_;
+  struct BaseQueue {
+    std::string name_;
+    std::unique_ptr<bip::message_queue> mq_{nullptr};
+    Statistics readStats_;
+    Statistics writeStats_;
+  };
+
+  std::vector<BaseQueue> queueVec_;
 
   public:
   /**
    * create edge queue for uri
    */
-  ASDQueue(const std::string& uri, size_t maxQueueLen, size_t maxMsgSize);
+  ASDQueue(const std::string& uri, size_t maxQueueLen, size_t maxMsgSize, size_t numQueues);
       
 
   /**
    * open existing edge queue for uri
    */
-  ASDQueue(const std::string& uri);
+  ASDQueue(const std::string& uri, size_t numQueues);
 
-  static int remove(const std::string& uri);
+  static int remove(const std::string& uri, size_t numQueues);
 
   ~ASDQueue();
 

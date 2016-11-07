@@ -69,7 +69,7 @@ int main(int argc, char* argv[])
   assert(err == 0);
 
   // open new
-  ASDQueue* asdQueue = new ASDQueue("127.0.0.1:21321", maxQueueLen, maxMsgSize);
+  ASDQueue* asdQueue = new ASDQueue("127.0.0.1:21321", maxQueueLen, maxMsgSize, 1/*numqueues*/);
 
   auto fut = std::async(std::launch::async, iocompletionFunc);
 

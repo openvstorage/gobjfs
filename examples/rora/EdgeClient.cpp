@@ -16,7 +16,7 @@ int main(int argc, char* argv[])
   EdgeQueue* edgeQueue = new EdgeQueue(pid, maxQueueLen, maxMsgSize, blockSize);
 
   // open existing
-  ASDQueue* asdQueue = new ASDQueue("127.0.0.1:21321");
+  ASDQueue* asdQueue = new ASDQueue("127.0.0.1:21321", 1);
 
   {
     // sending open message will cause rora gateway to open
