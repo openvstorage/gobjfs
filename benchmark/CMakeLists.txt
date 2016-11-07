@@ -11,4 +11,5 @@ TARGET_LINK_LIBRARIES(BenchIOExecFile
 add_subdirectory(networkxio)
 add_subdirectory(rora)
 add_subdirectory(shmq)
+add_subdirectory(bip_deque)
 
