@@ -41,6 +41,7 @@ TEST(GatewayProtocolTest, SharedPtrInMsgPack) {
   memset(sendBufPtr, 'a', maxAllocSize);
 
   GatewayMsg sendMsg;
+  sendMsg.opcode_ = Opcode::READ_RESP;
   // get the handle from the ptr
   sendMsg.bufVec_.push_back(creator->segment_->get_handle_from_address(sendBufPtr));
   // write into message queue

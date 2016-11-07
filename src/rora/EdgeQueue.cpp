@@ -170,7 +170,7 @@ EdgeQueue::~EdgeQueue() {
 }
 
 /**
- * TODO : can throw
+ * Called from Edge Process
  */
 int EdgeQueue::writeRequest(const GatewayMsg& gmsg) {
   try {
@@ -185,29 +185,22 @@ int EdgeQueue::writeRequest(const GatewayMsg& gmsg) {
 }
 
 /**
- * TODO : can throw
+ * Called from Rora Gateway
  */
-int EdgeQueue::readRequest(GatewayMsg& msg) {
+int EdgeQueue::readRequest(GatewayMsg& gmsg) {
   uint32_t priority;
   size_t recvdSize;
   try {
     char buf[request_.maxMsgSize_];
     request_.mq_->receive(buf, request_.maxMsgSize_, recvdSize, priority);
-    msg.unpack(buf, recvdSize);
-    if ((msg.opcode_ == Opcode::READ_REQ) ||
-      (msg.opcode_ == Opcode::READ_RESP)) {
-
-      // as it currently stands, the process which creates
-      // the edge queue only gets read responses
-      // while the rora gateway only gets read requests
-      // encoded that check in this assert
-      assert((isCreator_ && msg.opcode_ == Opcode::READ_RESP) ||
-        (!isCreator_ && msg.opcode_ == Opcode::READ_REQ));
-
-      // convert segment offset to raw ptr within this process
-      for (size_t idx = 0; idx < msg.numElems(); idx ++) {
-        msg.rawbufVec_.push_back(segment_->get_address_from_handle(msg.bufVec_[idx]));
-      }
+    gmsg.unpack(buf, recvdSize);
+    if (gmsg.opcode_ != Opcode::READ_REQ) {
+      LOG(ERROR) << "incorrect opcode received=" << gmsg.opcode_;
+      return -EINVAL;
+    }
+    // convert segment offset to raw ptr within this process
+    for (size_t idx = 0; idx < gmsg.numElems(); idx ++) {
+      gmsg.rawbufVec_.push_back(segment_->get_address_from_handle(gmsg.bufVec_[idx]));
     }
     updateStats(request_.readStats_, recvdSize);
     return 0;
@@ -217,7 +210,67 @@ int EdgeQueue::readRequest(GatewayMsg& msg) {
 }
 
 /**
- * TODO : can throw
+ * Called from Rora Gateway
+ */
+int EdgeQueue::tryReadRequest(GatewayMsg& gmsg) {
+  uint32_t priority;
+  size_t recvdSize;
+  try {
+    char buf[request_.maxMsgSize_];
+    bool ret = request_.mq_->try_receive(buf, request_.maxMsgSize_, recvdSize, priority);
+    if (ret == true) {
+      gmsg.unpack(buf, recvdSize);
+      if (gmsg.opcode_ != Opcode::READ_REQ) {
+        LOG(ERROR) << "incorrect opcode received=" << gmsg.opcode_;
+        return -EINVAL;
+      }
+      // convert segment offset to raw ptr within this process
+      for (size_t idx = 0; idx < gmsg.numElems(); idx ++) {
+        gmsg.rawbufVec_.push_back(segment_->get_address_from_handle(gmsg.bufVec_[idx]));
+      }
+      updateStats(request_.readStats_, recvdSize);
+      return 0;
+    } else {
+      return -EAGAIN;
+    }
+  } catch (const std::exception& e) {
+    return -1;
+  }
+}
+
+/**
+ * Called from Rora Gateway
+ */
+int EdgeQueue::timedReadRequest(GatewayMsg& gmsg, int millisec) {
+  uint32_t priority;
+  size_t recvdSize;
+  try {
+    char buf[request_.maxMsgSize_];
+    boost::posix_time::ptime now(boost::posix_time::second_clock::universal_time());
+    bool ret = request_.mq_->timed_receive(buf, request_.maxMsgSize_, recvdSize, priority,
+        now + boost::posix_time::milliseconds(millisec));
+    if (ret == true) {
+      gmsg.unpack(buf, recvdSize);
+      if (gmsg.opcode_ != Opcode::READ_REQ) {
+        LOG(ERROR) << "incorrect opcode received=" << gmsg.opcode_;
+        return -EINVAL;
+      }
+      // convert segment offset to raw ptr within this process
+      for (size_t idx = 0; idx < gmsg.numElems(); idx ++) {
+        gmsg.rawbufVec_.push_back(segment_->get_address_from_handle(gmsg.bufVec_[idx]));
+      }
+      updateStats(request_.readStats_, recvdSize);
+      return 0;
+    } else {
+      return -EAGAIN;
+    }
+  } catch (const std::exception& e) {
+    return -1;
+  }
+}
+
+/**
+ * Called from Rora Gateway
  */
 int EdgeQueue::writeResponse(const GatewayMsg& gmsg) {
   try {
@@ -232,29 +285,22 @@ int EdgeQueue::writeResponse(const GatewayMsg& gmsg) {
 }
 
 /**
- * TODO : can throw
+ * Called from Edge Process
  */
-int EdgeQueue::readResponse(GatewayMsg& msg) {
+int EdgeQueue::readResponse(GatewayMsg& gmsg) {
   uint32_t priority;
   size_t recvdSize;
   try {
     char buf[response_.maxMsgSize_];
     response_.mq_->receive(buf, response_.maxMsgSize_, recvdSize, priority);
-    msg.unpack(buf, recvdSize);
-    if ((msg.opcode_ == Opcode::READ_REQ) ||
-      (msg.opcode_ == Opcode::READ_RESP)) {
-
-      // as it currently stands, the process which creates
-      // the edge queue only gets read responses
-      // while the rora gateway only gets read requests
-      // encoded that check in this assert
-      assert((isCreator_ && msg.opcode_ == Opcode::READ_RESP) ||
-        (!isCreator_ && msg.opcode_ == Opcode::READ_REQ));
-
-      // convert segment offset to raw ptr within this process
-      for (size_t idx = 0; idx < msg.numElems(); idx ++) {
-        msg.rawbufVec_.push_back(segment_->get_address_from_handle(msg.bufVec_[idx]));
-      }
+    gmsg.unpack(buf, recvdSize);
+    if (gmsg.opcode_ != Opcode::READ_RESP) {
+      LOG(ERROR) << "incorrect opcode received=" << gmsg.opcode_;
+      return -EINVAL;
+    }
+    // convert segment offset to raw ptr within this process
+    for (size_t idx = 0; idx < gmsg.numElems(); idx ++) {
+      gmsg.rawbufVec_.push_back(segment_->get_address_from_handle(gmsg.bufVec_[idx]));
     }
     updateStats(response_.readStats_, recvdSize);
     return 0;
@@ -264,7 +310,7 @@ int EdgeQueue::readResponse(GatewayMsg& msg) {
 }
  
 /**
- * Will be called only from EdgeProcess
+ * Will be called only from Edge Process
  * Assume only one thread calls it
  * Therefore, Not thread-safe right now
  */
@@ -286,7 +332,7 @@ void* EdgeQueue::alloc(size_t sz) {
 }
 
 /**
- * Will be called only from EdgeProcess
+ * Will be called only from Edge Process
  * Assume only one thread calls it
  * Therefore, Not thread-safe right now
  */

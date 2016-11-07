@@ -86,6 +86,10 @@ class EdgeQueue {
 
   int readRequest(GatewayMsg& gmsg);
 
+  int tryReadRequest(GatewayMsg& gmsg);
+
+  int timedReadRequest(GatewayMsg& gmsg, int millisec);
+
   int writeResponse(const GatewayMsg& gmsg);
 
   int readResponse(GatewayMsg& gmsg);

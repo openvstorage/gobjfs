@@ -85,6 +85,7 @@ TEST(EdgeQueueTest, ReaderWriterQueue) {
   for (size_t idx = 0; idx < maxQueueLen; idx ++)
   {
     GatewayMsg msg;
+    msg.opcode_ = Opcode::READ_RESP;
     msg.offsetVec_.push_back(idx);
     msg.filenameVec_.push_back("abcd");
     auto ret = creator->writeResponse(msg);
