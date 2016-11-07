@@ -11,5 +11,7 @@ static constexpr int POLLING_TIME_USEC_DEFAULT = 0;
 // substantially, but will increase CPU cycle by consuming more power (watts).
 // http://www.accelio.org/wp-admin/accelio_doc/index.html
 
+static constexpr int MAX_IOV_BATCH_SIZE = 20;
+
 }
 }

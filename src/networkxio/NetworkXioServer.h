@@ -111,7 +111,7 @@ public:
    */
   void runTimerHandler();
 
-  size_t maxBatchSize_ = 8; // get this field in initial exchange from client
+  size_t maxBatchSize_ = MAX_IOV_BATCH_SIZE; // TODO get this field in initial exchange from client
 
 private:
   //    DECLARE_LOGGER("NetworkXioServer");

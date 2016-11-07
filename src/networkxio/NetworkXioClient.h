@@ -30,7 +30,8 @@ but WITHOUT ANY WARRANTY of any kind.
 #include <util/Spinlock.h>
 #include <util/Stats.h>
 #include <util/EventFD.h>
-#include "NetworkXioProtocol.h"
+#include <networkxio/NetworkXioProtocol.h>
+#include <networkxio/gobjfs_config.h>
 
 namespace gobjfs {
 namespace xio {
@@ -165,7 +166,7 @@ private:
   EventFD postProcessEventFD_;
 
 public:
-  size_t maxBatchSize_ = 8; // TODO dynamic
+  size_t maxBatchSize_ = MAX_IOV_BATCH_SIZE; // TODO dynamic
 
 private:
 
