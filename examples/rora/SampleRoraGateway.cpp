@@ -40,7 +40,7 @@ void iocompletionFunc() {
               aio_return(iocb));
           LOG(INFO) << "send response to pid=" << pid 
             << " for filename=" << iocb->filename;
-          auto ret = edgeQueue->write(respMsg);
+          auto ret = edgeQueue->writeResponse(respMsg);
           assert(ret == 0);
         } else {
           LOG(ERROR) << "not found edge queue for pid=" << pid;
@@ -104,7 +104,7 @@ int main(int argc, char* argv[])
             auto aio_ret = aio_readv(ctx, giocb_vec);
             if (aio_ret != 0) {
               anyReq.retvalVec_.push_back(-1);
-              auto ret = edgeQueue->write(anyReq);
+              auto ret = edgeQueue->writeResponse(anyReq);
               assert(ret == 0);
               for (auto giocb : giocb_vec) {
                 delete giocb;

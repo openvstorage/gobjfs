@@ -30,6 +30,9 @@ TEST(EdgeQueueTest, CreatorDestroyer) {
   size_t maxQueueLen = 100;
   size_t maxMsgSize = 100;
   size_t maxAllocSize = 4096;
+
+  EdgeQueue::remove(pid);
+
   for (int idx = 0; idx < 10; idx ++) {
     // 2nd creation should succeed if resources properly destroyed
     EdgeQueue *creator = new EdgeQueue(pid, maxQueueLen, maxMsgSize, maxAllocSize);
@@ -43,6 +46,8 @@ TEST(EdgeQueueTest, DuplicateCreation) {
   size_t maxQueueLen = 100;
   size_t maxMsgSize = 100;
   size_t maxAllocSize = 4096;
+
+  EdgeQueue::remove(pid);
 
   EdgeQueue *creator1 = new EdgeQueue(pid, maxQueueLen, maxMsgSize, maxAllocSize);
   // try to create message queue and shmem segment with same pid again
@@ -58,6 +63,7 @@ TEST(EdgeQueueTest, DuplicateCreation) {
 TEST(EdgeQueueTest, NonExistingQueue) {
 
   int pid = 10;
+  EdgeQueue::remove(pid);
   EXPECT_THROW({
     EdgeQueue *reader = new EdgeQueue(pid);
     delete reader;
@@ -71,32 +77,34 @@ TEST(EdgeQueueTest, ReaderWriterQueue) {
   size_t maxQueueLen = 100;
   size_t maxMsgSize = 100;
   size_t maxAllocSize = 4096;
+
+  EdgeQueue::remove(pid);
   EdgeQueue *creator = new EdgeQueue(pid, maxQueueLen, maxMsgSize, maxAllocSize);
   EdgeQueue *reader = new EdgeQueue(pid);
-
-  GatewayMsg msg;
-  for (size_t idx = 0; idx < maxQueueLen; idx ++)
-  {
-    msg.offsetVec_.push_back(idx);
-    msg.filenameVec_.push_back("abcd");
-    auto ret = creator->write(msg);
-    EXPECT_EQ(ret, 0);
-  }
-
-  // both shared memory queue handles should report same queue len
-  EXPECT_EQ(creator->getCurrentQueueLen(), maxMsgSize);
-  EXPECT_EQ(reader->getCurrentQueueLen(), maxMsgSize);
 
   for (size_t idx = 0; idx < maxQueueLen; idx ++)
   {
     GatewayMsg msg;
-    auto ret = reader->read(msg);
+    msg.offsetVec_.push_back(idx);
+    msg.filenameVec_.push_back("abcd");
+    auto ret = creator->writeResponse(msg);
+    EXPECT_EQ(ret, 0);
+  }
+
+  // both shared memory queue handles should report same queue len
+  EXPECT_EQ(creator->getResponseCurrentQueueLen(), maxMsgSize);
+  EXPECT_EQ(reader->getResponseCurrentQueueLen(), maxMsgSize);
+
+  for (size_t idx = 0; idx < maxQueueLen; idx ++)
+  {
+    GatewayMsg msg;
+    auto ret = reader->readResponse(msg);
     EXPECT_EQ(ret, 0);
     ASSERT_EQ(msg.offsetVec_[0], idx);
     ASSERT_EQ(msg.filenameVec_[0], "abcd");
 
-    EXPECT_EQ(creator->getCurrentQueueLen(), maxMsgSize - (idx + 1));
-    EXPECT_EQ(reader->getCurrentQueueLen(), maxMsgSize - (idx + 1));
+    EXPECT_EQ(creator->getResponseCurrentQueueLen(), maxMsgSize - (idx + 1));
+    EXPECT_EQ(reader->getResponseCurrentQueueLen(), maxMsgSize - (idx + 1));
   }
 
   delete creator;
@@ -110,6 +118,7 @@ TEST(EdgeQueueTest, SegmentAllocFree) {
   size_t maxMsgSize = 100;
   size_t maxAllocSize = 4096;
 
+  EdgeQueue::remove(pid);
   EdgeQueue *creator = new EdgeQueue(pid, maxQueueLen, maxMsgSize, maxAllocSize);
 
   // shared mem allocator uses some space for header segments
@@ -143,6 +152,8 @@ TEST(EdgeQueueTest, NoAllocFreeByReader) {
   size_t maxQueueLen = 100;
   size_t maxMsgSize = 100;
   size_t maxAllocSize = 4096;
+
+  EdgeQueue::remove(pid);
 
   EdgeQueue *creator = new EdgeQueue(pid, maxQueueLen, maxMsgSize, maxAllocSize);
 

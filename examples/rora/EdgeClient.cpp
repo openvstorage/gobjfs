@@ -34,7 +34,7 @@ int main(int argc, char* argv[])
   {
     // get read response
     GatewayMsg responseMsg;
-    auto ret = edgeQueue->read(responseMsg);
+    auto ret = edgeQueue->readResponse(responseMsg);
     assert(ret == 0);
 
     // check retval, errval, filename, offset, size match

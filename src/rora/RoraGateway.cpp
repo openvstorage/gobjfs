@@ -439,7 +439,7 @@ int RoraGateway::asdThreadFunc(ASDInfo* asdInfo, size_t thrIdx) {
 
           GatewayMsg respMsg;
           respMsg.opcode_ = Opcode::ADD_EDGE_RESP;
-          edgePtr->write(respMsg);
+          edgePtr->writeResponse(respMsg);
           break;
         }
       case Opcode::READ_REQ:
@@ -476,7 +476,7 @@ int RoraGateway::asdThreadFunc(ASDInfo* asdInfo, size_t thrIdx) {
           if (edgePtr) {
             GatewayMsg respMsg;
             respMsg.opcode_ = Opcode::DROP_EDGE_RESP;
-            edgePtr->write(respMsg);
+            edgePtr->writeResponse(respMsg);
             int ret = edges_.drop(anyReq.edgePid_);
             (void) ret;
           } else {
@@ -515,7 +515,7 @@ int RoraGateway::asdThreadFunc(ASDInfo* asdInfo, size_t thrIdx) {
               if (edgePtr) {
                 GatewayMsg respMsg;
                 edgePtr->GatewayMsg_from_giocb(respMsg, *iocb, -EIO);
-                auto ret = edgePtr->write(respMsg);
+                auto ret = edgePtr->writeResponse(respMsg);
                 assert(ret == 0);
               } else {
                 LOG(ERROR) << "could not find edgeQueue for pid=" << iocb->user_ctx;
@@ -574,7 +574,7 @@ int RoraGateway::handleReadCompletion(int fd, uintptr_t ptr) {
         LOG(DEBUG) << "send response to pid=" << pid 
           << ",ret=" << aio_return(iocb)
           << ",filename=" << iocb->filename;
-        auto ret = edgePtr->write(respMsg);
+        auto ret = edgePtr->writeResponse(respMsg);
         assert(ret == 0);
       } else {
         LOG(ERROR) << "not found edge queue for pid=" << pid;

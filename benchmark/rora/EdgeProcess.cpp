@@ -256,7 +256,7 @@ void RunContext::doRandomRead(ASDQueue* asdQueue) {
     for (size_t batchIdx = 0; batchIdx < config.maxOutstandingIO; batchIdx ++) {
       // get read response
       GatewayMsg responseMsg(1);
-      const auto ret = edgeQueue->read(responseMsg);
+      const auto ret = edgeQueue->readResponse(responseMsg);
       assert(ret == 0);
 
       // check retval, errval, filename, offset, size match
@@ -343,7 +343,7 @@ int main(int argc, char* argv[])
   assert(ret == 0);
 
   GatewayMsg responseMsg;
-  ret = edgeQueue->read(responseMsg);
+  ret = edgeQueue->readResponse(responseMsg);
   assert(ret == 0);
   assert(responseMsg.opcode_ == Opcode::ADD_EDGE_RESP);
 
@@ -366,7 +366,7 @@ int main(int argc, char* argv[])
   ret = asdQueue->write(createCloseRequest());
   assert(ret == 0);
 
-  ret = edgeQueue->read(responseMsg);
+  ret = edgeQueue->readResponse(responseMsg);
   assert(ret == 0);
   assert(responseMsg.opcode_ == Opcode::DROP_EDGE_RESP);
 

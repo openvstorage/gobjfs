@@ -35,13 +35,12 @@ class EdgeQueue {
 
   public:
   int pid_{-1};
+  size_t maxAllocSize_{0};
 
   private:
-  std::string queueName_;
   std::string heapName_;
   bool isCreator_{false};
 
-  size_t maxMsgSize_{0};
 
   // allocated cached blocks
   std::deque<void*> cachedBlocks_;
@@ -53,12 +52,18 @@ class EdgeQueue {
     gobjfs::stats::StatsCounter<uint32_t> msgSize_;
   };
 
-  Statistics readStats_;
-  Statistics writeStats_;
+  struct Queue {
+    Statistics readStats_;
+    Statistics writeStats_;
+    size_t maxMsgSize_{0};
+    std::string queueName_;
+    std::unique_ptr<bip::message_queue> mq_{nullptr};
+  };
 
   public:
 
-  std::unique_ptr<bip::message_queue> mq_{nullptr};
+  Queue request_;
+  Queue response_;
   std::unique_ptr<bip::managed_shared_memory> segment_{nullptr};
 
   public:
@@ -77,9 +82,13 @@ class EdgeQueue {
 
   ~EdgeQueue();
 
-  int write(const GatewayMsg& gmsg);
+  int writeRequest(const GatewayMsg& gmsg);
 
-  int read(GatewayMsg& gmsg);
+  int readRequest(GatewayMsg& gmsg);
+
+  int writeResponse(const GatewayMsg& gmsg);
+
+  int readResponse(GatewayMsg& gmsg);
    
   void* alloc(size_t sz);
 
@@ -101,11 +110,17 @@ class EdgeQueue {
 
   void clearStats();
 
-  size_t getCurrentQueueLen() const;
+  size_t getResponseCurrentQueueLen() const;
 
-  size_t getMaxQueueLen() const;
+  size_t getResponseMaxQueueLen() const;
 
-  size_t getMaxMsgSize() const;
+  size_t getResponseMaxMsgSize() const;
+
+  size_t getRequestCurrentQueueLen() const;
+
+  size_t getRequestMaxQueueLen() const;
+
+  size_t getRequestMaxMsgSize() const;
 
   size_t getFreeMem() const;
 };

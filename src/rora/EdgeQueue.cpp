@@ -13,13 +13,18 @@ using gobjfs::xio::giocb;
 namespace gobjfs {
 namespace rora {
 
-static std::string getEdgeQueueName(int pid) {
-  std::string str = "respqueue_to_pid_" + std::to_string(pid);
+static std::string getResponseEdgeQueueName(int pid) {
+  std::string str = "response_to_edge_pid_" + std::to_string(pid);
+  return str;
+}
+
+static std::string getRequestEdgeQueueName(int pid) {
+  std::string str = "request_from_edge_pid_" + std::to_string(pid);
   return str;
 }
 
 static std::string getHeapName(int pid) {
-  std::string heapName = "shmem_for_pid_" + std::to_string(pid);
+  std::string heapName = "shmem_for_edge_pid_" + std::to_string(pid);
   return heapName;
 }
 
@@ -36,11 +41,14 @@ EdgeQueue::EdgeQueue(int pid,
     size_t maxMsgSize,
     size_t maxAllocSize) 
   : pid_(pid)
-  , maxMsgSize_(maxMsgSize) {
+  , maxAllocSize_(maxAllocSize) {
 
   isCreator_ = true;
+  request_.maxMsgSize_ = maxMsgSize;
+  response_.maxMsgSize_ = maxMsgSize;
 
-  queueName_ = getEdgeQueueName(pid);
+  request_.queueName_ = getRequestEdgeQueueName(pid);
+  response_.queueName_ = getResponseEdgeQueueName(pid);
   heapName_ = getHeapName(pid);
 
   //Should pre-existing message queue and shmem be removed ?
@@ -48,10 +56,15 @@ EdgeQueue::EdgeQueue(int pid,
   //remove(pid);
 
   try {
-    mq_ = gobjfs::make_unique<bip::message_queue>(bip::create_only, 
-      queueName_.c_str(),
+    response_.mq_ = gobjfs::make_unique<bip::message_queue>(bip::create_only, 
+      response_.queueName_.c_str(),
       (BoostHeaderAdjustment + maxQueueLen),
-      maxMsgSize_);
+      response_.maxMsgSize_);
+
+    request_.mq_ = gobjfs::make_unique<bip::message_queue>(bip::create_only, 
+      request_.queueName_.c_str(),
+      (BoostHeaderAdjustment + maxQueueLen),
+      request_.maxMsgSize_);
   
     segment_ = gobjfs::make_unique<bip::managed_shared_memory>(bip::create_only, 
       heapName_.c_str(),
@@ -62,20 +75,21 @@ EdgeQueue::EdgeQueue(int pid,
       cachedBlocks_.push_back(segment_->allocate(maxAllocSize));
     }
 
-    // TODO : should be total number of jobs in system
-    LOG(INFO) << "created edge queue=" << queueName_ 
+    // TODO : queue len should be total number of jobs in system
+    LOG(INFO) << "created request queue=" << request_.queueName_ 
+      << " response queue=" << response_.queueName_ 
       << ",shmem=" << heapName_ 
       << ",maxQueueLen=" << maxQueueLen
       << ",maxAllocSize=" << maxAllocSize
-      << ",maxMsgSize=" << maxMsgSize_;
+      << ",maxMsgSize=" << maxMsgSize;
   } catch (const std::exception& e) {
 
-    mq_.reset();
+    response_.mq_.reset();
+    request_.mq_.reset();
     segment_.reset();
 
     throw std::runtime_error(
         "failed to create edgequeue for pid=" + std::to_string(pid));
-
   }
 }
 
@@ -87,19 +101,27 @@ EdgeQueue::EdgeQueue(int pid) : pid_(pid) {
 
   isCreator_ =  false;
 
-  queueName_ = getEdgeQueueName(pid);
+  request_.queueName_ = getRequestEdgeQueueName(pid);
+  response_.queueName_ = getResponseEdgeQueueName(pid);
   heapName_ = getHeapName(pid);
 
   try {
-    mq_ = gobjfs::make_unique<bip::message_queue>(bip::open_only, queueName_.c_str());
+    request_.mq_ = gobjfs::make_unique<bip::message_queue>(bip::open_only, request_.queueName_.c_str());
+    response_.mq_ = gobjfs::make_unique<bip::message_queue>(bip::open_only, response_.queueName_.c_str());
     segment_ = gobjfs::make_unique<bip::managed_shared_memory>(bip::open_only, heapName_.c_str());
-    maxMsgSize_ = getMaxMsgSize();
-    LOG(INFO) << "opened edge queue=" << queueName_ 
+    request_.maxMsgSize_ = getRequestMaxMsgSize();
+    response_.maxMsgSize_ = getResponseMaxMsgSize();
+    // maxAllocSize_ = TODO otherwise getFreeMem fails for reader side
+    LOG(INFO) 
+      << "opened request queue=" << request_.queueName_ 
+      << " response queue=" << response_.queueName_ 
       << ",shmem=" << heapName_ 
-      << ",maxMsgSize=" << maxMsgSize_;
+      << ",request_maxMsgSize=" << request_.maxMsgSize_
+      << ",response_maxMsgSize=" << response_.maxMsgSize_;
   } catch (const std::exception& e) {
 
-    mq_.reset();
+    request_.mq_.reset();
+    response_.mq_.reset();
     segment_.reset();
 
     throw std::runtime_error(
@@ -109,8 +131,8 @@ EdgeQueue::EdgeQueue(int pid) : pid_(pid) {
 
 int EdgeQueue::remove(int pid) {
 
-  auto queueName_ = getEdgeQueueName(pid);
-  bip::message_queue::remove(queueName_.c_str());
+  bip::message_queue::remove(getResponseEdgeQueueName(pid).c_str());
+  bip::message_queue::remove(getRequestEdgeQueueName(pid).c_str());
 
   auto heapName_ = getHeapName(pid);
   bip::shared_memory_object::remove(heapName_.c_str());
@@ -121,10 +143,16 @@ int EdgeQueue::remove(int pid) {
 EdgeQueue::~EdgeQueue() {
 
   if (isCreator_) {
-    if (mq_) {
-      auto ret = bip::message_queue::remove(queueName_.c_str());
+    if (request_.mq_) {
+      auto ret = bip::message_queue::remove(request_.queueName_.c_str());
       if (ret == false) {
-        LOG(ERROR) << "Failed to remove message queue=" << queueName_;
+        LOG(ERROR) << "Failed to remove message queue=" << request_.queueName_;
+      }
+    }
+    if (response_.mq_) {
+      auto ret = bip::message_queue::remove(response_.queueName_.c_str());
+      if (ret == false) {
+        LOG(ERROR) << "Failed to remove message queue=" << response_.queueName_;
       }
     }
     if (segment_) {
@@ -144,12 +172,12 @@ EdgeQueue::~EdgeQueue() {
 /**
  * TODO : can throw
  */
-int EdgeQueue::write(const GatewayMsg& gmsg) {
+int EdgeQueue::writeRequest(const GatewayMsg& gmsg) {
   try {
     auto sendStr = gmsg.pack();
-    assert(sendStr.size() < maxMsgSize_);
-    mq_->send(sendStr.c_str(), sendStr.size(), 0);
-    updateStats(writeStats_, sendStr.size());
+    assert(sendStr.size() < request_.maxMsgSize_);
+    request_.mq_->send(sendStr.c_str(), sendStr.size(), 0);
+    updateStats(request_.writeStats_, sendStr.size());
     return 0;
   } catch (const std::exception& e) {
     return -1;
@@ -159,12 +187,12 @@ int EdgeQueue::write(const GatewayMsg& gmsg) {
 /**
  * TODO : can throw
  */
-int EdgeQueue::read(GatewayMsg& msg) {
+int EdgeQueue::readRequest(GatewayMsg& msg) {
   uint32_t priority;
   size_t recvdSize;
   try {
-    char buf[maxMsgSize_];
-    mq_->receive(buf, maxMsgSize_, recvdSize, priority);
+    char buf[request_.maxMsgSize_];
+    request_.mq_->receive(buf, request_.maxMsgSize_, recvdSize, priority);
     msg.unpack(buf, recvdSize);
     if ((msg.opcode_ == Opcode::READ_REQ) ||
       (msg.opcode_ == Opcode::READ_RESP)) {
@@ -181,7 +209,54 @@ int EdgeQueue::read(GatewayMsg& msg) {
         msg.rawbufVec_.push_back(segment_->get_address_from_handle(msg.bufVec_[idx]));
       }
     }
-    updateStats(readStats_, recvdSize);
+    updateStats(request_.readStats_, recvdSize);
+    return 0;
+  } catch (const std::exception& e) {
+    return -1;
+  }
+}
+
+/**
+ * TODO : can throw
+ */
+int EdgeQueue::writeResponse(const GatewayMsg& gmsg) {
+  try {
+    auto sendStr = gmsg.pack();
+    assert(sendStr.size() < response_.maxMsgSize_);
+    response_.mq_->send(sendStr.c_str(), sendStr.size(), 0);
+    updateStats(response_.writeStats_, sendStr.size());
+    return 0;
+  } catch (const std::exception& e) {
+    return -1;
+  }
+}
+
+/**
+ * TODO : can throw
+ */
+int EdgeQueue::readResponse(GatewayMsg& msg) {
+  uint32_t priority;
+  size_t recvdSize;
+  try {
+    char buf[response_.maxMsgSize_];
+    response_.mq_->receive(buf, response_.maxMsgSize_, recvdSize, priority);
+    msg.unpack(buf, recvdSize);
+    if ((msg.opcode_ == Opcode::READ_REQ) ||
+      (msg.opcode_ == Opcode::READ_RESP)) {
+
+      // as it currently stands, the process which creates
+      // the edge queue only gets read responses
+      // while the rora gateway only gets read requests
+      // encoded that check in this assert
+      assert((isCreator_ && msg.opcode_ == Opcode::READ_RESP) ||
+        (!isCreator_ && msg.opcode_ == Opcode::READ_REQ));
+
+      // convert segment offset to raw ptr within this process
+      for (size_t idx = 0; idx < msg.numElems(); idx ++) {
+        msg.rawbufVec_.push_back(segment_->get_address_from_handle(msg.bufVec_[idx]));
+      }
+    }
+    updateStats(response_.readStats_, recvdSize);
     return 0;
   } catch (const std::exception& e) {
     return -1;
@@ -273,45 +348,73 @@ void EdgeQueue::updateStats(Statistics& which, size_t msgSize) {
 std::string EdgeQueue::getStats() const {
   std::ostringstream s;
   s 
-    << "read={count=" << readStats_.count_ << ",msg_size=" << readStats_.msgSize_ << "}"
-    << ",write={count=" << writeStats_.count_ << ",msg_size=" << writeStats_.msgSize_ << "}"
+    << "resp_read={count=" << response_.readStats_.count_ << ",msg_size=" << response_.readStats_.msgSize_ << "}"
+    << ",resp_write={count=" << response_.writeStats_.count_ << ",msg_size=" << response_.writeStats_.msgSize_ << "}"
+    << "req_read={count=" << response_.readStats_.count_ << ",msg_size=" << response_.readStats_.msgSize_ << "}"
+    << ",req_write={count=" << response_.writeStats_.count_ << ",msg_size=" << response_.writeStats_.msgSize_ << "}"
     ;
   return s.str();
 }
 
 void EdgeQueue::clearStats() {
-  readStats_.count_ = 0;
-  readStats_.msgSize_.reset();
-  writeStats_.count_ = 0;
-  writeStats_.msgSize_.reset();
+  response_.readStats_.count_ = 0;
+  response_.readStats_.msgSize_.reset();
+  response_.writeStats_.count_ = 0;
+  response_.writeStats_.msgSize_.reset();
+
+  request_.readStats_.count_ = 0;
+  request_.readStats_.msgSize_.reset();
+  request_.writeStats_.count_ = 0;
+  request_.writeStats_.msgSize_.reset();
 }
 
-size_t EdgeQueue::getCurrentQueueLen() const {
-  if (!mq_) {
+size_t EdgeQueue::getRequestCurrentQueueLen() const {
+  if (!request_.mq_) {
     throw std::runtime_error("invalid edgequeue");
   }
-  return mq_->get_num_msg();
+  return request_.mq_->get_num_msg();
 }
 
-size_t EdgeQueue::getMaxQueueLen() const {
-  if (!mq_) {
+size_t EdgeQueue::getRequestMaxQueueLen() const {
+  if (!request_.mq_) {
     throw std::runtime_error("invalid edgequeue");
   }
-  return mq_->get_max_msg();
+  return request_.mq_->get_max_msg();
 }
 
-size_t EdgeQueue::getMaxMsgSize() const {
-  if (!mq_) {
+size_t EdgeQueue::getRequestMaxMsgSize() const {
+  if (!request_.mq_) {
     throw std::runtime_error("invalid edgequeue");
   }
-  return mq_->get_max_msg_size();
+  return request_.mq_->get_max_msg_size();
+}
+
+size_t EdgeQueue::getResponseCurrentQueueLen() const {
+  if (!response_.mq_) {
+    throw std::runtime_error("invalid edgequeue");
+  }
+  return response_.mq_->get_num_msg();
+}
+
+size_t EdgeQueue::getResponseMaxQueueLen() const {
+  if (!response_.mq_) {
+    throw std::runtime_error("invalid edgequeue");
+  }
+  return response_.mq_->get_max_msg();
+}
+
+size_t EdgeQueue::getResponseMaxMsgSize() const {
+  if (!response_.mq_) {
+    throw std::runtime_error("invalid edgequeue");
+  }
+  return response_.mq_->get_max_msg_size();
 }
 
 size_t EdgeQueue::getFreeMem() const {
   if (!segment_) {
     throw std::runtime_error("invalid edgequeue");
   }
-  return segment_->get_free_memory();
+  return (cachedBlocks_.size() * maxAllocSize_) + segment_->get_free_memory();
 }
 
 }

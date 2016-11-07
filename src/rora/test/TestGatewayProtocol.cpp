@@ -44,14 +44,14 @@ TEST(GatewayProtocolTest, SharedPtrInMsgPack) {
   // get the handle from the ptr
   sendMsg.bufVec_.push_back(creator->segment_->get_handle_from_address(sendBufPtr));
   // write into message queue
-  auto ret = creator->write(sendMsg);
+  auto ret = creator->writeResponse(sendMsg);
   EXPECT_EQ(ret, 0);
 
   EdgeQueue *reader = new EdgeQueue(pid);
 
   // read from message queue
   GatewayMsg recvMsg;
-  ret = reader->read(recvMsg);
+  ret = reader->readResponse(recvMsg);
   EXPECT_EQ(ret, 0);
 
   // recover the ptr from the handle

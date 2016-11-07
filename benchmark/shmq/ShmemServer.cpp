@@ -66,7 +66,7 @@ void asdThreadFunc() {
             LOG(INFO) << "added edgeQueue for pid=" << reqMsg.edgePid_ << std::endl;
 
             GatewayMsg respMsg;
-            ret = edgeQueuePtr->write(respMsg);
+            ret = edgeQueuePtr->writeResponse(respMsg);
             assert(ret == 0);
 
 	    actualBatchSize = std::min(maxBatchSize, edgeQueueMap.size());
@@ -84,7 +84,7 @@ void asdThreadFunc() {
             auto& edgeQueue = iter->second;
 
             GatewayMsg respMsg;
-            ret = edgeQueue->write(respMsg);
+            ret = edgeQueue->writeResponse(respMsg);
             assert(ret == 0);
 
             {
@@ -133,7 +133,7 @@ void asdThreadFunc() {
         auto& edgeQueue = iter->second;
   
         GatewayMsg respMsg;
-        ret = edgeQueue->write(respMsg);
+        ret = edgeQueue->writeResponse(respMsg);
         assert(ret == 0);
       }
   

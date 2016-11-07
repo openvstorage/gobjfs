@@ -49,7 +49,7 @@ int main(int argc, char* argv[])
     assert(ret == 0);
 
     GatewayMsg respMsg;
-    ret = edgeQueue->read(respMsg);
+    ret = edgeQueue->readResponse(respMsg);
     assert(ret == 0);
   }
 
@@ -71,7 +71,7 @@ int main(int argc, char* argv[])
     assert(ret == 0);
 
     GatewayMsg respMsg;
-    ret = edgeQueue->read(respMsg);
+    ret = edgeQueue->readResponse(respMsg);
     assert(ret == 0);
 
     if (doneCount % 100 == 0) {
@@ -90,7 +90,7 @@ int main(int argc, char* argv[])
     assert(ret == 0);
 
     GatewayMsg respMsg;
-    ret = edgeQueue->read(respMsg);
+    ret = edgeQueue->readResponse(respMsg);
     assert(ret == 0);
   }
 
