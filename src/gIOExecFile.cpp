@@ -395,6 +395,12 @@ IOExecFileHandle IOExecFileOpen(IOExecServiceHandle serviceHandle,
 
   int mode = S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH;
 
+  if ((newFlags & O_DIRECT) == 0) {
+    // raise hell if polluting the buffer cache
+    LOG(ERROR) << "file=" << absFileName << " flags=" << newFlags
+               << " doesnt have O_DIRECT";
+  }
+
   int fd = open(absFileName, newFlags, mode);
 
   if (fd < 0) {
