@@ -34,7 +34,12 @@ sudo dpkg -i libxio-dev_1.7-1_amd64.deb
 
 sudo apt-get install -y libaio1 libaio1-dbg libaio-dev
 sudo apt-get install -y libz-dev libbz2-dev
-sudo apt-get install -y libboost-all-dev 
+
+# install boost1.57 specifically (this is how ovs does it)
+echo "deb http://ppa.launchpad.net/afrank/boost/ubuntu trusty main" > /etc/apt/sources.list.d/boost_repo.list
+echo "deb-src http://ppa.launchpad.net/afrank/boost/ubuntu trusty main" > /etc/apt/sources.list.d/boost_src_repo.list 
+sudo apt-get update
+sudo apt-get install libboost1.57-all-dev libboost1.57-all
 
 # Install google test
 cd ~
