@@ -127,7 +127,7 @@ RoraGateway::ASDInfo::ASDInfo(RoraGateway* rgPtr,
     << ",maxThreads=" << maxThreadsPerASD_;
 
   ctxVec_.reserve(maxConnPerASD_);
-  threadVec_.reserve(maxThreadsPerASD_);
+  asdThreadVec_.reserve(maxThreadsPerASD_);
   // Many threads can read from one shmem queue and 
   // forward requests to the server independently
   for (size_t idx = 0; idx < maxConnPerASD_; idx ++) {
@@ -311,7 +311,7 @@ int RoraGateway::dropASD(const std::string& transport,
         (asd->port_ == port)) {
       LOG(INFO) << "deleting asd=" << ipAddress << ":" << port;
       // shut down threads
-      for (auto threadInfo : asd->threadVec_) {
+      for (auto threadInfo : asd->asdThreadVec_) {
         threadInfo->stopping_ = true;
         threadInfo->thread_.join();
       }
@@ -376,54 +376,51 @@ int RoraGateway::watchDogFunc(int fd, uintptr_t userCtx) {
   return 0;
 }
 
-int RoraGateway::asdThreadFunc(ASDInfo* asdInfo, size_t thrIdx) {
+int RoraGateway::ASDThreadInfo::threadFunc(RoraGateway* rgPtr, ASDInfo* asdInfo, size_t thrIdx) {
 
-  ThreadInfo* threadInfo = asdInfo->threadVec_[thrIdx].get();
-  threadInfo->started_ = true;
+  RoraGateway::ASDThreadInfo* threadInfo = asdInfo->asdThreadVec_[thrIdx].get();
+  assert(threadInfo == this);
+  threadId_ = gettid();
+  started_ = true;
 
   LOG(INFO) << "started asd thread=" << gettid() 
     << ",using thread slot=" << thrIdx 
     << ",uri=" << asdInfo->ipAddress_ << ":" << asdInfo->port_;
 
-  int timeout_ms = 1;
-
-  std::vector<giocb*> pending_giocb_vec;
-
-  int numIdleLoops = 0;
-  size_t nextConnIdx = thrIdx;
+  nextConnIdx_ = thrIdx;
 
   while (1) {
 
     int ret = 0;
     GatewayMsg anyReq;
-    if (threadInfo->stopping_ || pending_giocb_vec.size()) {
+    if (stopping_ || pending_giocb_vec_.size()) {
       // see if there are more read requests we can batch
       ret = asdInfo->queue_->try_read(anyReq);
       if (ret != 0) {
-        numIdleLoops ++;
+        numIdleLoops_ ++;
       } else {
-        numIdleLoops = 0;
+        numIdleLoops_ = 0;
       }
     } else {
-      // if nothing in pending_giocb_vec queue, do longer wait.
+      // if nothing in pending_giocb_vec_ queue, do longer wait.
       // Cannot do blocking wait here otherwise process termination would 
       // require having to write a termination message to the queue 
       // from inside this process (from the thread calling shutdown)
-      ret = asdInfo->queue_->timed_read(anyReq, timeout_ms);
-      numIdleLoops = 0;
+      ret = asdInfo->queue_->timed_read(anyReq, timeout_ms_);
+      numIdleLoops_ = 0;
       if (ret != 0) {
         // if no writers, keep doubling timeout to save CPU
         // but bound the timeout to max one second so process terminates
         // quickly on being notified of shutdown
-        if (timeout_ms < 1000) {
-          timeout_ms = timeout_ms << 1;
+        if (timeout_ms_ < 1000) {
+          timeout_ms_ = timeout_ms_ << 1;
         }
         // assert cannot be sleeping when there are pending requests
-        assert(pending_giocb_vec.empty());
+        assert(pending_giocb_vec_.empty());
         continue;
       } else {
         // got a request, reset timeout interval
-        timeout_ms = 1;
+        timeout_ms_ = 1;
       }
     } 
 
@@ -435,7 +432,7 @@ int RoraGateway::asdThreadFunc(ASDInfo* asdInfo, size_t thrIdx) {
           LOG(INFO) << "got open from edge process=" << anyReq.edgePid_;
           auto edgePtr = std::make_shared<EdgeQueue>(anyReq.edgePid_);
           assert(edgePtr->pid_ == anyReq.edgePid_);
-          edges_.insert(edgePtr);
+          rgPtr->edges_.insert(edgePtr);
 
           GatewayMsg respMsg;
           respMsg.opcode_ = Opcode::ADD_EDGE_RESP;
@@ -445,20 +442,20 @@ int RoraGateway::asdThreadFunc(ASDInfo* asdInfo, size_t thrIdx) {
       case Opcode::READ_REQ:
         {
           const int pid = (pid_t)anyReq.edgePid_;
-          auto edgePtr = edges_.find(pid);
+          auto edgePtr = rgPtr->edges_.find(pid);
           
           if (edgePtr) {
             LOG(DEBUG) << "got read from pid=" << pid << " for number=" << anyReq.numElems();
             auto giocb_vec = edgePtr->giocb_from_GatewayMsg(anyReq);
-            // put iocb into pending_giocb_vec queue
-            if (pending_giocb_vec.empty()) {
-              pending_giocb_vec = std::move(giocb_vec);
+            // put iocb into pending_giocb_vec_ queue
+            if (pending_giocb_vec_.empty()) {
+              pending_giocb_vec_ = std::move(giocb_vec);
             } else {
-              pending_giocb_vec.reserve(
-                pending_giocb_vec.size() + giocb_vec.size());
+              pending_giocb_vec_.reserve(
+                pending_giocb_vec_.size() + giocb_vec.size());
               std::move(std::begin(giocb_vec),
                 std::end(giocb_vec),
-                std::back_inserter(pending_giocb_vec));
+                std::back_inserter(pending_giocb_vec_));
               giocb_vec.clear();
             }
           } else {
@@ -471,13 +468,13 @@ int RoraGateway::asdThreadFunc(ASDInfo* asdInfo, size_t thrIdx) {
           LOG(INFO) << "got close from edge process=" << anyReq.edgePid_;
           // TODO add ref counting to ensure edge queue doesnt go away
           // while there are outstanding requests
-          auto edgePtr = edges_.find(anyReq.edgePid_);
+          auto edgePtr = rgPtr->edges_.find(anyReq.edgePid_);
 
           if (edgePtr) {
             GatewayMsg respMsg;
             respMsg.opcode_ = Opcode::DROP_EDGE_RESP;
             edgePtr->writeResponse(respMsg);
-            int ret = edges_.drop(anyReq.edgePid_);
+            int ret = rgPtr->edges_.drop(anyReq.edgePid_);
             (void) ret;
           } else {
             LOG(ERROR) << " could not find queue for pid=" << anyReq.edgePid_;
@@ -493,24 +490,24 @@ int RoraGateway::asdThreadFunc(ASDInfo* asdInfo, size_t thrIdx) {
         }
       }
     }
-      // submit whatever is pending_giocb_vec if
+      // submit whatever is pending_giocb_vec_ if
       // (1) have as many requests as number of edges
       // (2) got nothing on previous nonblocking read AND have some pending
       //     requests 
-      if ((pending_giocb_vec.size() >= edges_.size()) || 
-          ((numIdleLoops == 1) && pending_giocb_vec.size())) {
+      if ((pending_giocb_vec_.size() >= rgPtr->edges_.size()) || 
+          ((numIdleLoops_ == 1) && pending_giocb_vec_.size())) {
 
-          asdInfo->stats_.submitBatchSize_ = pending_giocb_vec.size();
+          asdInfo->stats_.submitBatchSize_ = pending_giocb_vec_.size();
 
-          client_ctx_ptr& ctx = asdInfo->ctxVec_[nextConnIdx];
+          client_ctx_ptr& ctx = asdInfo->ctxVec_[nextConnIdx_];
 
-          auto aio_ret = aio_readv(ctx, pending_giocb_vec);
+          auto aio_ret = aio_readv(ctx, pending_giocb_vec_);
           if (aio_ret != 0) {
             // got an error? send back response right now
             // TODO : this doesnt handle case where some of the reads
             // were submitted successfully
-            for (auto iocb : pending_giocb_vec) {
-              auto edgePtr = edges_.find(iocb->user_ctx);
+            for (auto iocb : pending_giocb_vec_) {
+              auto edgePtr = rgPtr->edges_.find(iocb->user_ctx);
   
               if (edgePtr) {
                 GatewayMsg respMsg;
@@ -525,23 +522,25 @@ int RoraGateway::asdThreadFunc(ASDInfo* asdInfo, size_t thrIdx) {
           } else  {
             aio_wait_all(ctx);
           }
-          pending_giocb_vec.clear();
-          // rotate the connection used
-          // maxConn, maxThr, thread should use these connections
-          //   8       1         (1, 2, 3, 4, ..)
-          //   8       2         (1, 3, 5, 7)
-          //   8       4         (1, 5)
-          //   8       8         (1)
-          nextConnIdx = (nextConnIdx + asdInfo->maxThreadsPerASD_) % asdInfo->ctxVec_.size();
+          pending_giocb_vec_.clear();
+          // number of threads is less than or equal to number of connections
+          // rotate the connection used by this thread for sending msgs
+          // for example
+          // maxConn | maxThr | thread should use these connections
+          //   8        1         (1, 2, 3, 4, ..)
+          //   8        2         (1, 3, 5, 7)
+          //   8        4         (1, 5)
+          //   8        8         (1)
+          nextConnIdx_ = (nextConnIdx_ + asdInfo->maxThreadsPerASD_) % asdInfo->ctxVec_.size();
       }
-      if (pending_giocb_vec.empty() && threadInfo->stopping_) {
+      if (pending_giocb_vec_.empty() && stopping_) {
         break;
       }
   }
 
-  assert(pending_giocb_vec.empty());
-  threadInfo->stopped_ = true;
-  LOG(INFO) << "stopped asd thread=" << gettid() 
+  assert(pending_giocb_vec_.empty());
+  stopped_ = true;
+  LOG(INFO) << "stopped asd thread=" << threadId_
     << ",using thread slot=" << thrIdx 
     << ",uri=" << asdInfo->ipAddress_ << ":" << asdInfo->port_;
   return 0;
@@ -612,9 +611,9 @@ int RoraGateway::run() {
   // start all the configured threads
   for (auto& asdPtr : asdVec_) {
     for (size_t thrIdx = 0; thrIdx < asdPtr->maxThreadsPerASD_; thrIdx ++) {
-      asdPtr->threadVec_.push_back(std::make_shared<ThreadInfo>());
-      asdPtr->threadVec_[thrIdx]->thread_ = std::thread(
-          std::bind(&RoraGateway::asdThreadFunc, this, asdPtr.get(), thrIdx));
+      asdPtr->asdThreadVec_.push_back(std::make_shared<ASDThreadInfo>());
+      asdPtr->asdThreadVec_[thrIdx]->thread_ = std::thread(
+          std::bind(&ASDThreadInfo::threadFunc, asdPtr->asdThreadVec_[thrIdx].get(), this, asdPtr.get(), thrIdx));
     }
   }
 
@@ -628,7 +627,7 @@ int RoraGateway::run() {
   }
 
   for (auto& asdPtr : asdVec_) {
-    for (auto& threadInfo : asdPtr->threadVec_) {
+    for (auto& threadInfo : asdPtr->asdThreadVec_) {
       threadInfo->thread_.join();
     }
   }
@@ -647,7 +646,7 @@ int RoraGateway::shutdown() {
   edges_.epoller_.shutdown();
 
   for (auto& asdPtr : asdVec_) {
-    for (auto& threadInfo : asdPtr->threadVec_) {
+    for (auto& threadInfo : asdPtr->asdThreadVec_) {
       threadInfo->stopping_ = true;
     }
   }

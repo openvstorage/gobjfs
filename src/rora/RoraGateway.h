@@ -25,6 +25,7 @@ class RoraGateway {
   // per thread info
   struct ThreadInfo {
     std::thread thread_;
+    int threadId_; // gettid
     bool started_{false};
     bool stopping_{false};
     bool stopped_{false};
@@ -57,6 +58,26 @@ class RoraGateway {
 
   };
 
+  class ASDInfo;
+
+  /**
+   * variables used in thread loop are also part of this structure.
+   * just examine this struct during debugging from any thread, 
+   * instead of switching threads and examing local variables
+   */
+  struct ASDThreadInfo : public ThreadInfo {
+    std::vector<gobjfs::xio::giocb*> pending_giocb_vec_;
+    int timeout_ms_ = 1;
+    int numIdleLoops_ = 0;
+    uint32_t numLoops_ = 0;
+    size_t nextConnIdx_ = 0;
+
+    /**
+     * thread which forwards read requests to ASD
+     */
+    int threadFunc(RoraGateway* rgPtr, ASDInfo* asdInfo, size_t thrIdx);
+  };
+
   struct ASDInfo {
 
     const std::string transport_;
@@ -69,7 +90,7 @@ class RoraGateway {
     ASDQueueUPtr queue_;
 
     std::vector<gobjfs::xio::client_ctx_ptr> ctxVec_;
-    std::vector<std::shared_ptr<ThreadInfo>> threadVec_;
+    std::vector<std::shared_ptr<ASDThreadInfo>> asdThreadVec_;
 
     // info passed to EPoller.addEvent
     // to figure out the fd corresponding to the ctx
@@ -111,10 +132,6 @@ class RoraGateway {
   // watchdog timer
   std::unique_ptr<gobjfs::os::TimerNotifier> watchDogPtr_;
 
-  /**
-   * thread which forwards read requests to ASD
-   */
-  int asdThreadFunc(ASDInfo* asdInfo, size_t thrIdx);
 
   /**
    * thread which transmits read responses back to edges
