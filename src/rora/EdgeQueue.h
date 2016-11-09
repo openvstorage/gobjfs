@@ -62,7 +62,6 @@ class EdgeQueue {
 
   public:
 
-  Queue request_;
   Queue response_;
   std::unique_ptr<bip::managed_shared_memory> segment_{nullptr};
 
