@@ -589,6 +589,7 @@ int NetworkXioServer::on_request(xio_session *session ATTRIBUTE_UNUSED,
     NetworkXioRequest *req = new NetworkXioRequest(xio_req, clientData);
     clientData->ncd_refcnt ++;
     clientData->pt_->ioh_->handle_request(req);
+    xio_release_msg(xio_req);
   } catch (const std::bad_alloc &) {
     int ret = xio_cancel(xio_req, XIO_E_MSG_CANCELED);
     GLOG_ERROR("failed to allocate request, cancelling XIO request: " << ret);

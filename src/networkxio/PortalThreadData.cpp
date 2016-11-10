@@ -56,7 +56,7 @@ static int static_on_request(xio_session *session, xio_msg *req,
  * Only called for Portal
  */
 template <class T>
-static int static_on_msg_send_complete(xio_session *session, xio_msg *msg,
+static int static_on_ow_msg_send_complete(xio_session *session, xio_msg *msg,
                                        void *cb_user_context) {
   XXEnter();
   T *obj = reinterpret_cast<T *>(cb_user_context);
@@ -103,7 +103,7 @@ void PortalThreadData::portal_func() {
   xio_session_ops portal_ops;
   portal_ops.on_session_event = NULL;
   portal_ops.on_new_session = NULL;
-  portal_ops.on_msg_send_complete = static_on_msg_send_complete<PortalThreadData>;
+  portal_ops.on_ow_msg_send_complete = static_on_ow_msg_send_complete<PortalThreadData>;
   portal_ops.on_msg = static_on_request<PortalThreadData>;
 
   xio_server_ = xio_bind(ctx_, &portal_ops, uri_.c_str(), NULL, 0, this);
