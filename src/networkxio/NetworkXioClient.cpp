@@ -218,6 +218,16 @@ static int static_on_session_event(xio_session *session,
 }
 
 template <class T>
+static int static_on_ow_msg_send_complete(xio_session *session, xio_msg *req,
+                              void *cb_user_context) {
+  T *obj = reinterpret_cast<T *>(cb_user_context);
+  if (obj == NULL) {
+    return -1;
+  }
+  return obj->on_ow_msg_send_complete(session, req);
+}
+
+template <class T>
 static int static_on_response(xio_session *session, xio_msg *req,
                               int last_in_rxq, void *cb_user_context) {
   T *obj = reinterpret_cast<T *>(cb_user_context);
@@ -256,6 +266,7 @@ NetworkXioClient::NetworkXioClient(const std::string &uri, const uint64_t qd)
   ses_ops.on_session_event = static_on_session_event<NetworkXioClient>;
   ses_ops.on_session_established = static_on_session_established<NetworkXioClient>;
   ses_ops.on_msg = static_on_response<NetworkXioClient>;
+  ses_ops.on_ow_msg_send_complete = static_on_ow_msg_send_complete<NetworkXioClient>;
   ses_ops.on_msg_error = static_on_msg_error<NetworkXioClient>;
   ses_ops.on_cancel_request = NULL;
   ses_ops.assign_data_in_buf = NULL;
@@ -460,14 +471,14 @@ int NetworkXioClient::on_msg_error(xio_session *session __attribute__((unused)),
       responseHeader.unpack_msg(static_cast<const char *>(msg->in.header.iov_base),
                       msg->in.header.iov_len);
     } catch (...) {
-      xio_release_response(msg);
+      xio_release_msg(msg);
       GLOG_ERROR("failed to unpack msg");
       return 0;
     }
     msg->in.header.iov_base = NULL;
     msg->in.header.iov_len = 0;
     vmsg_sglist_set_nents(&msg->in, 0);
-    xio_release_response(msg);
+    xio_release_msg(msg);
 
     // free memory allocated to sglist
     if (msg->in.sgl_type == XIO_SGL_TYPE_IOV_PTR) {
@@ -598,7 +609,7 @@ int NetworkXioClient::send_msg(ClientMsg *msgPtr) {
   }
 
   if (ret == 0) {
-    ret = xio_send_request(conn, &msgPtr->xreq);
+    ret = xio_send_msg(conn, &msgPtr->xreq);
   }
 
   if (ret < 0) { 
@@ -703,6 +714,10 @@ int NetworkXioClient::send_read_request(const std::string &filename,
   return send_msg(msgPtr);
 }
 
+int NetworkXioClient::on_ow_msg_send_complete(xio_session* session, xio_msg *req) {
+  return 0;
+}
+
 int NetworkXioClient::on_response(xio_session *session __attribute__((unused)),
                                   xio_msg *reply,
                                   int last_in_rxq __attribute__((unused))) {
@@ -713,14 +728,14 @@ int NetworkXioClient::on_response(xio_session *session __attribute__((unused)),
                     reply->in.header.iov_len);
   } catch (...) {
     GLOG_ERROR("failed to unpack msg");
-    xio_release_response(reply);
+    xio_release_msg(reply);
     return 0;
   }
 
   reply->in.header.iov_base = NULL;
   reply->in.header.iov_len = 0;
   vmsg_sglist_set_nents(&reply->in, 0);
-  xio_release_response(reply);
+  xio_release_msg(reply);
 
   const size_t numElems = responseHeader.numElems_;
   {
@@ -744,7 +759,7 @@ int NetworkXioClient::on_response(xio_session *session __attribute__((unused)),
       free(vmsg_sglist(&msgPtr->xreq.in));
     }
 
-    // the msgPtr must be freed after xio_release_response()
+    // the msgPtr must be freed after xio_release_msg()
     // otherwise its a memory corruption bug
     delete msgPtr;
     xio_context_stop_loop(ctx.get());

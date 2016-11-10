@@ -537,14 +537,8 @@ int NetworkXioServer::on_msg_send_complete(xio_session *session
 
 void NetworkXioServer::send_reply(NetworkXioRequest *req) {
   XXEnter();
-  xio_msg *xio_req = req->xio_req;
 
   bzero(&req->xio_reply, sizeof(xio_msg));
-
-  vmsg_sglist_set_nents(&req->xio_req->in, 0);
-  xio_req->in.header.iov_base = NULL;
-  xio_req->in.header.iov_len = 0;
-  req->xio_reply.request = xio_req;
 
   req->xio_reply.out.header.iov_base =
       const_cast<void *>(reinterpret_cast<const void *>(req->msgpackBuffer.c_str()));
@@ -572,11 +566,10 @@ void NetworkXioServer::send_reply(NetworkXioRequest *req) {
   req->xio_reply.flags = XIO_MSG_FLAG_IMM_SEND_COMP;
 
   GLOG_DEBUG("sent reply=" << (void*)&req->xio_reply 
-        << " for original message=" << (void*)xio_req
         << " req=" << (void*)req
         << " with num elem=" << numElems);
 
-  int ret = xio_send_response(&req->xio_reply);
+  int ret = xio_send_msg(req->pClientData->ncd_conn, &req->xio_reply);
   if (ret != 0) {
     GLOG_ERROR("failed to send reply: " << xio_strerror(xio_errno()));
     deallocate_request(req);
