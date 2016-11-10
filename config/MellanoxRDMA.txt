@@ -1,0 +1,18 @@
+
+# to verify mellanox drivers loaded
+lsmod | grep mlx
+
+# to get device info
+ibv_devinfo
+
+# to find which interface supports rdma
+ibdev2netdev
+# you will get output like
+# mlx4_0 port 1 ==> eth1 (Up)
+# mlx4_0 port 2 ==> eth2 (Down)
+# this means "eth1" is to be used for RDMA
+
+# during a run, to check if rdma is being exercised instead of tcp
+# check these counters 
+cat /sys/class/infiniband/mlx4_0/ports/1/counters/port_rcv_packets
+cat /sys/class/infiniband/mlx4_0/ports/1/counters/port_xmit_packets
