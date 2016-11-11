@@ -155,6 +155,7 @@ private:
   bool stopping{false};
   bool stopped{false};
   
+  bool connected{false};
   bool disconnected{false};
   bool disconnecting{false};
 

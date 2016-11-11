@@ -376,6 +376,16 @@ void NetworkXioClient::run() {
   if (conn == nullptr) {
     throw XioClientCreateException("failed to connect");
   }
+
+  // since we are sharing same xio_session between portals
+  // the xio_session transitions into state=REDIRECT before
+  // it reaches state=ONLINE
+  // if xio_connect() is called when state=REDIRECT, it
+  // may return without establishing nexus
+  // therefore, lets wait here till connection is fully established 
+  while (not connected) {
+    xio_context_run_loop(ctx.get(), 1);
+  }
 }
 
 /**
@@ -511,7 +521,7 @@ int NetworkXioClient::on_msg_error(xio_session *session __attribute__((unused)),
   inFlightQueueLen_ --;
 
   delete msgPtr;
-  xio_context_stop_loop(ctx.get());
+  stop_loop();
   return ret;
 }
 
@@ -526,6 +536,11 @@ int NetworkXioClient::on_session_event(xio_session *session,
                                        xio_session_event_data *event_data) {
   XXEnter();
   switch (event_data->event) {
+
+  case XIO_SESSION_CONNECTION_ESTABLISHED_EVENT:
+    GLOG_INFO("thread=" << gettid() << " established conn=" << event_data->conn);
+    connected = true;
+    break;
 
   case XIO_SESSION_CONNECTION_DISCONNECTED_EVENT:
   case XIO_SESSION_ERROR_EVENT:
@@ -762,7 +777,7 @@ int NetworkXioClient::on_response(xio_session *session __attribute__((unused)),
     // the msgPtr must be freed after xio_release_msg()
     // otherwise its a memory corruption bug
     delete msgPtr;
-    xio_context_stop_loop(ctx.get());
+    stop_loop();
   }
   
   return 0;
