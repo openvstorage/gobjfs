@@ -356,8 +356,10 @@ int main(int argc, char* argv[])
     assert(ret == 0);
     assert(responseMsg.opcode_ == Opcode::ADD_ASD_RESP);
 
-    std::string uri = config.ipAddressVec[idx] + ":" + std::to_string(config.portVec[idx]);
-    auto asdPtr = gobjfs::make_unique<ASDQueue>(config.roraVersion_, uri);
+    auto asdPtr = gobjfs::make_unique<ASDQueue>(config.roraVersion_, 
+      config.transportVec[idx],
+      config.ipAddressVec[idx],
+      config.portVec[idx]);
     asdQueueVec.push_back(std::move(asdPtr));
   }
 

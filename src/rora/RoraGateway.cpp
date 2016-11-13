@@ -111,10 +111,9 @@ RoraGateway::ASDInfo::ASDInfo(RoraGateway* rgPtr,
 
   int ret = 0;
 
-  const std::string asdQueueName = ipAddress + ":" + std::to_string(port);
 
   queue_ = gobjfs::make_unique<ASDQueue>(RoraGateway::versionString_, 
-      asdQueueName, maxQueueLen, maxMsgSize);
+      transport_, ipAddress_, port_, maxQueueLen, maxMsgSize);
 
   auto ctx_attr_ptr = ctx_attr_new();
   ctx_attr_set_transport(ctx_attr_ptr, transport, ipAddress, port);

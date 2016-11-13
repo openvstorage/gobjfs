@@ -20,6 +20,9 @@ class GatewayMsg;
 class ASDQueue {
 
   std::string versionString_;
+  std::string transport_;
+  std::string ipAddress_;
+  int port_;
   std::string queueName_;
 
   std::unique_ptr<bip::message_queue> mq_{nullptr};
@@ -43,16 +46,18 @@ class ASDQueue {
    * create edge queue for uri
    */
   ASDQueue(const std::string& versionString,
-      const std::string& uri, size_t maxQueueLen, size_t maxMsgSize);
+      std::string transport, std::string ipAddress, int port,
+      size_t maxQueueLen, size_t maxMsgSize);
       
 
   /**
    * open existing edge queue for uri
    */
   ASDQueue(const std::string& versionString,
-      const std::string& uri);
+      std::string transport, std::string ipAddress, int port);
 
-  static int remove(const std::string& versionString, const std::string& uri);
+  static int remove(const std::string& versionString, 
+      std::string ipAddress, int port);
 
   ~ASDQueue();
 

@@ -13,8 +13,12 @@ namespace rora {
  * ASDQueue contains rora gateway version
  * this allows running a gateway with new version while old version is active
  */
-static std::string getASDQueueName(const std::string& uri, const std::string& versionString) {
-  std::string str = "rora" + versionString + "_to_asd_" + uri;
+static std::string getASDQueueName(std::string versionString,
+    std::string ipAddress, 
+    int port) {
+
+  std::string str = "rora" + versionString 
+    + "_to_asd_" + ipAddress + ":" + std::to_string(port);
   return str;
 }
 
@@ -22,18 +26,22 @@ static std::string getASDQueueName(const std::string& uri, const std::string& ve
  * this is a create
  */
 ASDQueue::ASDQueue(const std::string& versionString,
-    const std::string& uri,
+    std::string transport,
+    std::string ipAddress,
+    int port,
     size_t maxQueueLen, 
     size_t maxMsgSize) :
   versionString_(versionString),
-  maxMsgSize_(maxMsgSize) {
+  transport_(transport),
+  ipAddress_(ipAddress),
+  port_(port) {
 
   isCreator_ = true;
 
-  queueName_ = getASDQueueName(uri, versionString);
+  queueName_ = getASDQueueName(versionString, ipAddress, port);
 
   // always remove previous ASD queue
-  remove(versionString_, uri);
+  remove(versionString_, ipAddress, port);
 
   try {
     mq_ = gobjfs::make_unique<bip::message_queue>(bip::create_only, 
@@ -50,7 +58,7 @@ ASDQueue::ASDQueue(const std::string& versionString,
     mq_.reset();
 
     throw std::runtime_error(
-        "failed to create edgequeue for uri=" + uri);
+        "failed to create edgequeue for uri=" + ipAddress + ":" + std::to_string(port));
   }
 }
 
@@ -59,11 +67,17 @@ ASDQueue::ASDQueue(const std::string& versionString,
  * this is an open
  */
 ASDQueue::ASDQueue(const std::string& versionString,
-    const std::string &uri) {
+    std::string transport,
+    std::string ipAddress,
+    int port) :
+  versionString_(versionString),
+  transport_(transport),
+  ipAddress_(ipAddress),
+  port_(port) {
 
   isCreator_ =  false;
 
-  queueName_ = getASDQueueName(uri, versionString);
+  queueName_ = getASDQueueName(versionString, ipAddress, port);
 
   try {
     mq_ = gobjfs::make_unique<bip::message_queue>(bip::open_only, queueName_.c_str());
@@ -73,13 +87,13 @@ ASDQueue::ASDQueue(const std::string& versionString,
   } catch (const std::exception& e) {
     mq_.reset();
     throw std::runtime_error(
-        "failed to open edgequeue for uri=" + uri);
+        "failed to open edgequeue for uri=" + ipAddress + ":" + std::to_string(port));
   }
 }
 
-int ASDQueue::remove(const std::string& versionString, const std::string& uri) {
+int ASDQueue::remove(const std::string& versionString, std::string ipAddress, int port) {
 
-  auto queueName_ = getASDQueueName(versionString, uri);
+  auto queueName_ = getASDQueueName(versionString, ipAddress, port);
   auto ret = bip::message_queue::remove(queueName_.c_str());
   if (ret == false) {
     LOG(ERROR) << "Failed to remove message queue=" << queueName_;
