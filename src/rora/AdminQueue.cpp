@@ -34,8 +34,11 @@ AdminQueue::AdminQueue(const std::string& version, size_t maxQueueLen) {
       maxQueueLen,
       GatewayMsg::MaxMsgSize);
 
-    LOG(INFO) << "created asd queue=" << queueName_ 
-      << ",maxQueueLen=" << maxQueueLen;
+    maxMsgSize_ = getMaxMsgSize();
+
+    LOG(INFO) << "created admin queue=" << queueName_ 
+      << ",maxQueueLen=" << maxQueueLen
+      << ",maxMsgSize=" << maxMsgSize_;
   
   } catch (const std::exception& e) {
 
@@ -59,7 +62,7 @@ AdminQueue::AdminQueue(std::string version) {
   try {
     mq_ = gobjfs::make_unique<bip::message_queue>(bip::open_only, queueName_.c_str());
     maxMsgSize_ = getMaxMsgSize();
-    LOG(INFO) << "opened asd queue=" << queueName_ 
+    LOG(INFO) << "opened admin queue=" << queueName_ 
       << " with maxMsgSize=" << maxMsgSize_;
   } catch (const std::exception& e) {
     mq_.reset();

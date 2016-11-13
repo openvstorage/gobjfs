@@ -21,9 +21,6 @@ int RoraGateway::Config::readConfig(const std::string& configFileName) {
 
   bpo::options_description desc("allowed opt");
   desc.add_options()
-      ("ipaddress", bpo::value<std::vector<std::string>>(&ipAddressVec_)->required(), "ASD ip address")
-      ("port", bpo::value<std::vector<int>>(&portVec_)->required(), "ASD port")
-      ("transport", bpo::value<std::vector<std::string>>(&transportVec_)->required(), "ASD transport : tcp or rdma")
       ("max_asd_queue", bpo::value<size_t>(&maxQueueLen_)->required(), "length of shared memory queue used to forward requests to ASD")
       ("max_threads_per_asd", bpo::value<size_t>(&maxThreadsPerASD_)->required(), "max threads which service all connections")
       ("max_conn_per_asd", bpo::value<size_t>(&maxConnPerASD_)->required(), "max connections to an ASD (exploit accelio portals)")
@@ -35,14 +32,7 @@ int RoraGateway::Config::readConfig(const std::string& configFileName) {
   bpo::store(bpo::parse_config_file(configFile, desc), vm);
   bpo::notify(vm);
 
-  if ((transportVec_.size() != ipAddressVec_.size()) ||
-    transportVec_.size() != portVec_.size()) {
-    LOG(ERROR) << "ASD mismatch transport entries=" << transportVec_.size()
-      << " ipaddress entries=" << ipAddressVec_.size()
-      << " port entries=" << portVec_.size();
-    return -1;
-  }
-
+  // TODO check values not too high or low
 
   LOG(INFO)
       << "================================================================="
@@ -243,52 +233,54 @@ int RoraGateway::init(const std::string& configFileName) {
   std::string gatewayVersion = "1.0"; 
   adminQueuePtr_ = gobjfs::make_unique<AdminQueue>(gatewayVersion, adminQueueLen);
 
-  size_t numASD = config_.transportVec_.size();
-  asdVec_.reserve(numASD);
-  for (size_t idx = 0; idx < numASD; idx ++) {
-
-    auto& transport = config_.transportVec_[idx];
-    auto& port = config_.portVec_[idx];
-    auto& ipAddress = config_.ipAddressVec_[idx];
-
-    ret = addASD(transport, ipAddress, port, 
-        GatewayMsg::MaxMsgSize, config_.maxQueueLen_,
-        config_.maxThreadsPerASD_,
-        config_.maxConnPerASD_); 
-  }
-
   return ret;
 }
 
 int RoraGateway::addASD(const std::string& transport,
     const std::string& ipAddress,
     const int port,
-    const size_t maxMsgSize,
-    const size_t maxQueueLen,
-    const size_t maxThreadsPerASD,
-    const size_t maxPortals) {
+    int edgePid) {
 
   int ret = 0;
 
-  try {
-    auto asdp = gobjfs::make_unique<ASDInfo>(this,
-      transport, ipAddress, port, 
-      maxMsgSize, maxQueueLen,
-      maxThreadsPerASD,
-      maxPortals); 
+  decltype(asdVec_)::iterator iter;
+  decltype(asdVec_)::iterator end = asdVec_.end();
 
-    // start threads
-    for (size_t thrIdx = 0; thrIdx < asdp->maxThreadsPerASD_; thrIdx ++) {
-      asdp->asdThreadVec_.push_back(std::make_shared<ASDThreadInfo>());
-      asdp->asdThreadVec_[thrIdx]->thread_ = std::thread(
-          std::bind(&ASDThreadInfo::threadFunc, asdp->asdThreadVec_[thrIdx].get(), this, asdp.get(), thrIdx));
+  iter = std::find_if(asdVec_.begin(), asdVec_.end(),
+      [&] (const ASDInfoUPtr& p) -> bool { 
+        return (ipAddress == p->ipAddress_
+          && port == p->port_ 
+          && transport == p->transport_);
+      });
+
+  if (iter != asdVec_.end()) {
+    auto& asdPtr = *iter;
+    assert(asdPtr->edgesUsingMe_.size() > 0);
+    asdPtr->edgesUsingMe_.insert(edgePid);
+    LOG(INFO) << "Edge=" << edgePid << " is registered user of ASD=" 
+      << ipAddress << ":" << port;
+  } else {
+    try {
+      auto asdp = gobjfs::make_unique<ASDInfo>(this,
+        transport, ipAddress, port, 
+        GatewayMsg::MaxMsgSize, 
+        config_.maxQueueLen_,
+        config_.maxThreadsPerASD_,
+        config_.maxConnPerASD_); 
+  
+      // start threads
+      for (size_t thrIdx = 0; thrIdx < asdp->maxThreadsPerASD_; thrIdx ++) {
+        asdp->asdThreadVec_.push_back(std::make_shared<ASDThreadInfo>());
+        asdp->asdThreadVec_[thrIdx]->thread_ = std::thread(
+            std::bind(&ASDThreadInfo::threadFunc, asdp->asdThreadVec_[thrIdx].get(), this, asdp.get(), thrIdx));
+      }
+  
+      asdVec_.push_back(std::move(asdp));
+
+    } catch (const std::exception& e) {
+      LOG(ERROR) << "failed to add connection to ASD=" << ipAddress << ":" << port;
+      ret = -1;
     }
-
-    asdVec_.push_back(std::move(asdp));
-
-  } catch (const std::exception& e) {
-    LOG(ERROR) << "failed to add connection to ASD=" << ipAddress << ":" << port;
-    ret = -1;
   }
 
   return ret;
@@ -296,41 +288,57 @@ int RoraGateway::addASD(const std::string& transport,
 
 int RoraGateway::dropASD(const std::string& transport,
     const std::string& ipAddress,
-    const int port) {
+    const int port,
+    int edgePid) {
   
   int ret = -1;
-  decltype(asdVec_)::iterator iter = asdVec_.begin();
+  decltype(asdVec_)::iterator iter;
   decltype(asdVec_)::iterator end = asdVec_.end();
 
-  for (; iter != end; ++ iter) {
-    ASDInfo* asd = iter->get();
-    if ((asd->transport_ == transport) && 
-        (asd->ipAddress_ == ipAddress) && 
-        (asd->port_ == port)) {
-      LOG(INFO) << "deleting asd=" << ipAddress << ":" << port;
-
-      // shut down threads
-      for (auto threadInfo : asd->asdThreadVec_) {
-        threadInfo->stopping_ = true;
-        threadInfo->thread_.join();
-      }
-      // shut down connections
-      for (auto& ctx : asd->ctxVec_) {
-        ctx.reset();
-      }
-      // shut down the queue
-      asd->queue_.reset();
-
-      // remove the entry from list of registered ASDs
-      asdVec_.erase(iter);
-
-      ret = 0;
-
-      LOG(INFO) << "deleted asd=" << ipAddress << ":" << port;
+  ASDInfo* asdPtr = nullptr;
+  for (iter = asdVec_.begin(); iter != end; ++ iter) {
+    asdPtr = iter->get();
+    if ((asdPtr->transport_ == transport) && 
+        (asdPtr->ipAddress_ == ipAddress) && 
+        (asdPtr->port_ == port)) {
       break;
     }
   }
 
+  if (asdPtr) {
+    if (asdPtr->edgesUsingMe_.find(edgePid) != asdPtr->edgesUsingMe_.end()) {
+      if (asdPtr->edgesUsingMe_.size() > 1) {
+        LOG(INFO) << "removed edge=" << edgePid << " from users of ASD=" << ipAddress << ":" << port;
+        asdPtr->edgesUsingMe_.erase(edgePid);
+      } else {
+        LOG(INFO) << "deleting ASD=" << ipAddress << ":" << port;
+
+        // shut down threads
+        for (auto threadInfo : asdPtr->asdThreadVec_) {
+          threadInfo->stopping_ = true;
+          threadInfo->thread_.join();
+        }
+        // shut down connections
+        for (auto& ctx : asdPtr->ctxVec_) {
+          ctx.reset();
+        }
+        // shut down the queue
+        asdPtr->queue_.reset();
+  
+        // remove the entry from list of registered ASDs
+        asdVec_.erase(iter);
+  
+        ret = 0;
+  
+        LOG(INFO) << "deleted ASD=" << ipAddress << ":" << port;
+      }
+    } else {
+      LOG(ERROR) << "Invalid drop request. "
+        "edge=" << edgePid << " not registered user of ASD=" << ipAddress << ":" << port;
+    }
+  } else {
+    LOG(ERROR) << "Not found ASD for " << ipAddress << ":" << port;
+  }
   return ret;
 }
 
@@ -403,38 +411,44 @@ int RoraGateway::adminThreadFunc() {
         {
           LOG(INFO) << "got add asd for " << adminMsg.ipAddress_ << ":" << adminMsg.port_;
 
-          // TODO Check it already exists and increment ref count 
-          ret = addASD(adminMsg.transport_, adminMsg.ipAddress_, adminMsg.port_, 
-            GatewayMsg::MaxMsgSize, config_.maxQueueLen_,
-            config_.maxThreadsPerASD_,
-            config_.maxConnPerASD_); 
-
           auto edgePtr = edges_.find(adminMsg.edgePid_);
           if (edgePtr) {
-            GatewayMsg respMsg;
-            respMsg.opcode_ = Opcode::ADD_ASD_RESP;
-            edgePtr->writeResponse(respMsg);
+
+            ret = addASD(adminMsg.transport_, adminMsg.ipAddress_, adminMsg.port_, 
+              adminMsg.edgePid_);
+
           } else {
             LOG(ERROR) << " could not find queue for pid=" << adminMsg.edgePid_;
+            ret = -1;
           }
+
+          GatewayMsg respMsg;
+          respMsg.opcode_ = Opcode::ADD_ASD_RESP;
+          // TODO set retval
+          edgePtr->writeResponse(respMsg);
 
           break;
         }
       case Opcode::DROP_ASD_REQ:
         {
           LOG(INFO) << "got drop asd for " << adminMsg.ipAddress_ << ":" << adminMsg.port_;
-          ret = dropASD(adminMsg.transport_,
-            adminMsg.ipAddress_,
-            adminMsg.port_);
 
           auto edgePtr = edges_.find(adminMsg.edgePid_);
           if (edgePtr) {
-            GatewayMsg respMsg;
-            respMsg.opcode_ = Opcode::DROP_ASD_RESP;
-            edgePtr->writeResponse(respMsg);
+
+            ret = dropASD(adminMsg.transport_,
+              adminMsg.ipAddress_,
+              adminMsg.port_,
+              adminMsg.edgePid_);
+
           } else {
             LOG(ERROR) << " could not find queue for pid=" << adminMsg.edgePid_;
+            ret = -1;
           }
+
+          GatewayMsg respMsg;
+          respMsg.opcode_ = Opcode::DROP_ASD_RESP;
+          edgePtr->writeResponse(respMsg);
 
           break;
         }
@@ -457,10 +471,13 @@ int RoraGateway::adminThreadFunc() {
           // while there are outstanding requests
           auto edgePtr = edges_.find(adminMsg.edgePid_);
 
+          // TODO set retval 
+          GatewayMsg respMsg;
+          respMsg.opcode_ = Opcode::DROP_EDGE_RESP;
+          edgePtr->writeResponse(respMsg);
+
           if (edgePtr) {
-            GatewayMsg respMsg;
-            respMsg.opcode_ = Opcode::DROP_EDGE_RESP;
-            edgePtr->writeResponse(respMsg);
+            // cannot drop edge until response sent back
             int ret = edges_.drop(adminMsg.edgePid_);
             (void) ret;
           } else {

@@ -103,6 +103,7 @@ GatewayMsg createAddASDRequest(const std::string& transport,
   adminMsg.transport_ = transport;
   adminMsg.ipAddress_ = ipAddress;
   adminMsg.port_ = port;
+  adminMsg.edgePid_ = getpid();
   return adminMsg;
 }
 
@@ -114,6 +115,7 @@ GatewayMsg createDropASDRequest(const std::string& transport,
   adminMsg.transport_ = transport;
   adminMsg.ipAddress_ = ipAddress;
   adminMsg.port_ = port;
+  adminMsg.edgePid_ = getpid();
   return adminMsg;
 }
 

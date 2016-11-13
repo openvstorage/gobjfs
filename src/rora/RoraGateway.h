@@ -25,10 +25,6 @@ class RoraGateway {
 
   struct Config {
   
-    std::vector<std::string> transportVec_;
-    std::vector<std::string> ipAddressVec_;
-    std::vector<int> portVec_;
-  
     size_t maxQueueLen_ {256};
     // client threads to connect to multiple portals
     size_t maxEPollerThreads_{1}; 
@@ -108,6 +104,8 @@ class RoraGateway {
     std::vector<gobjfs::xio::client_ctx_ptr> ctxVec_;
     std::vector<std::shared_ptr<ASDThreadInfo>> asdThreadVec_;
 
+    std::set<int> edgesUsingMe_;
+
     // info passed to EPoller.addEvent
     // to figure out the fd corresponding to the ctx
     struct CallbackInfo {
@@ -183,14 +181,12 @@ class RoraGateway {
   int addASD(const std::string& transport,
     const std::string& ipAddress,
     const int port,
-    const size_t maxMsgSize,
-    const size_t maxQueueLen,
-    const size_t maxThreads,
-    const size_t maxPortals);
+    int edgePid);
 
   int dropASD(const std::string& transport,
     const std::string& ipAddress,
-    const int port);
+    const int port,
+    int edgePid);
 
   int run();
 
