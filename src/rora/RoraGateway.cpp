@@ -169,6 +169,42 @@ RoraGateway::ASDInfo::ASDInfo(RoraGateway* rgPtr,
   // TODO clean everything & throw if ret != 0
 }
 
+int RoraGateway::ASDInfo::destroyAll(RoraGateway* rgPtr) {
+
+
+    // shut down threads
+    for (auto threadInfo : asdThreadVec_) {
+      threadInfo->stopping_ = true;
+      threadInfo->thread_.join();
+    }
+    asdThreadVec_.clear();
+
+    // drop the epoller event 
+    for (auto& callbackCtx : callbackInfoList_) { 
+      int dropRet = rgPtr->edges_.epoller_.dropEvent(reinterpret_cast<uintptr_t>(callbackCtx.get()), 
+        aio_geteventfd(ctxVec_[callbackCtx->connIdx_]));
+      if (dropRet != 0) {
+        LOG(ERROR) << "failed to delete fd"
+          << " for asd uri=" << ipAddress_ << ":" << port_
+          << " conn_index=" << callbackCtx->connIdx_;
+      }
+    }
+    callbackInfoList_.clear();
+
+    // shut down connections
+    for (auto& ctx : ctxVec_) {
+      ctx.reset();
+    }
+    ctxVec_.clear();
+    // shut down the queue
+    queue_.reset();
+
+    // clear the edges set
+    edgesUsingMe_.clear();
+
+    return 0;
+}
+
 void RoraGateway::ASDInfo::clearStats() {
   stats_.submitBatchSize_.reset();
   stats_.callbackBatchSize_.reset();
@@ -336,23 +372,13 @@ int RoraGateway::dropASD(const std::string& transport,
         LOG(INFO) << "removed edge=" << edgePid << " from users of ASD=" << ipAddress << ":" << port;
         asdPtr->edgesUsingMe_.erase(edgePid);
       } else {
-        LOG(INFO) << "deleting ASD=" << ipAddress << ":" << port << " by edge=" << edgePid;
 
-        // shut down threads
-        for (auto threadInfo : asdPtr->asdThreadVec_) {
-          threadInfo->stopping_ = true;
-          threadInfo->thread_.join();
-        }
-        // shut down connections
-        for (auto& ctx : asdPtr->ctxVec_) {
-          ctx.reset();
-        }
-        // shut down the queue
-        asdPtr->queue_.reset();
+        LOG(INFO) << "deleting ASD=" << ipAddress << ":" << port << " by edge=" << edgePid;
+        asdPtr->destroyAll(this);
   
         // remove the entry from list of registered ASDs
         asdVec_.erase(iter);
-  
+
         ret = 0;
   
         LOG(INFO) << "deleted ASD=" << ipAddress << ":" << port;

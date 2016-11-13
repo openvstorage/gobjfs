@@ -139,6 +139,8 @@ class RoraGateway {
         size_t maxThreadsPerASD,
         size_t maxConnPerASD);
 
+    int destroyAll(RoraGateway* rgPtr);
+
     void clearStats();
   };
 
