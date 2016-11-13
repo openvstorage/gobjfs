@@ -267,6 +267,10 @@ int RoraGateway::addASD(const std::string& transport,
         config_.maxQueueLen_,
         config_.maxThreadsPerASD_,
         config_.maxConnPerASD_); 
+
+      asdp->edgesUsingMe_.insert(edgePid);
+      LOG(INFO) << "Edge=" << edgePid << " has added and registered ASD=" 
+        << ipAddress << ":" << port;
   
       // start threads
       for (size_t thrIdx = 0; thrIdx < asdp->maxThreadsPerASD_; thrIdx ++) {
@@ -311,7 +315,7 @@ int RoraGateway::dropASD(const std::string& transport,
         LOG(INFO) << "removed edge=" << edgePid << " from users of ASD=" << ipAddress << ":" << port;
         asdPtr->edgesUsingMe_.erase(edgePid);
       } else {
-        LOG(INFO) << "deleting ASD=" << ipAddress << ":" << port;
+        LOG(INFO) << "deleting ASD=" << ipAddress << ":" << port << " by edge=" << edgePid;
 
         // shut down threads
         for (auto threadInfo : asdPtr->asdThreadVec_) {
@@ -409,7 +413,7 @@ int RoraGateway::adminThreadFunc() {
     {
       case Opcode::ADD_ASD_REQ:
         {
-          LOG(INFO) << "got add asd for " << adminMsg.ipAddress_ << ":" << adminMsg.port_;
+          LOG(INFO) << "got add asd for " << adminMsg.ipAddress_ << ":" << adminMsg.port_ << " from " << adminMsg.edgePid_;
 
           auto edgePtr = edges_.find(adminMsg.edgePid_);
           if (edgePtr) {
@@ -418,7 +422,7 @@ int RoraGateway::adminThreadFunc() {
               adminMsg.edgePid_);
 
           } else {
-            LOG(ERROR) << " could not find queue for pid=" << adminMsg.edgePid_;
+            LOG(ERROR) << " could not find edge pid=" << adminMsg.edgePid_;
             ret = -1;
           }
 
