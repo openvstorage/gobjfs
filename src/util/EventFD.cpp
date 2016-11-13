@@ -19,6 +19,7 @@ but WITHOUT ANY WARRANTY of any kind.
 #include <util/EventFD.h>
 #include <sys/eventfd.h>
 #include <unistd.h>
+#include <gobjfs_log.h>
 #include <sstream>
 
 void EventFD::Statistics::clear() {
@@ -34,7 +35,7 @@ void EventFD::Statistics::clear() {
 std::string EventFD::Statistics::ToString() const {
   std::ostringstream os;
   os 
-    << "read_ctr=" << read_ctr_ 
+    << ",read_ctr=" << read_ctr_ 
     << ",read_eintr=" << read_eintr_
     << ",read_eagain=" << read_eagain_
     << ",write_ctr=" << write_ctr_
@@ -48,11 +49,13 @@ EventFD::EventFD() {
   if (evfd_ < 0) {
     throw std::runtime_error("failed to create eventfd");
   }
+  LOG(INFO) << "created eventfd=" << (void*)this << " fd=" << evfd_;
 }
 
 EventFD::~EventFD() {
   if (evfd_ != -1) {
     close(evfd_);
+    LOG(INFO) << "destroyed eventfd=" << (void*)this << " fd=" << evfd_;
     evfd_ = -1;
   }
 }
