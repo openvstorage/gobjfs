@@ -394,7 +394,7 @@ int RoraGateway::adminThreadFunc() {
   LOG(INFO) << "started admin thread=" << gettid();
 
   int timeout_ms = 1;
-  while (1) {
+  while (not adminThread_.stopping_) {
     GatewayMsg adminMsg;
     int ret = adminQueuePtr_->timed_read(adminMsg, timeout_ms);
     if (ret != 0) {
@@ -491,13 +491,14 @@ int RoraGateway::adminThreadFunc() {
         }
       default:
         {
-          LOG(ERROR) << " got unknown opcode=" << adminMsg.opcode_;
+          LOG(ERROR) << " admin got unknown opcode=" << adminMsg.opcode_;
           break;
         }
       }
   }
 
   adminThread_.stopped_ = true;
+  LOG(INFO) << "stopped admin thread=" << gettid();
   return 0;
 }
 
