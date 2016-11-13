@@ -327,21 +327,11 @@ int main(int argc, char* argv[])
 
   std::vector<ASDQueueUPtr> asdQueueVec;
 
-  // create new for this process
+  // create new edgequeue for this process
   edgeQueue = gobjfs::make_unique<EdgeQueue>(pid, 2 * config.maxOutstandingIO, 
       GatewayMsg::MaxMsgSize, config.blockSize);
 
-  // open existing asd queues
-  const size_t numASD = config.transportVec.size();
-  for (size_t idx = 0; idx < numASD; idx ++) {
-    std::string uri = config.ipAddressVec[idx] + ":" + std::to_string(config.portVec[idx]);
-    auto asdPtr = gobjfs::make_unique<ASDQueue>(uri);
-    asdQueueVec.push_back(std::move(asdPtr));
-  }
-
-  ASDQueue* asdQueue = asdQueueVec[0].get();
-  // sending open message will cause rora gateway to open
-  // the EdgeQueue for sending responses
+  // first send ADD_EDGE message to rora gateway 
   ret = adminQueue->write(createAddEdgeRequest(1024));
   assert(ret == 0);
 
@@ -349,6 +339,27 @@ int main(int argc, char* argv[])
   ret = edgeQueue->readResponse(responseMsg);
   assert(ret == 0);
   assert(responseMsg.opcode_ == Opcode::ADD_EDGE_RESP);
+
+  // then ask gateway to add asds
+  const size_t numASD = config.transportVec.size();
+  for (size_t idx = 0; idx < numASD; idx ++) {
+
+    ret = adminQueue->write(createAddASDRequest(config.transportVec[idx],
+      config.ipAddressVec[idx],
+      config.portVec[idx]));
+    assert(ret == 0);
+
+    GatewayMsg responseMsg;
+    ret = edgeQueue->readResponse(responseMsg);
+    assert(ret == 0);
+    assert(responseMsg.opcode_ == Opcode::ADD_ASD_RESP);
+
+    std::string uri = config.ipAddressVec[idx] + ":" + std::to_string(config.portVec[idx]);
+    auto asdPtr = gobjfs::make_unique<ASDQueue>(uri);
+    asdQueueVec.push_back(std::move(asdPtr));
+  }
+
+  ASDQueue* asdQueue = asdQueueVec[0].get();
 
   RunContext r;
   auto fut = std::async(std::launch::async, std::bind(&RunContext::doRandomRead, &r, asdQueue));
@@ -363,6 +374,21 @@ int main(int argc, char* argv[])
   }
 
   fut.wait();
+
+  // drop the asds
+  for (size_t idx = 0; idx < numASD; idx ++) {
+
+    ret = adminQueue->write(createDropASDRequest(config.transportVec[idx],
+      config.ipAddressVec[idx],
+      config.portVec[idx]));
+    assert(ret == 0);
+
+    GatewayMsg responseMsg;
+    ret = edgeQueue->readResponse(responseMsg);
+    assert(ret == 0);
+    assert(responseMsg.opcode_ == Opcode::DROP_ASD_RESP);
+
+  }
 
   // sending close message will cause rora gateway to close
   // the EdgeQueue for sending responses
