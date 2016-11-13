@@ -14,12 +14,12 @@ namespace gobjfs {
 namespace rora {
 
 static std::string getResponseEdgeQueueName(int pid) {
-  std::string str = "response_to_edge_pid_" + std::to_string(pid);
+  std::string str = "rora_response_to_edge_pid_" + std::to_string(pid);
   return str;
 }
 
 static std::string getHeapName(int pid) {
-  std::string heapName = "shmem_for_edge_pid_" + std::to_string(pid);
+  std::string heapName = "rora_shmem_for_edge_pid_" + std::to_string(pid);
   return heapName;
 }
 

@@ -10,7 +10,7 @@ namespace gobjfs {
 namespace rora {
 
 static std::string getASDQueueName(const std::string& uri) {
-  std::string str = "to_asd_" + uri;
+  std::string str = "rora_to_asd_" + uri;
   return str;
 }
 

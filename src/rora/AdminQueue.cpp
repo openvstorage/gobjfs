@@ -10,7 +10,7 @@ namespace gobjfs {
 namespace rora {
 
 static std::string getAdminQueueName(const std::string& version) {
-  std::string str = "adminqueue_" + version; 
+  std::string str = "rora_adminqueue_" + version; 
   return str;
 }
 
