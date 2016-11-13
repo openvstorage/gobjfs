@@ -16,23 +16,47 @@ using gobjfs::os::TimerNotifier;
 namespace gobjfs {
 namespace rora {
 
+std::string RoraGateway::versionString_ = 
+  std::to_string(RoraGateway::majorVersion_) + "." +
+  std::to_string(RoraGateway::minorVersion_);
 
-int RoraGateway::Config::readConfig(const std::string& configFileName) {
+int RoraGateway::Config::readConfig(const std::string& configFileName, 
+    int argc, const char* argv[]) {
 
-  bpo::options_description desc("allowed opt");
-  desc.add_options()
-      ("max_asd_queue", bpo::value<size_t>(&maxQueueLen_)->required(), "length of shared memory queue used to forward requests to ASD")
-      ("max_threads_per_asd", bpo::value<size_t>(&maxThreadsPerASD_)->required(), "max threads which service all connections")
-      ("max_conn_per_asd", bpo::value<size_t>(&maxConnPerASD_)->required(), "max connections to an ASD (exploit accelio portals)")
-      ("max_epoller_threads", bpo::value<size_t>(&maxEPollerThreads_)->required(), "max threads for epoll")
+  bpo::options_description generic("options allowed in config file & command line");
+  generic.add_options()
+      ("max_asd_queue", bpo::value<size_t>(&maxASDQueueLen_)->default_value(1024), "length of shared memory queue used to forward requests to ASD")
+      ("max_admin_queue", bpo::value<size_t>(&maxAdminQueueLen_)->default_value(10), "length of shared memory queue used for admin requests")
+      ("max_threads_per_asd", bpo::value<size_t>(&maxThreadsPerASD_)->default_value(8), "max threads which service all connections")
+      ("max_conn_per_asd", bpo::value<size_t>(&maxConnPerASD_)->default_value(8), "max connections to an ASD (exploit accelio portals)")
+      ("max_epoller_threads", bpo::value<size_t>(&maxEPollerThreads_)->default_value(4), "max threads for epoll")
+      ("watchdog_time_sec", bpo::value<size_t>(&watchDogTimeSec_)->default_value(30), "interval for watchdog timer")
+      ("daemon", bpo::value<bool>(&isDaemon_)->default_value(false), "run as daemon")
       ;
+
+  bpo::options_description cmdline("command line options");
+  cmdline.add_options()
+    ("help", "produce help message")
+    ("version", "print rora gateway version")
+    ;
+
+  cmdline.add(generic);
 
   std::ifstream configFile(configFileName);
   bpo::variables_map vm;
-  bpo::store(bpo::parse_config_file(configFile, desc), vm);
+  // parse cmd line first, because value stored first overrides 
+  bpo::store(bpo::parse_command_line(argc, argv, cmdline), vm);
+  bpo::store(bpo::parse_config_file(configFile, generic), vm);
   bpo::notify(vm);
 
   // TODO check values not too high or low
+  if (vm.count("help")) {
+    std::cout << cmdline << std::endl;
+    return 1;
+  } else if (vm.count("version")) {
+    std::cout << "version " << RoraGateway::versionString_ << std::endl;
+    return 1;
+  }
 
   LOG(INFO)
       << "================================================================="
@@ -52,6 +76,8 @@ int RoraGateway::Config::readConfig(const std::string& configFileName) {
         s << val << ",";
       }
       s << std::endl;
+    } else if (auto v = boost::any_cast<bool>(&value)) {
+      s << *v << std::endl;
     } else if (auto v = boost::any_cast<size_t>(&value)) {
       s << *v << std::endl;
     } else {
@@ -66,7 +92,6 @@ int RoraGateway::Config::readConfig(const std::string& configFileName) {
   return 0;
 }
 
-const int RoraGateway::watchDogTimeSec_ = 30;  // TODO tunable
 //
 // ============== ASDINFO ===========================
 
@@ -88,7 +113,8 @@ RoraGateway::ASDInfo::ASDInfo(RoraGateway* rgPtr,
 
   const std::string asdQueueName = ipAddress + ":" + std::to_string(port);
 
-  queue_ = gobjfs::make_unique<ASDQueue>(asdQueueName, maxQueueLen, maxMsgSize);
+  queue_ = gobjfs::make_unique<ASDQueue>(RoraGateway::versionString_, 
+      asdQueueName, maxQueueLen, maxMsgSize);
 
   auto ctx_attr_ptr = ctx_attr_new();
   ctx_attr_set_transport(ctx_attr_ptr, transport, ipAddress, port);
@@ -204,20 +230,18 @@ int RoraGateway::EdgeInfo::cleanupForDeadEdgeProcesses() {
 //
 // ============== RORAGATEWAY ===========================
 
-int RoraGateway::init(const std::string& configFileName) {
+int RoraGateway::init(const std::string& configFileName, int argc, const char* argv[]) {
   int ret = 0;
 
-  ret = config_.readConfig(configFileName);
+  ret = config_.readConfig(configFileName, argc, argv);
   if (ret != 0) {
     LOG(ERROR) << "failed to read config=" << configFileName;
     return -1;
   }
 
-  maxEPollerThreads_ = config_.maxEPollerThreads_;
-
   edges_.epoller_.init();
 
-  watchDogPtr_ = gobjfs::make_unique<TimerNotifier>(watchDogTimeSec_, 0);
+  watchDogPtr_ = gobjfs::make_unique<TimerNotifier>(config_.watchDogTimeSec_, 0);
 
   ret = edges_.epoller_.addEvent(0, watchDogPtr_->getFD(), 
       EPOLLIN,
@@ -229,9 +253,7 @@ int RoraGateway::init(const std::string& configFileName) {
     return -1;
   }
 
-  size_t adminQueueLen = 10;
-  std::string gatewayVersion = "1.0"; 
-  adminQueuePtr_ = gobjfs::make_unique<AdminQueue>(gatewayVersion, adminQueueLen);
+  adminQueuePtr_ = gobjfs::make_unique<AdminQueue>(versionString_, config_.maxAdminQueueLen_);
 
   return ret;
 }
@@ -264,7 +286,7 @@ int RoraGateway::addASD(const std::string& transport,
       auto asdp = gobjfs::make_unique<ASDInfo>(this,
         transport, ipAddress, port, 
         GatewayMsg::MaxMsgSize, 
-        config_.maxQueueLen_,
+        config_.maxASDQueueLen_,
         config_.maxThreadsPerASD_,
         config_.maxConnPerASD_); 
 
@@ -704,7 +726,7 @@ int RoraGateway::run() {
   adminThread_.thread_ = std::thread(
       std::bind(&RoraGateway::adminThreadFunc, this));
 
-  for (size_t idx = 0; idx < maxEPollerThreads_; idx ++) {
+  for (size_t idx = 0; idx < config_.maxEPollerThreads_; idx ++) {
     edges_.epollerThreadsVec_.push_back(std::make_shared<ThreadInfo>()); 
     edges_.epollerThreadsVec_[idx]->thread_ = std::thread(std::bind(&RoraGateway::responseThreadFunc, this, idx));
   }

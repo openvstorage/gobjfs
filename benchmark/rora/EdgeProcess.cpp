@@ -36,6 +36,7 @@ namespace sinks = boost::log::sinks;
 namespace keywords = boost::log::keywords;
 
 struct Config {
+  std::string roraVersion_ = "1.0";
   uint32_t blockSize = 4096;
   uint32_t maxFiles = 1000;
   uint32_t maxBlocks = 10000;
@@ -55,6 +56,7 @@ struct Config {
   int readConfig(const std::string &configFileName) {
     options_description desc("allowed options");
     desc.add_options()
+        ("rora_version", value<std::string>(&roraVersion_)->default_value("1.0"), "version of rora gateway")
         ("block_size", value<uint32_t>(&blockSize)->required(), "blocksize for reads & writes")
         ("num_files", value<uint32_t>(&maxFiles)->required(), "number of files") 
         ("max_file_blocks", value<uint32_t>(&maxBlocks)->required(), "number of [blocksize] blocks in file")
@@ -323,7 +325,7 @@ int main(int argc, char* argv[])
   ret = config.readConfig(configFileName);
   assert(ret == 0);
 
-  auto adminQueue = gobjfs::make_unique<AdminQueue>("1.0");
+  auto adminQueue = gobjfs::make_unique<AdminQueue>(config.roraVersion_);
 
   std::vector<ASDQueueUPtr> asdQueueVec;
 
@@ -355,7 +357,7 @@ int main(int argc, char* argv[])
     assert(responseMsg.opcode_ == Opcode::ADD_ASD_RESP);
 
     std::string uri = config.ipAddressVec[idx] + ":" + std::to_string(config.portVec[idx]);
-    auto asdPtr = gobjfs::make_unique<ASDQueue>(uri);
+    auto asdPtr = gobjfs::make_unique<ASDQueue>(config.roraVersion_, uri);
     asdQueueVec.push_back(std::move(asdPtr));
   }
 

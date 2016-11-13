@@ -19,6 +19,7 @@ class GatewayMsg;
  */
 class ASDQueue {
 
+  std::string versionString_;
   std::string queueName_;
 
   std::unique_ptr<bip::message_queue> mq_{nullptr};
@@ -41,15 +42,17 @@ class ASDQueue {
   /**
    * create edge queue for uri
    */
-  ASDQueue(const std::string& uri, size_t maxQueueLen, size_t maxMsgSize);
+  ASDQueue(const std::string& versionString,
+      const std::string& uri, size_t maxQueueLen, size_t maxMsgSize);
       
 
   /**
    * open existing edge queue for uri
    */
-  ASDQueue(const std::string& uri);
+  ASDQueue(const std::string& versionString,
+      const std::string& uri);
 
-  static int remove(const std::string& uri);
+  static int remove(const std::string& versionString, const std::string& uri);
 
   ~ASDQueue();
 

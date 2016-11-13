@@ -9,25 +9,27 @@ namespace bip = boost::interprocess;
 namespace gobjfs {
 namespace rora {
 
-static std::string getASDQueueName(const std::string& uri) {
-  std::string str = "rora_to_asd_" + uri;
+static std::string getASDQueueName(const std::string& uri, const std::string& versionString) {
+  std::string str = "rora_to_asd_" + versionString + "_" + uri;
   return str;
 }
 
 /**
  * this is a create
  */
-ASDQueue::ASDQueue(const std::string& uri,
+ASDQueue::ASDQueue(const std::string& versionString,
+    const std::string& uri,
     size_t maxQueueLen, 
     size_t maxMsgSize) :
+  versionString_(versionString),
   maxMsgSize_(maxMsgSize) {
 
   isCreator_ = true;
 
-  queueName_ = getASDQueueName(uri);
+  queueName_ = getASDQueueName(uri, versionString);
 
   // always remove previous ASD queue
-  remove(uri);
+  remove(versionString_, uri);
 
   try {
     mq_ = gobjfs::make_unique<bip::message_queue>(bip::create_only, 
@@ -52,11 +54,12 @@ ASDQueue::ASDQueue(const std::string& uri,
 /**
  * this is an open
  */
-ASDQueue::ASDQueue(const std::string &uri) {
+ASDQueue::ASDQueue(const std::string& versionString,
+    const std::string &uri) {
 
   isCreator_ =  false;
 
-  queueName_ = getASDQueueName(uri);
+  queueName_ = getASDQueueName(uri, versionString);
 
   try {
     mq_ = gobjfs::make_unique<bip::message_queue>(bip::open_only, queueName_.c_str());
@@ -70,9 +73,9 @@ ASDQueue::ASDQueue(const std::string &uri) {
   }
 }
 
-int ASDQueue::remove(const std::string& uri) {
+int ASDQueue::remove(const std::string& versionString, const std::string& uri) {
 
-  auto queueName_ = getASDQueueName(uri);
+  auto queueName_ = getASDQueueName(versionString, uri);
   auto ret = bip::message_queue::remove(queueName_.c_str());
   if (ret == false) {
     LOG(ERROR) << "Failed to remove message queue=" << queueName_;

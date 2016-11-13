@@ -9,6 +9,9 @@ namespace bip = boost::interprocess;
 namespace gobjfs {
 namespace rora {
 
+// append version string to queue name so we can allow
+// rora gateways of new version to run while old one
+// is still not phased out
 static std::string getAdminQueueName(const std::string& version) {
   std::string str = "rora_adminqueue_" + version; 
   return str;

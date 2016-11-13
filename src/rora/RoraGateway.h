@@ -22,17 +22,23 @@ class RoraGateway {
 
   private:
 
-  static const int watchDogTimeSec_;
+  static const int majorVersion_ = 1;
+  static const int minorVersion_ = 0;
+  static std::string versionString_;
 
   struct Config {
   
-    size_t maxQueueLen_ {256};
+    size_t watchDogTimeSec_{30};
+    size_t maxAdminQueueLen_ {256};
+    size_t maxASDQueueLen_ {256};
     // client threads to connect to multiple portals
     size_t maxEPollerThreads_{1}; 
     size_t maxThreadsPerASD_{1}; 
     size_t maxConnPerASD_{1}; 
+    bool isDaemon_{false};
 
-    int readConfig(const std::string& configFileName);
+    int readConfig(const std::string& configFileName,
+      int argc, const char* argv[]);
   };
 
   // per thread info
@@ -43,8 +49,6 @@ class RoraGateway {
     bool stopping_{false};
     bool stopped_{false};
   };
-
-  size_t maxEPollerThreads_{1};
 
   struct EdgeInfo {
     // map from edge pid to edge queue
@@ -177,7 +181,7 @@ class RoraGateway {
 
   public:
 
-  int init(const std::string &configFileName);
+  int init(const std::string &configFileName, int argc, const char* argv[]);
 
   int addASD(const std::string& transport,
     const std::string& ipAddress,

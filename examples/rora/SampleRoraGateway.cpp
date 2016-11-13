@@ -73,7 +73,7 @@ int main(int argc, char* argv[])
   AdminQueue* adminQueue = new AdminQueue("1.0", 1024);
 
   // open new
-  ASDQueue* asdQueue = new ASDQueue("127.0.0.1:21321", maxQueueLen, maxMsgSize);
+  ASDQueue* asdQueue = new ASDQueue("1.0", "127.0.0.1:21321", maxQueueLen, maxMsgSize);
 
   auto fut = std::async(std::launch::async, iocompletionFunc);
 
