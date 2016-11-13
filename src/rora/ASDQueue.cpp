@@ -9,8 +9,12 @@ namespace bip = boost::interprocess;
 namespace gobjfs {
 namespace rora {
 
+/**
+ * ASDQueue contains rora gateway version
+ * this allows running a gateway with new version while old version is active
+ */
 static std::string getASDQueueName(const std::string& uri, const std::string& versionString) {
-  std::string str = "rora_to_asd_" + versionString + "_" + uri;
+  std::string str = "rora" + versionString + "_to_asd_" + uri;
   return str;
 }
 

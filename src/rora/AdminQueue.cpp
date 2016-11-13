@@ -13,7 +13,7 @@ namespace rora {
 // rora gateways of new version to run while old one
 // is still not phased out
 static std::string getAdminQueueName(const std::string& version) {
-  std::string str = "rora_adminqueue_" + version; 
+  std::string str = "rora" + version + "_adminqueue";
   return str;
 }
 
