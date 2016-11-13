@@ -49,6 +49,7 @@ ASDQueue::ASDQueue(const std::string& versionString,
       maxQueueLen,
       maxMsgSize);
 
+    maxMsgSize_ = getMaxMsgSize();
     LOG(INFO) << "created asd queue=" << queueName_ 
       << ",maxQueueLen=" << maxQueueLen
       << ",maxMsgSize=" << maxMsgSize_;
@@ -116,6 +117,7 @@ ASDQueue::~ASDQueue() {
 /**
  */
 int ASDQueue::write(const GatewayMsg& gmsg) {
+  assert(maxMsgSize_ > 0);
   try {
     auto sendStr = gmsg.pack();
     assert(sendStr.size() < maxMsgSize_);
@@ -132,6 +134,7 @@ int ASDQueue::write(const GatewayMsg& gmsg) {
 int ASDQueue::read(GatewayMsg& gmsg) {
   uint32_t priority;
   size_t recvdSize;
+  assert(maxMsgSize_ > 0);
   try {
     char buf[maxMsgSize_];
     mq_->receive(buf, maxMsgSize_, recvdSize, priority);
@@ -146,6 +149,7 @@ int ASDQueue::read(GatewayMsg& gmsg) {
 int ASDQueue::try_read(GatewayMsg& gmsg) {
   uint32_t priority;
   size_t recvdSize;
+  assert(maxMsgSize_ > 0);
   try {
     char buf[maxMsgSize_];
     bool ret = mq_->try_receive(buf, maxMsgSize_, recvdSize, priority);
@@ -164,6 +168,7 @@ int ASDQueue::try_read(GatewayMsg& gmsg) {
 int ASDQueue::timed_read(GatewayMsg& gmsg, int millisec) {
   uint32_t priority;
   size_t recvdSize;
+  assert(maxMsgSize_ > 0);
   try {
     char buf[maxMsgSize_];
     boost::posix_time::ptime now(boost::posix_time::second_clock::universal_time()); 

@@ -19,6 +19,7 @@ class GatewayMsg;
  */
 class ASDQueue {
 
+  public:
   std::string versionString_;
   std::string transport_;
   std::string ipAddress_;
