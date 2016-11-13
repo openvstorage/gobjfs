@@ -10,7 +10,7 @@ namespace bip = boost::interprocess;
 namespace gobjfs {
 namespace rora {
 
-class AdminMsg;
+class GatewayMsg;
 
 /**
  * The AdminQueue is one per machine/server
@@ -49,26 +49,26 @@ class AdminQueue {
   /**
    * open existing edge queue for version
    */
-  AdminQueue(const std::string& version);
+  AdminQueue(std::string version);
 
   static int remove(const std::string& version);
 
   ~AdminQueue();
 
-  int write(const AdminMsg& gmsg);
+  int write(const GatewayMsg& gmsg);
 
-  int read(AdminMsg& gmsg);
+  int read(GatewayMsg& gmsg);
 
   /**
    * @return -EAGAIN if got nothing 
    */
-  int try_read(AdminMsg& gmsg);
+  int try_read(GatewayMsg& gmsg);
 
   /**
    * @param millisec wait before returning
    * @return -EAGAIN if got nothing 
    */
-  int timed_read(AdminMsg& gmsg, int millisec);
+  int timed_read(GatewayMsg& gmsg, int millisec);
 
   const std::string& getName() const;
 

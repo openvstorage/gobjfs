@@ -2,6 +2,7 @@
 
 #include <rora/EdgeQueue.h>
 #include <rora/ASDQueue.h>
+#include <rora/AdminQueue.h>
 #include <util/EPoller.h>
 #include <util/Stats.h>
 #include <util/TimerNotifier.h>
@@ -21,6 +22,21 @@ class RoraGateway {
   private:
 
   static const int watchDogTimeSec_;
+
+  struct Config {
+  
+    std::vector<std::string> transportVec_;
+    std::vector<std::string> ipAddressVec_;
+    std::vector<int> portVec_;
+  
+    size_t maxQueueLen_ {256};
+    // client threads to connect to multiple portals
+    size_t maxEPollerThreads_{1}; 
+    size_t maxThreadsPerASD_{1}; 
+    size_t maxConnPerASD_{1}; 
+
+    int readConfig(const std::string& configFileName);
+  };
 
   // per thread info
   struct ThreadInfo {
@@ -125,6 +141,12 @@ class RoraGateway {
 
   typedef std::unique_ptr<ASDInfo> ASDInfoUPtr;
 
+  Config config_;
+
+  // queue for receiving add/drop of ASD/Edge requests
+  AdminQueueUPtr adminQueuePtr_;
+  ThreadInfo adminThread_;
+
   // catalog of registered edges
   EdgeInfo edges_;
   // list of ASDs
@@ -132,6 +154,10 @@ class RoraGateway {
   // watchdog timer
   std::unique_ptr<gobjfs::os::TimerNotifier> watchDogPtr_;
 
+  /**
+   * thread which processes admin messages
+   */
+  int adminThreadFunc();
 
   /**
    * thread which transmits read responses back to edges

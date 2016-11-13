@@ -13,18 +13,23 @@ namespace gobjfs {
 namespace rora {
 
 #define REQ_START 1000
-#define RESP_START (REQ_START + 1000)
+#define RESP_START 2000
 
 enum Opcode {
   INVALID = 0,
 
+
   ADD_EDGE_REQ = REQ_START,
-  READ_REQ,
   DROP_EDGE_REQ,
+  ADD_ASD_REQ,
+  DROP_ASD_REQ,
+  READ_REQ,
 
   ADD_EDGE_RESP = RESP_START,
-  READ_RESP,
   DROP_EDGE_RESP,
+  ADD_ASD_RESP,
+  DROP_ASD_RESP,
+  READ_RESP
 };
 
 class EdgeQueue;
@@ -55,6 +60,14 @@ struct GatewayMsg {
 
   // rawbuf deliberately not included in msgpack
   std::vector<void*> rawbufVec_;
+
+  // how much outstanding IO is this edge expected to send
+  size_t maxOutstanding_{1};
+
+  // set when adding or dropping ASD
+  std::string transport_;
+  std::string ipAddress_;
+  int port_;
 
   // if read succeeded, this is size of block read 
   // if read failed, it is errno
@@ -91,11 +104,23 @@ struct GatewayMsg {
       sizeVec_,
       offsetVec_,
       bufVec_,
+      maxOutstanding_,
+      transport_,
+      ipAddress_,
+      port_,
       retvalVec_);
   
 };
 
-GatewayMsg createOpenRequest();
+GatewayMsg createAddASDRequest(const std::string& transport,
+    const std::string& ipAddress,
+    int port);
+GatewayMsg createDropASDRequest(const std::string& transport,
+    const std::string& ipAddress,
+    int port);
+
+GatewayMsg createAddEdgeRequest(size_t maxOutstanding);
+GatewayMsg createDropEdgeRequest();
 
 GatewayMsg createReadRequest(
     EdgeQueue* edgeQueue,
@@ -110,8 +135,6 @@ GatewayMsg createReadRequest(
     const std::vector<std::string> &filenameVec, 
     std::vector<off_t> &offsetVec, 
     std::vector<size_t> &sizeVec);
-
-GatewayMsg createCloseRequest();
 
 }
 }

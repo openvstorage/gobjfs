@@ -1,6 +1,7 @@
 #include <rora/GatewayProtocol.h>
 #include <rora/EdgeQueue.h>
 #include <rora/ASDQueue.h>
+#include <rora/AdminQueue.h>
 
 #include <gobjfs_client.h>
 
@@ -67,6 +68,9 @@ int main(int argc, char* argv[])
 
   int err = ctx_init(ctx);
   assert(err == 0);
+
+  // open new
+  AdminQueue* adminQueue = new AdminQueue("1.0", 1024);
 
   // open new
   ASDQueue* asdQueue = new ASDQueue("127.0.0.1:21321", maxQueueLen, maxMsgSize);

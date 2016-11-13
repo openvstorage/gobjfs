@@ -1,5 +1,6 @@
 #include <rora/GatewayProtocol.h>
 #include <rora/EdgeQueue.h>
+#include <rora/AdminQueue.h>
 #include <rora/ASDQueue.h>
 
 #include <util/Timer.h>
@@ -322,6 +323,8 @@ int main(int argc, char* argv[])
   ret = config.readConfig(configFileName);
   assert(ret == 0);
 
+  auto adminQueue = gobjfs::make_unique<AdminQueue>("1.0");
+
   std::vector<ASDQueueUPtr> asdQueueVec;
 
   // create new for this process
@@ -339,7 +342,7 @@ int main(int argc, char* argv[])
   ASDQueue* asdQueue = asdQueueVec[0].get();
   // sending open message will cause rora gateway to open
   // the EdgeQueue for sending responses
-  ret = asdQueue->write(createOpenRequest());
+  ret = adminQueue->write(createAddEdgeRequest(1024));
   assert(ret == 0);
 
   GatewayMsg responseMsg;
@@ -363,7 +366,7 @@ int main(int argc, char* argv[])
 
   // sending close message will cause rora gateway to close
   // the EdgeQueue for sending responses
-  ret = asdQueue->write(createCloseRequest());
+  ret = adminQueue->write(createDropEdgeRequest());
   assert(ret == 0);
 
   ret = edgeQueue->readResponse(responseMsg);

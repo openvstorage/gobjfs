@@ -1,6 +1,7 @@
 #include <rora/GatewayProtocol.h>
 #include <rora/EdgeQueue.h>
 #include <rora/ASDQueue.h>
+#include <rora/AdminQueue.h>
 #include <unistd.h>
 
 using namespace gobjfs::rora;
@@ -11,6 +12,8 @@ int main(int argc, char* argv[])
   size_t maxQueueLen = 10;
   size_t maxMsgSize = 1024;
   size_t blockSize = 4096;
+  // open existing
+  AdminQueue* adminQueue = new AdminQueue("1.0");
 
   // create new
   EdgeQueue* edgeQueue = new EdgeQueue(pid, maxQueueLen, maxMsgSize, blockSize);
@@ -21,7 +24,7 @@ int main(int argc, char* argv[])
   {
     // sending open message will cause rora gateway to open
     // the EdgeQueue for sending responses
-    auto ret = asdQueue->write(createOpenRequest());
+    auto ret = asdQueue->write(createAddEdgeRequest(1024));
     assert(ret == 0);
   }
 
@@ -49,7 +52,7 @@ int main(int argc, char* argv[])
   {
     // sending close message will cause rora gateway to close
     // the EdgeQueue for sending responses
-    auto ret = asdQueue->write(createCloseRequest());
+    auto ret = asdQueue->write(createDropEdgeRequest());
     assert(ret == 0);
   }
 

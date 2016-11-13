@@ -1,5 +1,5 @@
 #include "AdminQueue.h"
-#include <rora/AdminMsg.h>
+#include <rora/GatewayProtocol.h>
 #include <string>
 #include <gobjfs_log.h>
 #include <type_traits>
@@ -32,7 +32,7 @@ AdminQueue::AdminQueue(const std::string& version, size_t maxQueueLen) {
     mq_ = gobjfs::make_unique<bip::message_queue>(bip::create_only, 
       queueName_.c_str(),
       maxQueueLen,
-      AdminMsg::MaxMsgSize);
+      GatewayMsg::MaxMsgSize);
 
     LOG(INFO) << "created asd queue=" << queueName_ 
       << ",maxQueueLen=" << maxQueueLen;
@@ -50,7 +50,7 @@ AdminQueue::AdminQueue(const std::string& version, size_t maxQueueLen) {
 /**
  * this is an open
  */
-AdminQueue::AdminQueue(const std::string &version) {
+AdminQueue::AdminQueue(std::string version) {
 
   isCreator_ =  false;
 
@@ -92,7 +92,7 @@ AdminQueue::~AdminQueue() {
 
 /**
  */
-int AdminQueue::write(const AdminMsg& gmsg) {
+int AdminQueue::write(const GatewayMsg& gmsg) {
   try {
     auto sendStr = gmsg.pack();
     assert(sendStr.size() < maxMsgSize_);
@@ -106,7 +106,7 @@ int AdminQueue::write(const AdminMsg& gmsg) {
 
 /**
  */
-int AdminQueue::read(AdminMsg& gmsg) {
+int AdminQueue::read(GatewayMsg& gmsg) {
   uint32_t priority;
   size_t recvdSize;
   try {
@@ -120,7 +120,7 @@ int AdminQueue::read(AdminMsg& gmsg) {
   }
 }
 
-int AdminQueue::try_read(AdminMsg& gmsg) {
+int AdminQueue::try_read(GatewayMsg& gmsg) {
   uint32_t priority;
   size_t recvdSize;
   try {
@@ -138,7 +138,7 @@ int AdminQueue::try_read(AdminMsg& gmsg) {
   }
 }
 
-int AdminQueue::timed_read(AdminMsg& gmsg, int millisec) {
+int AdminQueue::timed_read(GatewayMsg& gmsg, int millisec) {
   uint32_t priority;
   size_t recvdSize;
   try {
