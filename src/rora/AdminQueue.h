@@ -1,7 +1,6 @@
 #pragma once
 
 #include <boost/interprocess/ipc/message_queue.hpp>
-#include <boost/interprocess/managed_shared_memory.hpp>
 #include <string>
 #include <sys/stat.h> // mode_t
 #include <util/Stats.h>
@@ -14,22 +13,18 @@ namespace rora {
 class GatewayMsg;
 
 /**
- * An ASDQueue abstracts the message queue and 
- * required for receiving read requests on the Gateway
+ * The AdminQueue is one per machine/server
+ * It processes following messages
+ * 1) add_asd
+ * 2) add_edge
+ * 3) drop_edge
+ * 4) drop_edge
+ * 5) any other admin-type messages (add here)
  */
-class ASDQueue {
+class AdminQueue {
 
-  public:
-  std::string versionString_;
-  std::string transport_;
-  std::string ipAddress_;
-  int port_;
-  std::string queueName_;
-
-  std::unique_ptr<bip::message_queue> mq_{nullptr};
-  
   bool isCreator_{false};
-
+  
   size_t maxMsgSize_{0};
 
   struct Statistics {
@@ -39,28 +34,26 @@ class ASDQueue {
     gobjfs::stats::StatsCounter<uint32_t> msgSize_;
   };
 
+  std::string queueName_;
+  std::unique_ptr<bip::message_queue> mq_{nullptr};
   Statistics readStats_;
   Statistics writeStats_;
 
   public:
   /**
-   * create edge queue for uri
+   * create edge queue for version
    */
-  ASDQueue(const std::string& versionString,
-      std::string transport, std::string ipAddress, int port,
-      size_t maxQueueLen, size_t maxMsgSize);
+  AdminQueue(const std::string& version, size_t maxQueueLen);
       
 
   /**
-   * open existing edge queue for uri
+   * open existing edge queue for version
    */
-  ASDQueue(const std::string& versionString,
-      std::string transport, std::string ipAddress, int port);
+  AdminQueue(std::string version);
 
-  static int remove(const std::string& versionString, 
-      std::string ipAddress, int port);
+  static int remove(const std::string& version);
 
-  ~ASDQueue();
+  ~AdminQueue();
 
   int write(const GatewayMsg& gmsg);
 
@@ -80,7 +73,7 @@ class ASDQueue {
   const std::string& getName() const;
 
   private:
-  void updateStats(ASDQueue::Statistics& which, size_t msgSize);
+  void updateStats(AdminQueue::Statistics& which, size_t msgSize);
 
   public:
   std::string getStats() const;
@@ -95,8 +88,8 @@ class ASDQueue {
 
 };
 
-typedef std::unique_ptr<ASDQueue> ASDQueueUPtr;
-typedef std::shared_ptr<ASDQueue> ASDQueueSPtr;
+typedef std::unique_ptr<AdminQueue> AdminQueueUPtr;
+typedef std::shared_ptr<AdminQueue> AdminQueueSPtr;
 
 }
 }

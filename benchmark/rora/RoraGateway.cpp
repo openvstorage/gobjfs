@@ -22,7 +22,7 @@ void sigintHandler(int dummy) {
   gw.shutdown();
 }
 
-int main(int argc, char* argv[])
+int main(int argc, const char* argv[])
 {
   namespace logging = boost::log;
   logging::core::get()->set_filter(logging::trivial::severity >=
@@ -43,6 +43,8 @@ int main(int argc, char* argv[])
 
   std::cout << "logs in " << logFileName << std::endl;
   signal(SIGINT, sigintHandler);
-  gw.init("./rora_gateway.conf");
-  gw.run();
+  int ret = gw.init("./rora_gateway.conf", argc, argv);
+  if (ret == 0) {
+    gw.run();
+  }
 }

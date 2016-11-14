@@ -2,6 +2,7 @@
 
 #include <rora/EdgeQueue.h>
 #include <rora/ASDQueue.h>
+#include <rora/AdminQueue.h>
 #include <util/EPoller.h>
 #include <util/Stats.h>
 #include <util/TimerNotifier.h>
@@ -10,6 +11,7 @@
 #include <string>
 #include <thread>
 #include <vector>
+#include <set>
 #include <mutex>
 #include <map>
 
@@ -20,7 +22,24 @@ class RoraGateway {
 
   private:
 
-  static const int watchDogTimeSec_;
+  static const int majorVersion_ = 1;
+  static const int minorVersion_ = 0;
+  static std::string versionString_;
+
+  struct Config {
+  
+    size_t watchDogTimeSec_{30};
+    size_t maxAdminQueueLen_ {256};
+    size_t maxASDQueueLen_ {256};
+    // client threads to connect to multiple portals
+    size_t maxEPollerThreads_{1}; 
+    size_t maxThreadsPerASD_{1}; 
+    size_t maxConnPerASD_{1}; 
+    bool isDaemon_{false};
+
+    int readConfig(const std::string& configFileName,
+      int argc, const char* argv[]);
+  };
 
   // per thread info
   struct ThreadInfo {
@@ -30,8 +49,6 @@ class RoraGateway {
     bool stopping_{false};
     bool stopped_{false};
   };
-
-  size_t maxEPollerThreads_{1};
 
   struct EdgeInfo {
     // map from edge pid to edge queue
@@ -92,6 +109,8 @@ class RoraGateway {
     std::vector<gobjfs::xio::client_ctx_ptr> ctxVec_;
     std::vector<std::shared_ptr<ASDThreadInfo>> asdThreadVec_;
 
+    std::set<int> edgesUsingMe_;
+
     // info passed to EPoller.addEvent
     // to figure out the fd corresponding to the ctx
     struct CallbackInfo {
@@ -120,10 +139,18 @@ class RoraGateway {
         size_t maxThreadsPerASD,
         size_t maxConnPerASD);
 
+    int destroyAll(RoraGateway* rgPtr);
+
     void clearStats();
   };
 
   typedef std::unique_ptr<ASDInfo> ASDInfoUPtr;
+
+  Config config_;
+
+  // queue for receiving add/drop of ASD/Edge requests
+  AdminQueueUPtr adminQueuePtr_;
+  ThreadInfo adminThread_;
 
   // catalog of registered edges
   EdgeInfo edges_;
@@ -132,6 +159,10 @@ class RoraGateway {
   // watchdog timer
   std::unique_ptr<gobjfs::os::TimerNotifier> watchDogPtr_;
 
+  /**
+   * thread which processes admin messages
+   */
+  int adminThreadFunc();
 
   /**
    * thread which transmits read responses back to edges
@@ -152,19 +183,17 @@ class RoraGateway {
 
   public:
 
-  int init(const std::string &configFileName);
+  int init(const std::string &configFileName, int argc, const char* argv[]);
 
   int addASD(const std::string& transport,
     const std::string& ipAddress,
     const int port,
-    const size_t maxMsgSize,
-    const size_t maxQueueLen,
-    const size_t maxThreads,
-    const size_t maxPortals);
+    int edgePid);
 
   int dropASD(const std::string& transport,
     const std::string& ipAddress,
-    const int port);
+    const int port,
+    int edgePid);
 
   int run();
 

@@ -1,4 +1,4 @@
-#include "ASDQueue.h"
+#include "AdminQueue.h"
 #include <rora/GatewayProtocol.h>
 #include <string>
 #include <gobjfs_log.h>
@@ -9,48 +9,37 @@ namespace bip = boost::interprocess;
 namespace gobjfs {
 namespace rora {
 
-/**
- * ASDQueue contains rora gateway version
- * this allows running a gateway with new version while old version is active
- */
-static std::string getASDQueueName(std::string versionString,
-    std::string ipAddress, 
-    int port) {
-
-  std::string str = "rora" + versionString 
-    + "_to_asd_" + ipAddress + ":" + std::to_string(port);
+// append version string to queue name so we can allow
+// rora gateways of new version to run while old one
+// is still not phased out
+static std::string getAdminQueueName(const std::string& version) {
+  std::string str = "rora" + version + "_adminqueue";
   return str;
 }
 
 /**
  * this is a create
+ * @param version uniquely identifies the gateway instance
+ *        you can run two instances of gateway with different versions
  */
-ASDQueue::ASDQueue(const std::string& versionString,
-    std::string transport,
-    std::string ipAddress,
-    int port,
-    size_t maxQueueLen, 
-    size_t maxMsgSize) :
-  versionString_(versionString),
-  transport_(transport),
-  ipAddress_(ipAddress),
-  port_(port) {
+AdminQueue::AdminQueue(const std::string& version, size_t maxQueueLen) {
 
   isCreator_ = true;
 
-  queueName_ = getASDQueueName(versionString, ipAddress, port);
+  queueName_ = getAdminQueueName(version);
 
-  // always remove previous ASD queue
-  remove(versionString_, ipAddress, port);
+  // always remove previous Admin queue
+  remove(version);
 
   try {
     mq_ = gobjfs::make_unique<bip::message_queue>(bip::create_only, 
       queueName_.c_str(),
       maxQueueLen,
-      maxMsgSize);
+      GatewayMsg::MaxMsgSize);
 
     maxMsgSize_ = getMaxMsgSize();
-    LOG(INFO) << "created asd queue=" << queueName_ 
+
+    LOG(INFO) << "created admin queue=" << queueName_ 
       << ",maxQueueLen=" << maxQueueLen
       << ",maxMsgSize=" << maxMsgSize_;
   
@@ -59,7 +48,7 @@ ASDQueue::ASDQueue(const std::string& versionString,
     mq_.reset();
 
     throw std::runtime_error(
-        "failed to create edgequeue for uri=" + ipAddress + ":" + std::to_string(port));
+        "failed to create edgequeue for version=" + version);
   }
 }
 
@@ -67,34 +56,27 @@ ASDQueue::ASDQueue(const std::string& versionString,
 /**
  * this is an open
  */
-ASDQueue::ASDQueue(const std::string& versionString,
-    std::string transport,
-    std::string ipAddress,
-    int port) :
-  versionString_(versionString),
-  transport_(transport),
-  ipAddress_(ipAddress),
-  port_(port) {
+AdminQueue::AdminQueue(std::string version) {
 
   isCreator_ =  false;
 
-  queueName_ = getASDQueueName(versionString, ipAddress, port);
+  queueName_ = getAdminQueueName(version);
 
   try {
     mq_ = gobjfs::make_unique<bip::message_queue>(bip::open_only, queueName_.c_str());
     maxMsgSize_ = getMaxMsgSize();
-    LOG(INFO) << "opened asd queue=" << queueName_ 
+    LOG(INFO) << "opened admin queue=" << queueName_ 
       << " with maxMsgSize=" << maxMsgSize_;
   } catch (const std::exception& e) {
     mq_.reset();
     throw std::runtime_error(
-        "failed to open edgequeue for uri=" + ipAddress + ":" + std::to_string(port));
+        "failed to open edgequeue for version=" + version);
   }
 }
 
-int ASDQueue::remove(const std::string& versionString, std::string ipAddress, int port) {
+int AdminQueue::remove(const std::string& version) {
 
-  auto queueName_ = getASDQueueName(versionString, ipAddress, port);
+  auto queueName_ = getAdminQueueName(version);
   auto ret = bip::message_queue::remove(queueName_.c_str());
   if (ret == false) {
     LOG(ERROR) << "Failed to remove message queue=" << queueName_;
@@ -102,7 +84,7 @@ int ASDQueue::remove(const std::string& versionString, std::string ipAddress, in
   return ret;
 }
 
-ASDQueue::~ASDQueue() {
+AdminQueue::~AdminQueue() {
 
   if (isCreator_) {
     if (mq_) {
@@ -116,8 +98,7 @@ ASDQueue::~ASDQueue() {
 
 /**
  */
-int ASDQueue::write(const GatewayMsg& gmsg) {
-  assert(maxMsgSize_ > 0);
+int AdminQueue::write(const GatewayMsg& gmsg) {
   try {
     auto sendStr = gmsg.pack();
     assert(sendStr.size() < maxMsgSize_);
@@ -131,10 +112,9 @@ int ASDQueue::write(const GatewayMsg& gmsg) {
 
 /**
  */
-int ASDQueue::read(GatewayMsg& gmsg) {
+int AdminQueue::read(GatewayMsg& gmsg) {
   uint32_t priority;
   size_t recvdSize;
-  assert(maxMsgSize_ > 0);
   try {
     char buf[maxMsgSize_];
     mq_->receive(buf, maxMsgSize_, recvdSize, priority);
@@ -146,10 +126,9 @@ int ASDQueue::read(GatewayMsg& gmsg) {
   }
 }
 
-int ASDQueue::try_read(GatewayMsg& gmsg) {
+int AdminQueue::try_read(GatewayMsg& gmsg) {
   uint32_t priority;
   size_t recvdSize;
-  assert(maxMsgSize_ > 0);
   try {
     char buf[maxMsgSize_];
     bool ret = mq_->try_receive(buf, maxMsgSize_, recvdSize, priority);
@@ -165,10 +144,9 @@ int ASDQueue::try_read(GatewayMsg& gmsg) {
   }
 }
 
-int ASDQueue::timed_read(GatewayMsg& gmsg, int millisec) {
+int AdminQueue::timed_read(GatewayMsg& gmsg, int millisec) {
   uint32_t priority;
   size_t recvdSize;
-  assert(maxMsgSize_ > 0);
   try {
     char buf[maxMsgSize_];
     boost::posix_time::ptime now(boost::posix_time::second_clock::universal_time()); 
@@ -186,12 +164,12 @@ int ASDQueue::timed_read(GatewayMsg& gmsg, int millisec) {
   }
 }
 
-void ASDQueue::updateStats(Statistics& which, size_t msgSize) {
+void AdminQueue::updateStats(Statistics& which, size_t msgSize) {
   which.count_ ++;
   which.msgSize_ = msgSize;
 }
 
-std::string ASDQueue::getStats() const {
+std::string AdminQueue::getStats() const {
   std::ostringstream s;
   s 
     << "read={count=" << readStats_.count_ << ",msg_size=" << readStats_.msgSize_ << "}"
@@ -200,32 +178,32 @@ std::string ASDQueue::getStats() const {
   return s.str();
 }
 
-void ASDQueue::clearStats() {
+void AdminQueue::clearStats() {
   readStats_.count_ = 0;
   readStats_.msgSize_.reset();
   writeStats_.count_ = 0;
   writeStats_.msgSize_.reset();
 }
 
-const std::string& ASDQueue::getName() const {
+const std::string& AdminQueue::getName() const {
   return queueName_;
 }
  
-size_t ASDQueue::getCurrentQueueLen() const {
+size_t AdminQueue::getCurrentQueueLen() const {
   if (!mq_) {
     throw std::runtime_error("invalid edgequeue");
   }
   return mq_->get_num_msg();
 }
 
-size_t ASDQueue::getMaxQueueLen() const {
+size_t AdminQueue::getMaxQueueLen() const {
   if (!mq_) {
     throw std::runtime_error("invalid edgequeue");
   }
   return mq_->get_max_msg();
 }
 
-size_t ASDQueue::getMaxMsgSize() const {
+size_t AdminQueue::getMaxMsgSize() const {
   if (!mq_) {
     throw std::runtime_error("invalid edgequeue");
   }

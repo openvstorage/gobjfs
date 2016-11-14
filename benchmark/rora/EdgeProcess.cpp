@@ -1,6 +1,4 @@
-#include <rora/GatewayProtocol.h>
-#include <rora/EdgeQueue.h>
-#include <rora/ASDQueue.h>
+#include <rora/GatewayClient.h>
 
 #include <util/Timer.h>
 #include <util/Stats.h>
@@ -35,6 +33,7 @@ namespace sinks = boost::log::sinks;
 namespace keywords = boost::log::keywords;
 
 struct Config {
+  std::string roraVersion_ = "1.0";
   uint32_t blockSize = 4096;
   uint32_t maxFiles = 1000;
   uint32_t maxBlocks = 10000;
@@ -54,6 +53,7 @@ struct Config {
   int readConfig(const std::string &configFileName) {
     options_description desc("allowed options");
     desc.add_options()
+        ("rora_version", value<std::string>(&roraVersion_)->default_value("1.0"), "version of rora gateway")
         ("block_size", value<uint32_t>(&blockSize)->required(), "blocksize for reads & writes")
         ("num_files", value<uint32_t>(&maxFiles)->required(), "number of files") 
         ("max_file_blocks", value<uint32_t>(&maxBlocks)->required(), "number of [blocksize] blocks in file")
@@ -139,7 +139,6 @@ struct FileManager {
 
 static FileManager fileMgr;
 // =====================
-EdgeQueueUPtr edgeQueue;
 
 // record run identifier and number of concurrent edge processes, 
 // for purpose of benchmark - for easier grep thru text files
@@ -219,16 +218,19 @@ struct RunContext {
     assert(doneCount > 0); // must have run
   }
 
-  void doRandomRead(ASDQueue* asdQueue);
+  void doRandomRead(GatewayClient* gc);
 };
 
-void RunContext::doRandomRead(ASDQueue* asdQueue) {
+void RunContext::doRandomRead(GatewayClient* gc) {
 
   std::mt19937 seedGen(getpid() + gobjfs::os::GetCpuCore());
   std::uniform_int_distribution<decltype(config.maxFiles)> filenumGen(
       0, config.maxFiles - 1);
   std::uniform_int_distribution<decltype(config.maxBlocks)> blockGenerator(
       0, config.maxBlocks - 1);
+
+  auto asdQueue = gc->asdQueueVec_.at(0).get();
+  auto edgeQueue = gc->edgeQueue_.get();
 
   start();
 
@@ -248,7 +250,7 @@ void RunContext::doRandomRead(ASDQueue* asdQueue) {
       offsetVec.push_back(blockGenerator(seedGen) * config.blockSize);
     }
 
-    const auto ret = asdQueue->write(createReadRequest(edgeQueue.get(), 1, filenameVec,
+    const auto ret = asdQueue->write(createReadRequest(edgeQueue, 1, filenameVec,
       offsetVec,
       sizeVec));
     assert(ret == 0);
@@ -313,8 +315,6 @@ int main(int argc, char* argv[])
 
   int ret = 0;
 
-  int pid = getpid();
-
   std::string configFileName = "./edge_process.conf";
   if (argc > 3) {
     configFileName = argv[3];
@@ -322,33 +322,22 @@ int main(int argc, char* argv[])
   ret = config.readConfig(configFileName);
   assert(ret == 0);
 
-  std::vector<ASDQueueUPtr> asdQueueVec;
+  GatewayClient gc(config.roraVersion_, config.maxOutstandingIO,
+      config.blockSize);
 
-  // create new for this process
-  edgeQueue = gobjfs::make_unique<EdgeQueue>(pid, 2 * config.maxOutstandingIO, 
-      GatewayMsg::MaxMsgSize, config.blockSize);
-
-  // open existing asd queues
+  // then ask gateway to add asds
   const size_t numASD = config.transportVec.size();
   for (size_t idx = 0; idx < numASD; idx ++) {
-    std::string uri = config.ipAddressVec[idx] + ":" + std::to_string(config.portVec[idx]);
-    auto asdPtr = gobjfs::make_unique<ASDQueue>(uri);
-    asdQueueVec.push_back(std::move(asdPtr));
+
+    ret = gc.addASD(config.transportVec[idx],
+      config.ipAddressVec[idx],
+      config.portVec[idx]);
+    assert(ret == 0);
+
   }
 
-  ASDQueue* asdQueue = asdQueueVec[0].get();
-  // sending open message will cause rora gateway to open
-  // the EdgeQueue for sending responses
-  ret = asdQueue->write(createOpenRequest());
-  assert(ret == 0);
-
-  GatewayMsg responseMsg;
-  ret = edgeQueue->readResponse(responseMsg);
-  assert(ret == 0);
-  assert(responseMsg.opcode_ == Opcode::ADD_EDGE_RESP);
-
   RunContext r;
-  auto fut = std::async(std::launch::async, std::bind(&RunContext::doRandomRead, &r, asdQueue));
+  auto fut = std::async(std::launch::async, std::bind(&RunContext::doRandomRead, &r, &gc));
 
   if (config.runTimeSec) {
     // print progress count here for time-based run
@@ -361,15 +350,5 @@ int main(int argc, char* argv[])
 
   fut.wait();
 
-  // sending close message will cause rora gateway to close
-  // the EdgeQueue for sending responses
-  ret = asdQueue->write(createCloseRequest());
-  assert(ret == 0);
-
-  ret = edgeQueue->readResponse(responseMsg);
-  assert(ret == 0);
-  assert(responseMsg.opcode_ == Opcode::DROP_EDGE_RESP);
-
-  asdQueueVec.clear();
-  edgeQueue.reset();
+  gc.shutdown();
 }

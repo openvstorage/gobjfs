@@ -28,13 +28,6 @@ GatewayMsg::~GatewayMsg() {
   //assert(buf_ == 0);
 }
 
-GatewayMsg createOpenRequest() {
-  GatewayMsg gmsg(0);
-  gmsg.opcode_ = Opcode::ADD_EDGE_REQ;
-  gmsg.edgePid_ = getpid();
-  return gmsg;
-}
-
 GatewayMsg createReadRequest(
     EdgeQueue* edgeQueue,
     uint32_t fileNumber,
@@ -87,11 +80,43 @@ GatewayMsg createReadRequest(
   return gmsg;
 }
 
-GatewayMsg createCloseRequest() {
-  GatewayMsg gmsg(0);
-  gmsg.opcode_ = Opcode::DROP_EDGE_REQ;
-  gmsg.edgePid_ = getpid();
-  return gmsg;
+GatewayMsg createAddEdgeRequest(size_t maxOutstanding) {
+  GatewayMsg adminMsg;
+  adminMsg.opcode_ = Opcode::ADD_EDGE_REQ;
+  adminMsg.edgePid_ = getpid();
+  adminMsg.maxOutstanding_ = maxOutstanding;
+  return adminMsg;
+}
+
+GatewayMsg createDropEdgeRequest() {
+  GatewayMsg adminMsg;
+  adminMsg.opcode_ = Opcode::DROP_EDGE_REQ;
+  adminMsg.edgePid_ = getpid();
+  return adminMsg;
+}
+
+GatewayMsg createAddASDRequest(const std::string& transport,
+    const std::string& ipAddress,
+    int port) {
+  GatewayMsg adminMsg;
+  adminMsg.opcode_ = Opcode::ADD_ASD_REQ;
+  adminMsg.transport_ = transport;
+  adminMsg.ipAddress_ = ipAddress;
+  adminMsg.port_ = port;
+  adminMsg.edgePid_ = getpid();
+  return adminMsg;
+}
+
+GatewayMsg createDropASDRequest(const std::string& transport,
+    const std::string& ipAddress,
+    int port) {
+  GatewayMsg adminMsg;
+  adminMsg.opcode_ = Opcode::DROP_ASD_REQ;
+  adminMsg.transport_ = transport;
+  adminMsg.ipAddress_ = ipAddress;
+  adminMsg.port_ = port;
+  adminMsg.edgePid_ = getpid();
+  return adminMsg;
 }
 
 }

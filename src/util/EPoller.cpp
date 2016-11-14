@@ -73,7 +73,7 @@ int EPoller::init() {
   } while (0);
 
   if (ret == 0) {
-    LOG(INFO) << "started epoller=" << (void*)this;
+    LOG(INFO) << "started epoller=" << (void*)this << " with fd=" << fd_;
   }
 
   return ret;
@@ -266,6 +266,7 @@ int EPoller::addEvent(uintptr_t userData,
   } else {
     std::unique_lock<std::mutex> l(eventListMutex_);
     eventList_.push_back(std::move(ctxptr));
+    LOG(INFO) << "eventFD=" << eventFD << " added to epollfd=" << fd_;
   }
 
   return ret;
@@ -309,6 +310,8 @@ int EPoller::dropEvent(uintptr_t userData, int eventFD) {
       << " userData=" << userData
       << " from eventList of size=" << eventList_.size();
     delRet = -ENOENT;
+  } else {
+    LOG(INFO) << "eventFD=" << eventFD << " dropped from epollfd=" << fd_;
   }
 
   return delRet;

@@ -39,7 +39,7 @@ int main(int argc, char* argv[])
   edgeQueue = gobjfs::make_unique<EdgeQueue>(pid, maxQueueLen,
       GatewayMsg::MaxMsgSize, maxAllocSize);
 
-  asdQueue = gobjfs::make_unique<ASDQueue>(asdQueueName);
+  asdQueue = gobjfs::make_unique<ASDQueue>("1.0", "tcp", "localhost", 12321);
 
   {
     GatewayMsg reqMsg;

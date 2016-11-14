@@ -4,6 +4,7 @@ set(SOURCES
   EdgeQueue.cpp
   ASDQueue.cpp
   GatewayProtocol.cpp
+  AdminQueue.cpp
   RoraGateway.cpp
   )
 
