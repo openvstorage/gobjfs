@@ -147,7 +147,7 @@ void asdThreadFunc() {
 
 int main(int argc, char* argv[])
 {
-  asdQueue = gobjfs::make_unique<ASDQueue>("1.0", "tcp", "localhost", 12321, maxQueueLen, GatewayMsg::MaxMsgSize);
+  asdQueue = gobjfs::make_unique<ASDQueue>(1, "tcp", "localhost", 12321, maxQueueLen, GatewayMsg::MaxMsgSize);
 
   std::vector<std::future<void>> futVec;
 

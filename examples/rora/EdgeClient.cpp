@@ -12,14 +12,15 @@ int main(int argc, char* argv[])
   size_t maxQueueLen = 10;
   size_t maxMsgSize = 1024;
   size_t blockSize = 4096;
+  const int roraVersion = 1;
   // open existing
-  AdminQueue* adminQueue = new AdminQueue("1.0");
+  AdminQueue* adminQueue = new AdminQueue(roraVersion);
 
   // create new
   EdgeQueue* edgeQueue = new EdgeQueue(pid, maxQueueLen, maxMsgSize, blockSize);
 
   // open existing
-  ASDQueue* asdQueue = new ASDQueue("1.0", "tcp", "127.0.0.1", 21321);
+  ASDQueue* asdQueue = new ASDQueue(roraVersion, "tcp", "127.0.0.1", 21321);
 
   {
     // sending open message will cause rora gateway to open

@@ -22,9 +22,6 @@ class RoraGateway {
 
   private:
 
-  static const int majorVersion_ = 1;
-  static const int minorVersion_ = 0;
-  static std::string versionString_;
 
   struct Config {
   
@@ -36,6 +33,7 @@ class RoraGateway {
     size_t maxThreadsPerASD_{1}; 
     size_t maxConnPerASD_{1}; 
     bool isDaemon_{false};
+    int32_t version_{1};
 
     int readConfig(const std::string& configFileName,
       int argc, const char* argv[]);
@@ -147,6 +145,11 @@ class RoraGateway {
   typedef std::unique_ptr<ASDInfo> ASDInfoUPtr;
 
   Config config_;
+
+  // version is used in the names generated for shared memory queues
+  // switching this number allows running multiple RORA gateways
+  // on same machine.  This can be useful for testing or version upgrade
+  int32_t version_{1};
 
   // queue for receiving add/drop of ASD/Edge requests
   AdminQueueUPtr adminQueuePtr_;

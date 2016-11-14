@@ -59,6 +59,7 @@ int main(int argc, char* argv[])
 {
   size_t maxQueueLen = 10;
   size_t maxMsgSize = 1024;
+  int32_t roraVersion = 1;
 
   auto ctx_attr = ctx_attr_new();
   ctx_attr_set_transport(ctx_attr, "tcp", "127.0.0.1", 21321);
@@ -70,10 +71,10 @@ int main(int argc, char* argv[])
   assert(err == 0);
 
   // open new
-  AdminQueue* adminQueue = new AdminQueue("1.0", 1024);
+  AdminQueue* adminQueue = new AdminQueue(roraVersion, 1024);
 
   // open new
-  ASDQueue* asdQueue = new ASDQueue("1.0", "tcp", "127.0.0.1", 21321, maxQueueLen, maxMsgSize);
+  ASDQueue* asdQueue = new ASDQueue(roraVersion, "tcp", "127.0.0.1", 21321, maxQueueLen, maxMsgSize);
 
   auto fut = std::async(std::launch::async, iocompletionFunc);
 

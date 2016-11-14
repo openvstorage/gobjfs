@@ -11,7 +11,7 @@ namespace rora {
 
 struct GatewayClient {
 
-  std::string roraVersion_;
+  int32_t roraVersion_{-1};
 
   AdminQueueUPtr adminQueue_;
 
@@ -21,11 +21,12 @@ struct GatewayClient {
 
   static GatewayClient* create(std::string roraVersion);
 
-  GatewayClient(std::string roraVersion,
+  GatewayClient(int32_t roraVersion,
       size_t maxOutstandingIO,
       size_t blockSize) {
 
     roraVersion_ = roraVersion;
+    assert(roraVersion_ != -1);
 
     adminQueue_ = gobjfs::make_unique<AdminQueue>(roraVersion);
 
@@ -46,7 +47,7 @@ struct GatewayClient {
 
   int addASD(std::string transport, std::string ipAddress, int port) {
 
-    assert(not roraVersion_.empty());
+    assert(roraVersion_ != -1);
 
     int ret = adminQueue_->write(createAddASDRequest(transport,
       ipAddress,
@@ -79,8 +80,8 @@ struct GatewayClient {
   int shutdown() {
 
     int ret = 0;
+    assert(roraVersion_ != -1);
 
-    assert(not roraVersion_.empty());
     // drop the asds
     for (auto& asdQueue : asdQueueVec_) {
 

@@ -12,8 +12,8 @@ namespace rora {
 // append version string to queue name so we can allow
 // rora gateways of new version to run while old one
 // is still not phased out
-static std::string getAdminQueueName(const std::string& version) {
-  std::string str = "rora" + version + "_adminqueue";
+static std::string getAdminQueueName(int32_t version) {
+  std::string str = "rora" + std::to_string(version) + "_adminqueue";
   return str;
 }
 
@@ -22,7 +22,7 @@ static std::string getAdminQueueName(const std::string& version) {
  * @param version uniquely identifies the gateway instance
  *        you can run two instances of gateway with different versions
  */
-AdminQueue::AdminQueue(const std::string& version, size_t maxQueueLen) {
+AdminQueue::AdminQueue(int32_t version, size_t maxQueueLen) {
 
   isCreator_ = true;
 
@@ -56,7 +56,7 @@ AdminQueue::AdminQueue(const std::string& version, size_t maxQueueLen) {
 /**
  * this is an open
  */
-AdminQueue::AdminQueue(std::string version) {
+AdminQueue::AdminQueue(int32_t version) {
 
   isCreator_ =  false;
 
@@ -74,7 +74,7 @@ AdminQueue::AdminQueue(std::string version) {
   }
 }
 
-int AdminQueue::remove(const std::string& version) {
+int AdminQueue::remove(int32_t version) {
 
   auto queueName_ = getAdminQueueName(version);
   auto ret = bip::message_queue::remove(queueName_.c_str());

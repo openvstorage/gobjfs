@@ -33,7 +33,7 @@ namespace sinks = boost::log::sinks;
 namespace keywords = boost::log::keywords;
 
 struct Config {
-  std::string roraVersion_ = "1.0";
+  int32_t roraVersion_ = 1;
   uint32_t blockSize = 4096;
   uint32_t maxFiles = 1000;
   uint32_t maxBlocks = 10000;
@@ -53,7 +53,7 @@ struct Config {
   int readConfig(const std::string &configFileName) {
     options_description desc("allowed options");
     desc.add_options()
-        ("rora_version", value<std::string>(&roraVersion_)->default_value("1.0"), "version of rora gateway")
+        ("rora_version", value<int32_t>(&roraVersion_)->default_value(1), "version of rora gateway to connect to")
         ("block_size", value<uint32_t>(&blockSize)->required(), "blocksize for reads & writes")
         ("num_files", value<uint32_t>(&maxFiles)->required(), "number of files") 
         ("max_file_blocks", value<uint32_t>(&maxBlocks)->required(), "number of [blocksize] blocks in file")

@@ -16,14 +16,10 @@ using gobjfs::os::TimerNotifier;
 namespace gobjfs {
 namespace rora {
 
-std::string RoraGateway::versionString_ = 
-  std::to_string(RoraGateway::majorVersion_) + "." +
-  std::to_string(RoraGateway::minorVersion_);
-
 int RoraGateway::Config::readConfig(const std::string& configFileName, 
     int argc, const char* argv[]) {
 
-  bpo::options_description generic("options allowed in config file & command line");
+  bpo::options_description generic("options allowed in config file and command line(command line overrides)");
   generic.add_options()
       ("max_asd_queue", bpo::value<size_t>(&maxASDQueueLen_)->default_value(1024), "length of shared memory queue used to forward requests to ASD")
       ("max_admin_queue", bpo::value<size_t>(&maxAdminQueueLen_)->default_value(10), "length of shared memory queue used for admin requests")
@@ -32,19 +28,20 @@ int RoraGateway::Config::readConfig(const std::string& configFileName,
       ("max_epoller_threads", bpo::value<size_t>(&maxEPollerThreads_)->default_value(4), "max threads for epoll")
       ("watchdog_time_sec", bpo::value<size_t>(&watchDogTimeSec_)->default_value(30), "interval for watchdog timer")
       ("daemon", bpo::value<bool>(&isDaemon_)->default_value(false), "run as daemon")
+      ("version", bpo::value<int32_t>(&version_)->default_value(1), "change version of Rora Gateway to run multiple versions on same machine.  This version field gets embedded in names of shared mem queues")
       ;
 
   bpo::options_description cmdline("command line options");
   cmdline.add_options()
     ("help", "produce help message")
-    ("version", "print rora gateway version")
     ;
 
   cmdline.add(generic);
 
   std::ifstream configFile(configFileName);
   bpo::variables_map vm;
-  // parse cmd line first, because value stored first overrides 
+  // parse cmd line parameters first, because the value stored first 
+  // into map overrides later updates (also see "composing" in boost)
   bpo::store(bpo::parse_command_line(argc, argv, cmdline), vm);
   bpo::store(bpo::parse_config_file(configFile, generic), vm);
   bpo::notify(vm);
@@ -53,10 +50,7 @@ int RoraGateway::Config::readConfig(const std::string& configFileName,
   if (vm.count("help")) {
     std::cout << cmdline << std::endl;
     return 1;
-  } else if (vm.count("version")) {
-    std::cout << "version " << RoraGateway::versionString_ << std::endl;
-    return 1;
-  }
+  } 
 
   LOG(INFO)
       << "================================================================="
@@ -76,6 +70,8 @@ int RoraGateway::Config::readConfig(const std::string& configFileName,
         s << val << ",";
       }
       s << std::endl;
+    } else if (auto v = boost::any_cast<int32_t>(&value)) {
+      s << *v << std::endl;
     } else if (auto v = boost::any_cast<bool>(&value)) {
       s << *v << std::endl;
     } else if (auto v = boost::any_cast<size_t>(&value)) {
@@ -111,8 +107,7 @@ RoraGateway::ASDInfo::ASDInfo(RoraGateway* rgPtr,
 
   int ret = 0;
 
-
-  queue_ = gobjfs::make_unique<ASDQueue>(RoraGateway::versionString_, 
+  queue_ = gobjfs::make_unique<ASDQueue>(rgPtr->version_,
       transport_, ipAddress_, port_, maxQueueLen, maxMsgSize);
 
   auto ctx_attr_ptr = ctx_attr_new();
@@ -288,7 +283,7 @@ int RoraGateway::init(const std::string& configFileName, int argc, const char* a
     return -1;
   }
 
-  adminQueuePtr_ = gobjfs::make_unique<AdminQueue>(versionString_, config_.maxAdminQueueLen_);
+  adminQueuePtr_ = gobjfs::make_unique<AdminQueue>(version_, config_.maxAdminQueueLen_);
 
   return ret;
 }

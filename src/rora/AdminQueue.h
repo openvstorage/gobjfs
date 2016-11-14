@@ -43,15 +43,15 @@ class AdminQueue {
   /**
    * create edge queue for version
    */
-  AdminQueue(const std::string& version, size_t maxQueueLen);
+  explicit AdminQueue(int32_t version, size_t maxQueueLen);
       
 
   /**
    * open existing edge queue for version
    */
-  AdminQueue(std::string version);
+  explicit AdminQueue(int32_t version);
 
-  static int remove(const std::string& version);
+  static int remove(int32_t version);
 
   ~AdminQueue();
 
