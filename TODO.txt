@@ -1,0 +1,74 @@
+
+mutex on asd/edge + keep EdgeQueue ref counts to ensure it not released until open iocb exist
+API for edge - inProgress
+record cpu util
+record latency breakdown
+measure sendTime/callbackTime = numConnThreads/numRespThreads
+set XIO_OPTNAME_LOG_FN & other opt
+
+BUG
+* keepalive destroys session (OR) all disconnect destroys session
+* maxoutstanding io 64 doesnt work
+* server-side error if clients quickly connect-disconnect with shared session ptr
+* xio_connect must wait until connection established before doing send_request
+* handle errors when some iocb in batch fail and others submitted
+
+add tests
+get 16k numbers
+get 4k updated numbers
+ - server waitTime, srvTime
+ - client shmemQueueTime, sendTime, callbackTime
+ - diff between sendTimer - recvTimer = netTime
+
+Optim
+* change boost shmem queue to something else
+
+Optimizations
+* add more negotiation info to opening messages between gateway-host and
+     edge-gateway (what is maxoutstanding io, how many portals)
+* destroy Edgequeue if pid has crashed
+
+
+=========
+
+change RoraGateway::run to not do join
+
+1) Add test if edge pid disappears to ensure cleanup
+1) TEST for eventfd on NetworkXioClient
+1) Merge multiread into xioportal_nowq
+1) check owner tid = tid calling aio_wait/aio_read
+1) Use IOV_PTR consistently -forego batchsize = 4
+3) portal of threads which read from shmem queue 
+4) TEST shared session fails on rapid start-stop
+6) TEST for half request failures within an aio_readv
+7) kill client, kill server and test shutdown
+*) configure xio_log_fn on server and client
+*) improve 1 client async io perf for server
+
+http://www.boost.org/doc/libs/1_42_0/doc/html/program_options/tutorial.html
+
+http://stackoverflow.com/questions/15552284/boostprogram-options-how-to-ignore-unknown-parameters
+
+https://github.com/openvstorage/volumedriver/tree/6c0477a13e3b0fb42316de3ce4a9017aa82840db/src/filesystem
+
+https://github.com/accelio/accelio/issues/132
+
+ADD DOC
+One client in one process will only talk to one URI
+One client can open connxn to all portals and then round-robin internally
+
+write adapter switch between direct/indirect send
+
+disable flow control ?
+
+define assign_data_in_buf for RDMA
+
+XIO_OPTNAME_MAX_INLINE_XIO_HEADER
+XIO_OPTNAME_MAX_INLINE_XIO_DATA
+XIO_OPTNAME_CONFIG_MEMPOOL
+
+start and stop portals dynamically
+
+testing 
+multiple clients, multiple servers
+long runs
