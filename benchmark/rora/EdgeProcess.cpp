@@ -1,4 +1,5 @@
 #include <rora/GatewayClient.h>
+#include <rora/GatewayProtocol.h>
 
 #include <util/Timer.h>
 #include <util/Stats.h>
