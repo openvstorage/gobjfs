@@ -199,6 +199,51 @@ void NetworkXioIOHandler::stopEventHandler() {
 
 /**
  * Called from NetworkXioServer's timer handler
+ *
+ * This function changes the submitSize of the underlying IOExecutor
+ *
+ * The Goal is to increase iops.  
+ * SSD iops depend on queue depth
+ * For instance, on sample NVME SSD
+ * queue depth = 16, iops = 130K 
+ * queue depth = 24, iops = 180K 
+ *
+ * Assumption: we do not know how much outstanding IO each client can send,
+ * OR whether the queueing network is closed-loop or open-loop
+ *
+ * Open questions
+ * 1) What are the iops at various queue depths when multiple CPU cores
+ *    are simultaneously submitting IO?
+ * 2) How to find the stable point for IOPS when input rate varies
+ * 3) Should we coordinate changes to minSubmitSize of all IOExecutor 
+ *    or vary each one individually (as is done right now)
+ *
+ * The following parameters recorded in IOExecutor stats can be considered
+ * while dynamically varying submitSize
+ *    a) iops recorded in last time quantum by this IOExecutor
+ *    b) interArrival time between requests 
+ *    c) numExternalFlushes = flushed after timeout when there was not enuf io
+ *    d) numInlineFlushes = flushed when batch was full
+ *    e) numCompletionFlushes = flushed after kernel finished previous batch
+ *    f) numProcessedInLoop = in the last second.  This is less than or equal to minSubmitSize
+ *
+ * How to optimize batch size without knowing total requests a client can possibly send ?
+ * We can estimate a fraction of the total IO requests 
+ * Total requests at any instant on server = numInRequestQueue 
+ *     + numSubmittedToKernel 
+ *     + numCompleted 
+ * We have no estimate of the IO requests being queued on client side
+ * unless the client explicitly signals that at the start.
+ *
+ * Observations:
+ * 1) we want to increase minSubmitSize as much as possible
+ * 2) if numExternalFlushes increase, it means timeouts have increased
+ *    and there are not enough requests to meet batch size (minSubmitSize).
+ * 3) if numProcessedInLoop is not within fraction of minSubmitSize, it means 
+ *    batch size (minSubmitSize) is too high
+ * 4) interarrival time between requests = inversely proportional to iops
+ * 5) if interarrival deviation increases (input is jittery), it means
+ *    batchSize may be too high ??
  */
 void NetworkXioIOHandler::runTimerHandler()
 {
@@ -222,18 +267,18 @@ void NetworkXioIOHandler::runTimerHandler()
       {
 		    float submitDiff = ((float)minSubmitSz - numProcessedInLoopAvg);
         if (submitDiff > 1.0f) {
-          minSubmitSz -= (size_t)submitDiff;
-			    // batchSize set too high
-			    // load has decreased ? 
-			     cond = "too_high";
-          } else if (ioexecPtr_->stats_.numExternalFlushes_ > (ioexecPtr_->stats_.numInlineFlushes_/3)) {
+            minSubmitSz -= (size_t)submitDiff;
+		    // batchSize set too high
+		    // load has decreased ? 
+            cond = "too_high";
+        } else if (ioexecPtr_->stats_.numExternalFlushes_ > (ioexecPtr_->stats_.numInlineFlushes_/3)) {
             minSubmitSz -= 1;
-			      // if flushes due to timeout are too high, then reduce batchsize
-			      cond = "timeouts";
+	        // if flushes due to timeout are too high, then reduce batchsize
+	        cond = "timeouts";
           } else {
-		        ssize_t diffOps = currentOps - prevOps_;
-			      size_t diff = std::abs(diffOps);
-			      if (diff > prevOps_/10) {
+            ssize_t diffOps = currentOps - prevOps_;
+	        size_t diff = std::abs(diffOps);
+   	        if (diff > prevOps_/10) {
               ssize_t diffSubmitSz = minSubmitSz - prevMinSubmitSz_;
               // if ops incr after submitSz incr OR 
               // ops decr after submitSz decr 
@@ -247,19 +292,19 @@ void NetworkXioIOHandler::runTimerHandler()
                 cond = "diffn";
               }
             } else {
-            minSubmitSz += 1;
-            cond = "rand";
+              minSubmitSz += 1;
+              cond = "rand";
             }
           }
           if (minSubmitSz > 0) {
-		        prevMinSubmitSz_ = ioexecPtr_->minSubmitSize();
+		    prevMinSubmitSz_ = ioexecPtr_->minSubmitSize();
             ioexecPtr_->setMinSubmitSize(minSubmitSz);
             minSubmitSizeStats_ = minSubmitSz;
           }
         }
         TimerPrint t{currentOps, 
           prevMinSubmitSz_,
-		      cond,
+		  cond,
           numProcessedInLoopAvg,
           ioexecPtr_->stats_.interArrivalNsec_.variance(),
           ioexecPtr_->stats_.numExternalFlushes_,
