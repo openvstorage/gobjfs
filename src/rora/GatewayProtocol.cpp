@@ -80,6 +80,20 @@ GatewayMsg createReadRequest(
   return gmsg;
 }
 
+GatewayMsg createReadResponse(EdgeQueue* edgePtr,
+  gobjfs::xio::giocb* iocb,
+  int retval) {
+  GatewayMsg respMsg;
+  edgePtr->GatewayMsg_from_giocb(respMsg, *iocb, retval);
+  return respMsg;
+}
+
+GatewayMsg createInvalidResponse(int pid, int retval) {
+  GatewayMsg adminResp;
+  adminResp.opcode_ = Opcode::BAD_OPCODE_RESP;
+  return adminResp;
+}
+
 GatewayMsg createAddEdgeRequest(size_t maxOutstanding) {
   GatewayMsg adminMsg;
   adminMsg.opcode_ = Opcode::ADD_EDGE_REQ;
@@ -88,11 +102,23 @@ GatewayMsg createAddEdgeRequest(size_t maxOutstanding) {
   return adminMsg;
 }
 
+GatewayMsg createAddEdgeResponse(int pid, int retval) {
+  GatewayMsg adminResp;
+  adminResp.opcode_ = Opcode::ADD_EDGE_RESP;
+  return adminResp;
+}
+
 GatewayMsg createDropEdgeRequest() {
   GatewayMsg adminMsg;
   adminMsg.opcode_ = Opcode::DROP_EDGE_REQ;
   adminMsg.edgePid_ = getpid();
   return adminMsg;
+}
+
+GatewayMsg createDropEdgeResponse(int pid, int retval) {
+  GatewayMsg adminResp;
+  adminResp.opcode_ = Opcode::DROP_EDGE_RESP;
+  return adminResp;
 }
 
 GatewayMsg createAddASDRequest(const std::string& transport,
@@ -107,6 +133,12 @@ GatewayMsg createAddASDRequest(const std::string& transport,
   return adminMsg;
 }
 
+GatewayMsg createAddASDResponse(int retval) {
+  GatewayMsg adminResp;
+  adminResp.opcode_ = Opcode::ADD_ASD_RESP;
+  return adminResp;
+}
+
 GatewayMsg createDropASDRequest(const std::string& transport,
     const std::string& ipAddress,
     int port) {
@@ -117,6 +149,12 @@ GatewayMsg createDropASDRequest(const std::string& transport,
   adminMsg.port_ = port;
   adminMsg.edgePid_ = getpid();
   return adminMsg;
+}
+
+GatewayMsg createDropASDResponse(int retval) {
+  GatewayMsg adminResp;
+  adminResp.opcode_ = Opcode::DROP_ASD_RESP;
+  return adminResp;
 }
 
 }

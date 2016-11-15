@@ -137,8 +137,6 @@ RoraGateway::ASDInfo::ASDInfo(RoraGateway* rgPtr,
     ctxVec_.push_back(ctx);
 
     // for each ASD connection, add an event to monitor for read completions
-    // TODO need to call dropEvent ?
-
     auto callbackCtx = std::make_shared<ASDInfo::CallbackInfo>();
     callbackCtx->asdPtr_ = this;
     callbackCtx->connIdx_ = idx;
@@ -209,17 +207,17 @@ void RoraGateway::ASDInfo::clearStats() {
 // ============== EDGEINFO ===========================
 
 EdgeQueueSPtr RoraGateway::EdgeInfo::find(int pid) {
-  std::unique_lock<std::mutex> l(mutex_);
-  auto iter = catalog_.find(pid);
-  if (iter != catalog_.end()) {
+  std::unique_lock<std::mutex> l(edgeRegistryMutex_);
+  auto iter = edgeRegistry_.find(pid);
+  if (iter != edgeRegistry_.end()) {
     return iter->second;
   }
   return nullptr;
 }
 
 int RoraGateway::EdgeInfo::drop(int pid) {
-  std::unique_lock<std::mutex> l(mutex_);
-  size_t sz = catalog_.erase(pid);
+  std::unique_lock<std::mutex> l(edgeRegistryMutex_);
+  size_t sz = edgeRegistry_.erase(pid);
   if (sz != 1) {
     LOG(ERROR) << "Failed to find edge entry for pid=" << pid;
     return -1;
@@ -228,33 +226,33 @@ int RoraGateway::EdgeInfo::drop(int pid) {
 }
 
 size_t RoraGateway::EdgeInfo::size() const {
-  std::unique_lock<std::mutex> l(mutex_);
-  return catalog_.size();
+  std::unique_lock<std::mutex> l(edgeRegistryMutex_);
+  return edgeRegistry_.size();
 }
 
 int RoraGateway::EdgeInfo::insert(EdgeQueueSPtr edgePtr) {
-  std::unique_lock<std::mutex> l(mutex_);
-  catalog_.insert(std::make_pair(edgePtr->pid_, edgePtr));
+  std::unique_lock<std::mutex> l(edgeRegistryMutex_);
+  edgeRegistry_.insert(std::make_pair(edgePtr->pid_, edgePtr));
   return 0;
 }
 
 int RoraGateway::EdgeInfo::cleanupForDeadEdgeProcesses() {
-  std::unique_lock<std::mutex> l(mutex_, std::try_to_lock);
+  std::unique_lock<std::mutex> l(edgeRegistryMutex_, std::try_to_lock);
 
   if (!l.owns_lock()) {
     LOG(WARNING) << "failed to obtain edge catalog mutex.  returning";
     return 0;
   }
-  if (!catalog_.size()) {
+  if (!edgeRegistry_.size()) {
     return 0;
   }
-  for (auto& edgeIter : catalog_) {
+  for (auto& edgeIter : edgeRegistry_) {
     if (kill(edgeIter.second->pid_, 0) == ESRCH) {
       LOG(ERROR) << "pid=" << edgeIter.second->pid_ << " is dead";
       // TODO detach the EdgeQueue
     }
   }
-  LOG(INFO) << "watchdog found registered edge processes=" << catalog_.size();
+  LOG(INFO) << "watchdog found registered edge processes=" << edgeRegistry_.size();
   return 0;
 }
 //
@@ -402,12 +400,12 @@ int RoraGateway::watchDogFunc(int fd, uintptr_t userCtx) {
 
   {
     // Print stats for writes to each EdgeQueue 
-    std::unique_lock<std::mutex> l(edges_.mutex_);
-    if (edges_.catalog_.size() == 0) {
+    std::unique_lock<std::mutex> l(edges_.edgeRegistryMutex_);
+    if (edges_.edgeRegistry_.size() == 0) {
       // return early if no registered processes
       return 0;
     }
-    for (auto& edgeIter : edges_.catalog_) {
+    for (auto& edgeIter : edges_.edgeRegistry_) {
       auto& edgeQueue = edgeIter.second;
       auto str = edgeQueue->getStats();
       edgeQueue->clearStats();
@@ -468,10 +466,8 @@ int RoraGateway::adminThreadFunc() {
             ret = -1;
           }
 
-          GatewayMsg respMsg;
-          respMsg.opcode_ = Opcode::ADD_ASD_RESP;
           // TODO set retval
-          edgePtr->writeResponse(respMsg);
+          edgePtr->writeResponse(createAddASDResponse(ret));
 
           break;
         }
@@ -492,9 +488,7 @@ int RoraGateway::adminThreadFunc() {
             ret = -1;
           }
 
-          GatewayMsg respMsg;
-          respMsg.opcode_ = Opcode::DROP_ASD_RESP;
-          edgePtr->writeResponse(respMsg);
+          edgePtr->writeResponse(createDropASDResponse(ret));
 
           break;
         }
@@ -505,9 +499,7 @@ int RoraGateway::adminThreadFunc() {
           assert(edgePtr->pid_ == adminMsg.edgePid_);
           edges_.insert(edgePtr);
 
-          GatewayMsg respMsg;
-          respMsg.opcode_ = Opcode::ADD_EDGE_RESP;
-          edgePtr->writeResponse(respMsg);
+          edgePtr->writeResponse(createAddEdgeResponse(adminMsg.edgePid_, ret));
           break;
         }
       case Opcode::DROP_EDGE_REQ:
@@ -516,24 +508,29 @@ int RoraGateway::adminThreadFunc() {
           // TODO add ref counting to ensure edge queue doesnt go away
           // while there are outstanding requests
           auto edgePtr = edges_.find(adminMsg.edgePid_);
-
-          // TODO set retval 
-          GatewayMsg respMsg;
-          respMsg.opcode_ = Opcode::DROP_EDGE_RESP;
-          edgePtr->writeResponse(respMsg);
+          int ret = -1;
 
           if (edgePtr) {
+            ret = 0;
+            edgePtr->writeResponse(createDropEdgeResponse(adminMsg.edgePid_, ret));
             // cannot drop edge until response sent back
-            int ret = edges_.drop(adminMsg.edgePid_);
-            (void) ret;
+            ret = edges_.drop(adminMsg.edgePid_);
           } else {
+            ret = -1;
+            edgePtr->writeResponse(createDropEdgeResponse(adminMsg.edgePid_, ret));
             LOG(ERROR) << " could not find queue for pid=" << adminMsg.edgePid_;
           }
           break;
         }
       default:
         {
-          LOG(ERROR) << " admin got unknown opcode=" << adminMsg.opcode_;
+          auto edgePtr = edges_.find(adminMsg.edgePid_);
+          if (edgePtr) {
+            edgePtr->writeResponse(createInvalidResponse(adminMsg.edgePid_, -1));
+          } else {
+            LOG(ERROR) << " cannot find edge queue for pid=" << adminMsg.edgePid_;
+          }
+          LOG(ERROR) << " admin got unknown opcode=" << adminMsg.opcode_ << " from pid=" << adminMsg.edgePid_;
           break;
         }
       }
@@ -703,12 +700,12 @@ int RoraGateway::handleReadCompletion(int fd, uintptr_t ptr) {
       auto edgePtr = edges_.find(pid);
       if (edgePtr) {
 
-        GatewayMsg respMsg;
-        edgePtr->GatewayMsg_from_giocb(respMsg, *iocb, 
-            aio_return(iocb));
         LOG(DEBUG) << "send response to pid=" << pid 
           << ",ret=" << aio_return(iocb)
           << ",filename=" << iocb->filename;
+        GatewayMsg respMsg;
+        edgePtr->GatewayMsg_from_giocb(respMsg, *iocb, 
+            aio_return(iocb));
         auto ret = edgePtr->writeResponse(respMsg);
         assert(ret == 0);
       } else {

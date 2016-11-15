@@ -10,10 +10,17 @@
 namespace bip = boost::interprocess;
 
 namespace gobjfs {
+  namespace xio {
+    struct giocb; // forward declare
+  }
+};
+
+namespace gobjfs {
 namespace rora {
 
 #define REQ_START 1000
 #define RESP_START 2000
+#define BAD_START 9000
 
 enum Opcode {
   INVALID = 0,
@@ -29,7 +36,9 @@ enum Opcode {
   DROP_EDGE_RESP,
   ADD_ASD_RESP,
   DROP_ASD_RESP,
-  READ_RESP
+  READ_RESP,
+
+  BAD_OPCODE_RESP = BAD_START
 };
 
 class EdgeQueue;
@@ -115,12 +124,18 @@ struct GatewayMsg {
 GatewayMsg createAddASDRequest(const std::string& transport,
     const std::string& ipAddress,
     int port);
+GatewayMsg createAddASDResponse(int retval);
+
 GatewayMsg createDropASDRequest(const std::string& transport,
     const std::string& ipAddress,
     int port);
+GatewayMsg createDropASDResponse(int retval);
 
 GatewayMsg createAddEdgeRequest(size_t maxOutstanding);
+GatewayMsg createAddEdgeResponse(int pid, int retval);
+
 GatewayMsg createDropEdgeRequest();
+GatewayMsg createDropEdgeResponse(int pid, int retval);
 
 GatewayMsg createReadRequest(
     EdgeQueue* edgeQueue,
@@ -135,6 +150,12 @@ GatewayMsg createReadRequest(
     const std::vector<std::string> &filenameVec, 
     std::vector<off_t> &offsetVec, 
     std::vector<size_t> &sizeVec);
+
+GatewayMsg createReadResponse(EdgeQueue* edgeQueue,
+    gobjfs::xio::giocb* iocb,
+    ssize_t retval);
+
+GatewayMsg createInvalidResponse(int pid, int retval);
 
 }
 }

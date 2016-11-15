@@ -28,11 +28,12 @@ class RoraGateway {
     size_t watchDogTimeSec_{30};
     size_t maxAdminQueueLen_ {256};
     size_t maxASDQueueLen_ {256};
-    // client threads to connect to multiple portals
     size_t maxEPollerThreads_{1}; 
+    // number of client threads to connect to multiple portals
     size_t maxThreadsPerASD_{1}; 
+    // number of connections to rora host
     size_t maxConnPerASD_{1}; 
-    bool isDaemon_{false};
+    bool isDaemon_{false}; // unused
     int32_t version_{1};
 
     int readConfig(const std::string& configFileName,
@@ -50,10 +51,10 @@ class RoraGateway {
 
   struct EdgeInfo {
     // map from edge pid to edge queue
-    std::map<int, EdgeQueueSPtr> catalog_;
+    std::map<int, EdgeQueueSPtr> edgeRegistry_;
 
-    // mutex protects catalog insert/delete done by multiple asd threads
-    mutable std::mutex mutex_;
+    // mutex protects edge registry 
+    mutable std::mutex edgeRegistryMutex_;
 
     // polls for completed read requests from all asds
     gobjfs::os::EPoller epoller_;
@@ -107,6 +108,7 @@ class RoraGateway {
     std::vector<gobjfs::xio::client_ctx_ptr> ctxVec_;
     std::vector<std::shared_ptr<ASDThreadInfo>> asdThreadVec_;
 
+    // set of edge pids which are acccessing this ASD
     std::set<int> edgesUsingMe_;
 
     // info passed to EPoller.addEvent
