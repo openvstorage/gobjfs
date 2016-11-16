@@ -643,9 +643,7 @@ int RoraGateway::ASDThreadInfo::threadFunc(RoraGateway* rgPtr, ASDInfo* asdInfo,
               auto edgePtr = rgPtr->edges_.find(iocb->user_ctx);
   
               if (edgePtr) {
-                GatewayMsg respMsg;
-                edgePtr->GatewayMsg_from_giocb(respMsg, *iocb, -EIO);
-                auto ret = edgePtr->writeResponse(respMsg);
+                auto ret = edgePtr->writeResponse(createReadResponse(edgePtr.get(), iocb, -EIO));
                 assert(ret == 0);
               } else {
                 LOG(ERROR) << "could not find edgeQueue for pid=" << iocb->user_ctx;
@@ -703,10 +701,7 @@ int RoraGateway::handleReadCompletion(int fd, uintptr_t ptr) {
         LOG(DEBUG) << "send response to pid=" << pid 
           << ",ret=" << aio_return(iocb)
           << ",filename=" << iocb->filename;
-        GatewayMsg respMsg;
-        edgePtr->GatewayMsg_from_giocb(respMsg, *iocb, 
-            aio_return(iocb));
-        auto ret = edgePtr->writeResponse(respMsg);
+        auto ret = edgePtr->writeResponse(createReadResponse(edgePtr.get(), iocb, aio_return(iocb)));
         assert(ret == 0);
       } else {
         LOG(ERROR) << "not found edge queue for pid=" << pid;

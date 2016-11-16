@@ -82,7 +82,7 @@ GatewayMsg createReadRequest(
 
 GatewayMsg createReadResponse(EdgeQueue* edgePtr,
   gobjfs::xio::giocb* iocb,
-  int retval) {
+  ssize_t retval) {
   GatewayMsg respMsg;
   edgePtr->GatewayMsg_from_giocb(respMsg, *iocb, retval);
   return respMsg;
