@@ -18,6 +18,8 @@ namespace gobjfs {
 namespace gobjfs {
 namespace rora {
 
+struct eioRequest;
+
 #define REQ_START 1000
 #define RESP_START 2000
 #define BAD_START 9000
@@ -136,6 +138,10 @@ GatewayMsg createAddEdgeResponse(int pid, int retval);
 
 GatewayMsg createDropEdgeRequest();
 GatewayMsg createDropEdgeResponse(int pid, int retval);
+
+GatewayMsg createReadRequest(
+    EdgeQueue* edgePtr,
+    const eioRequest& req);
 
 GatewayMsg createReadRequest(
     EdgeQueue* edgeQueue,

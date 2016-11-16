@@ -21,6 +21,10 @@ struct eiocb {
 struct eioRequest {
     std::vector<eiocb*> eiocbVec_;
     std::vector<ssize_t> retvalVec_;
+
+    size_t size() const {
+        return eiocbVec_.size();
+    }
 };
 
 struct GatewayClient {

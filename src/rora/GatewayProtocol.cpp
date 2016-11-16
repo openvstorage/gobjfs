@@ -1,4 +1,5 @@
 #include "GatewayProtocol.h"
+#include <rora/GatewayClient.h>
 #include <rora/EdgeQueue.h>
 
 namespace gobjfs {
@@ -26,6 +27,29 @@ GatewayMsg::~GatewayMsg() {
   // check segment was deallocated in case of READ_REQ
   //assert(rawbuf_ == nullptr);
   //assert(buf_ == 0);
+}
+
+GatewayMsg createReadRequest(
+    EdgeQueue* edgePtr,
+    const eioRequest& req) {
+
+  GatewayMsg gmsg(req.size());
+
+  gmsg.opcode_ = Opcode::READ_REQ;
+  gmsg.edgePid_ = getpid();
+  //gmsg.fileNumber_ = fileNumber;
+  for (auto& aReq : req.eiocbVec_) {
+    gmsg.filenameVec_.push_back(aReq->filename_);
+    gmsg.offsetVec_.push_back(aReq->offset_);
+    gmsg.sizeVec_.push_back(aReq->size_);
+    auto ptr = edgePtr->alloc(aReq->size_);
+    gmsg.rawbufVec_.push_back(ptr);
+    gmsg.bufVec_.push_back(edgePtr->segment_->get_handle_from_address(ptr));
+  }
+
+  gmsg.numElems_ = req.size();
+
+  return gmsg;
 }
 
 GatewayMsg createReadRequest(
