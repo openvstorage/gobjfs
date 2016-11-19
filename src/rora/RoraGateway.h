@@ -5,6 +5,7 @@
 #include <rora/AdminQueue.h>
 #include <util/EPoller.h>
 #include <util/Stats.h>
+#include <util/Timer.h>
 #include <util/TimerNotifier.h>
 #include <gobjfs_client.h>
 
@@ -82,11 +83,28 @@ class RoraGateway {
    * instead of switching threads and examing local variables
    */
   struct ASDThreadInfo : public ThreadInfo {
+    // gather requests from asd queue into this vector
+    // before submitting to rora host
     std::vector<gobjfs::xio::giocb*> pending_giocb_vec_;
     int timeout_ms_ = 1;
     int numIdleLoops_ = 0;
     uint32_t numLoops_ = 0;
     size_t nextConnIdx_ = 0;
+    // used to record serviceTime_ below
+    gobjfs::stats::Timer sendTimer_;
+
+    struct Statistics {
+      // how many requests were submitted in aio_readv
+      gobjfs::stats::StatsCounter<uint64_t> submitBatchSize_;
+
+      // time interval between successive request submission to rora host
+      gobjfs::stats::StatsCounter<int64_t> serviceTime_;
+
+      void clear() {
+          serviceTime_.reset();
+          submitBatchSize_.reset();
+      }
+    }stats_;
 
     /**
      * thread which forwards read requests to ASD
@@ -124,9 +142,6 @@ class RoraGateway {
 
     // per asdqueue stats
     struct Statistics {
-      // how many requests were submitted in aio_readv
-      // TODO : many threads can update this variable
-      gobjfs::stats::StatsCounter<uint64_t> submitBatchSize_;
       // how many responses were received together in callback
       gobjfs::stats::StatsCounter<uint64_t> callbackBatchSize_;
     }stats_;

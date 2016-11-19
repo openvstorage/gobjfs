@@ -171,8 +171,11 @@ public:
 
     gobjfs::stats::StatsCounter<uint32_t> numCompletionEvents_;
 
+    // flushes done by caller outside IOExecutor
     uint32_t numExternalFlushes_ = 0;
+    // flushes done when batch size was met
     uint32_t numInlineFlushes_ = 0;
+    // flushes done after kernel free some io_ctx
     uint32_t numCompletionFlushes_ = 0;
 
     uint32_t numTimesCtxEmpty_ = 0;

@@ -4,6 +4,7 @@
 
 #include <boost/program_options.hpp>
 #include <gobjfs_log.h>
+#include <sstream>
 #include <util/lang_utils.h>
 #include <util/os_utils.h>
 #include <signal.h>
@@ -199,7 +200,9 @@ int RoraGateway::ASDInfo::destroyAll(RoraGateway* rgPtr) {
 }
 
 void RoraGateway::ASDInfo::clearStats() {
-  stats_.submitBatchSize_.reset();
+  for (auto& threadInfo : asdThreadVec_) {
+    threadInfo->stats_.clear();
+  }
   stats_.callbackBatchSize_.reset();
   queue_->clearStats();
 }
@@ -417,10 +420,16 @@ int RoraGateway::watchDogFunc(int fd, uintptr_t userCtx) {
   // TODO may need mutex once dynamic registration of ASD is allowed
   for (auto& asdInfo : asdVec_) {
     auto str = asdInfo->queue_->getStats();
-    LOG(INFO) << "ASD=" << (void*)asdInfo.get() << ":" << asdInfo->ipAddress_ << ":" << asdInfo->port_  
+    std::ostringstream os;
+    os << "ASD=" << (void*)asdInfo.get() << ":" << asdInfo->ipAddress_ << ":" << asdInfo->port_  
       << ",queueStats=" << str
-      << ",submitBatchSize=" << asdInfo->stats_.submitBatchSize_
       << ",callbackBatchSize=" << asdInfo->stats_.callbackBatchSize_;
+    for (auto& threadInfo : asdInfo->asdThreadVec_) {
+       os  << "{submitBatchSize=" << threadInfo->stats_.submitBatchSize_
+            << "serviceTime=" << threadInfo->stats_.serviceTime_
+            << "}";
+    }
+    LOG(INFO) << os.str();
     asdInfo->clearStats();
   }
   
@@ -554,6 +563,8 @@ int RoraGateway::ASDThreadInfo::threadFunc(RoraGateway* rgPtr, ASDInfo* asdInfo,
 
   nextConnIdx_ = thrIdx;
 
+  sendTimer_.reset();
+
   while (1) {
 
     int ret = 0;
@@ -630,9 +641,8 @@ int RoraGateway::ASDThreadInfo::threadFunc(RoraGateway* rgPtr, ASDInfo* asdInfo,
       if ((pending_giocb_vec_.size() >= rgPtr->edges_.size()) || 
           ((numIdleLoops_ == 1) && pending_giocb_vec_.size())) {
 
-          asdInfo->stats_.submitBatchSize_ = pending_giocb_vec_.size();
-
           client_ctx_ptr& ctx = asdInfo->ctxVec_[nextConnIdx_];
+          const auto submitSize = pending_giocb_vec_.size();
 
           auto aio_ret = aio_readv(ctx, pending_giocb_vec_);
           if (aio_ret != 0) {
@@ -653,6 +663,12 @@ int RoraGateway::ASDThreadInfo::threadFunc(RoraGateway* rgPtr, ASDInfo* asdInfo,
           } else  {
             aio_wait_all(ctx);
           }
+
+          // update stats
+          stats_.submitBatchSize_ = submitSize;
+          stats_.serviceTime_ = sendTimer_.elapsedMicroseconds();
+          sendTimer_.reset();
+
           pending_giocb_vec_.clear();
           // number of threads is less than or equal to number of connections
           // rotate the connection used by this thread for sending msgs
@@ -672,6 +688,8 @@ int RoraGateway::ASDThreadInfo::threadFunc(RoraGateway* rgPtr, ASDInfo* asdInfo,
   assert(pending_giocb_vec_.empty());
   stopped_ = true;
   LOG(INFO) << "stopped asd thread=" << threadId_
+    << ",submitSize=" << stats_.submitBatchSize_
+    << ",serviceTime=" << stats_.serviceTime_
     << ",using thread slot=" << thrIdx 
     << ",uri=" << asdInfo->ipAddress_ << ":" << asdInfo->port_;
   return 0;
