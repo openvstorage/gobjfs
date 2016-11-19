@@ -423,10 +423,11 @@ int RoraGateway::watchDogFunc(int fd, uintptr_t userCtx) {
     std::ostringstream os;
     os << "ASD=" << (void*)asdInfo.get() << ":" << asdInfo->ipAddress_ << ":" << asdInfo->port_  
       << ",queueStats=" << str
-      << ",callbackBatchSize=" << asdInfo->stats_.callbackBatchSize_;
+      << ",callbackBatchSize=" << asdInfo->stats_.callbackBatchSize_
+      << ",callbackTime(us)=" << asdInfo->stats_.callbackTime_us_;
     for (auto& threadInfo : asdInfo->asdThreadVec_) {
        os  << "{submitBatchSize=" << threadInfo->stats_.submitBatchSize_
-            << "serviceTime=" << threadInfo->stats_.serviceTime_
+            << "serviceTime(us)=" << threadInfo->stats_.serviceTime_us_
             << "}";
     }
     LOG(INFO) << os.str();
@@ -666,7 +667,7 @@ int RoraGateway::ASDThreadInfo::threadFunc(RoraGateway* rgPtr, ASDInfo* asdInfo,
 
           // update stats
           stats_.submitBatchSize_ = submitSize;
-          stats_.serviceTime_ = sendTimer_.elapsedMicroseconds();
+          stats_.serviceTime_us_ = sendTimer_.elapsedMicroseconds();
           sendTimer_.reset();
 
           pending_giocb_vec_.clear();
@@ -688,10 +689,13 @@ int RoraGateway::ASDThreadInfo::threadFunc(RoraGateway* rgPtr, ASDInfo* asdInfo,
   assert(pending_giocb_vec_.empty());
   stopped_ = true;
   LOG(INFO) << "stopped asd thread=" << threadId_
-    << ",submitSize=" << stats_.submitBatchSize_
-    << ",serviceTime=" << stats_.serviceTime_
     << ",using thread slot=" << thrIdx 
-    << ",uri=" << asdInfo->ipAddress_ << ":" << asdInfo->port_;
+    << ",uri=" << asdInfo->ipAddress_ << ":" << asdInfo->port_
+    << ",submitSize=" << stats_.submitBatchSize_
+    << ",serviceTime(us)=" << stats_.serviceTime_us_
+    << ",callbackSize=" << asdInfo->stats_.callbackBatchSize_
+    << ",callbackTime(us)=" << asdInfo->stats_.callbackTime_us_
+    ;
   return 0;
 }
 
@@ -703,13 +707,13 @@ int RoraGateway::handleReadCompletion(int fd, uintptr_t ptr) {
   ASDInfo* asdPtr = callbackCtx->asdPtr_;
   client_ctx_ptr& ctx = asdPtr->ctxVec_[callbackCtx->connIdx_];
 
-  std::vector<giocb*> iocb_vec;
+  std::vector<giocb*> completed_iocb_vec;
   int times = 1; // ignored right now
-  int r = aio_getevents(ctx, times, iocb_vec);
+  gobjfs::stats::Timer callbackTimer(true);
+  int r = aio_getevents(ctx, times, completed_iocb_vec);
 
   if (r == 0) {
-    asdPtr->stats_.callbackBatchSize_ = iocb_vec.size();
-    for (auto& iocb : iocb_vec) {
+    for (auto& iocb : completed_iocb_vec) {
 
       const int pid = (int) iocb->user_ctx;
 
@@ -719,6 +723,8 @@ int RoraGateway::handleReadCompletion(int fd, uintptr_t ptr) {
         LOG(DEBUG) << "send response to pid=" << pid 
           << ",ret=" << aio_return(iocb)
           << ",filename=" << iocb->filename;
+        // each iocb may need to be send back to a different edge
+        // batching all responses to same edge would require extra effort here
         auto ret = edgePtr->writeResponse(createReadResponse(edgePtr.get(), iocb, aio_return(iocb)));
         assert(ret == 0);
       } else {
@@ -728,7 +734,14 @@ int RoraGateway::handleReadCompletion(int fd, uintptr_t ptr) {
       aio_finish(iocb);
       delete iocb;
     }
-    doneCount += iocb_vec.size();
+
+    const auto completedSize = completed_iocb_vec.size();
+    if (completedSize) {
+        doneCount += completedSize;
+        // update stats
+        asdPtr->stats_.callbackBatchSize_ = completedSize;
+        asdPtr->stats_.callbackTime_us_ = callbackTimer.elapsedMicroseconds();
+    }
   }
   return 0;
 }

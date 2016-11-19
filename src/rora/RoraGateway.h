@@ -97,11 +97,11 @@ class RoraGateway {
       // how many requests were submitted in aio_readv
       gobjfs::stats::StatsCounter<uint64_t> submitBatchSize_;
 
-      // time interval between successive request submission to rora host
-      gobjfs::stats::StatsCounter<int64_t> serviceTime_;
+      // microsec time between successive request submission to rora host
+      gobjfs::stats::StatsCounter<int64_t> serviceTime_us_;
 
       void clear() {
-          serviceTime_.reset();
+          serviceTime_us_.reset();
           submitBatchSize_.reset();
       }
     }stats_;
@@ -144,6 +144,8 @@ class RoraGateway {
     struct Statistics {
       // how many responses were received together in callback
       gobjfs::stats::StatsCounter<uint64_t> callbackBatchSize_;
+      // time(microsec) between aio_readv and writing responses to edge queues
+      gobjfs::stats::StatsCounter<int64_t> callbackTime_us_;
     }stats_;
 
     public:
