@@ -38,6 +38,7 @@ public:
   }
 
   void reset() { begin_ = Clock::now(); }
+  void clear() { reset(); }
 
   int64_t differenceMicroseconds(const Timer& older) const {
     return std::chrono::duration_cast<std::chrono::microseconds>(
