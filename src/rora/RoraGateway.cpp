@@ -426,8 +426,8 @@ int RoraGateway::watchDogFunc(int fd, uintptr_t userCtx) {
       << ",callbackBatchSize=" << asdInfo->stats_.callbackBatchSize_
       << ",callbackTime(us)=" << asdInfo->stats_.callbackTime_us_;
     for (auto& threadInfo : asdInfo->asdThreadVec_) {
-       os  << "{submitBatchSize=" << threadInfo->stats_.submitBatchSize_
-            << "serviceTime(us)=" << threadInfo->stats_.serviceTime_us_
+       os  << ",{submitBatchSize=" << threadInfo->stats_.submitBatchSize_
+            << ",serviceTime(us)=" << threadInfo->stats_.serviceTime_us_
             << "}";
     }
     LOG(INFO) << os.str();

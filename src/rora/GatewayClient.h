@@ -13,13 +13,14 @@ struct eiocb;
 
 struct eiocb {
     std::string filename_;
-    off_t offset_;
-    size_t size_;
-    void* buffer_;
+    off_t offset_{0};
+    size_t size_{0};
+    void* buffer_{nullptr}; // will be allocated internally
 };
 
 struct eioRequest {
-    std::vector<eiocb*> eiocbVec_;
+    int32_t asdIdx_{-1};
+    std::vector<std::unique_ptr<eiocb>> eiocbVec_;
     std::vector<ssize_t> retvalVec_;
 
     size_t size() const {
@@ -49,7 +50,10 @@ struct GatewayClient {
 
   ~GatewayClient();
 
-  int addASD(std::string transport, std::string ipAddress, int port);
+  /*
+   * @return asdIdx which has to be set in suAsequent eiocb requests
+   */
+  int32_t addASD(std::string transport, std::string ipAddress, int port);
 
   // synchronous read
   int read(eioRequest& req);
