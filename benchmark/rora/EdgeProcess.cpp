@@ -230,53 +230,44 @@ void RunContext::doRandomRead(GatewayClient* gc) {
   std::uniform_int_distribution<decltype(config.maxBlocks)> blockGenerator(
       0, config.maxBlocks - 1);
 
-  auto asdQueue = gc->asdQueueVec_.at(0).get();
   auto edgeQueue = gc->edgeQueue_.get();
 
   start();
 
   while (!isFinished()) {
 
-    Timer latencyTimer(true); // one timer for all batch
-
-    std::vector<off_t> offsetVec;
-    std::vector<size_t> sizeVec;
-    std::vector<std::string> filenameVec;
+    eioRequest submitReq;
+    submitReq.asdIdx_ = 0;
     // send read msg 
     // a batch may contains read offset for different files
     for (size_t batchIdx = 0; batchIdx < config.maxOutstandingIO; batchIdx ++) {
+      eiocb *iocb = new eiocb;
       const uint32_t fileNumber = filenumGen(seedGen);
-      filenameVec.push_back(fileMgr.getFilename(fileNumber));
-      sizeVec.push_back(config.blockSize);
-      offsetVec.push_back(blockGenerator(seedGen) * config.blockSize);
+      iocb->filename_ = fileMgr.getFilename(fileNumber);
+      iocb->offset_ = blockGenerator(seedGen) * config.blockSize;
+      iocb->size_ = config.blockSize;
+      submitReq.eiocbVec_.push_back(iocb);
     }
 
-    const auto ret = asdQueue->write(createReadRequest(edgeQueue, 1, filenameVec,
-      offsetVec,
-      sizeVec));
+    Timer latencyTimer(true); // one timer for all batch
+
+    auto ret = gc->asyncRead(submitReq);
     assert(ret == 0);
   
     for (size_t batchIdx = 0; batchIdx < config.maxOutstandingIO; batchIdx ++) {
       // get read response
-      GatewayMsg responseMsg(1);
-      const auto ret = edgeQueue->readResponse(responseMsg);
+      eioRequest completedReq;
+      ret = gc->waitForResponse(completedReq);
       assert(ret == 0);
 
       // check retval, errval, filename, offset, size match
       if (config.doMemCheck) {
-        /*
-        const std::string fileString((const char*)responseMsg.rawbuf_, 8); 
-        const std::string offsetString((const char*)responseMsg.rawbuf_ + 8, 8); 
-        assert(atoll(fileString.c_str()) == responseMsg.fileNumber_);
-        assert(atoll(offsetString.c_str()) == responseMsg.offset_);
-        */
       }
   
-      for (size_t idx = 0; idx < responseMsg.numElems(); idx ++) {
-        const bool hasFailed = (responseMsg.retvalVec_[idx] < 0);
-        incrementCount(hasFailed);
+      for (size_t idx = 0; idx < completedReq.eiocbVec_.size(); idx ++) {
+        incrementCount(completedReq.retvalVec_[idx] < 0);
         // free allocated shared segment
-        edgeQueue->free(responseMsg.rawbufVec_[idx]);
+        edgeQueue->free(completedReq.eiocbVec_[idx]->buffer_);
       }
     }
 

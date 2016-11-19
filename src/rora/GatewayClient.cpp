@@ -1,7 +1,6 @@
 #include <rora/GatewayClient.h>
 
 #include <unistd.h> // getpid
-#include <unistd.h> // getpid
 #include <rora/GatewayProtocol.h>
 
 namespace gobjfs {
@@ -51,8 +50,7 @@ int GatewayClient::addASD(std::string transport, std::string ipAddress, int port
         port);
 
     asdQueueVec_.push_back(std::move(asdPtr));
-
-    return 0;
+    return asdQueueVec_.size() - 1;
 }
 
 int GatewayClient::read(eioRequest& req) {
@@ -60,14 +58,33 @@ int GatewayClient::read(eioRequest& req) {
 }
 
 int GatewayClient::asyncRead(eioRequest& req) {
+    auto asdPtr = asdQueueVec_.at(req.asdIdx_).get();
+    return asdPtr->write(createReadRequest(edgeQueue_.get(), req));
     return 0;
 }
 
-int release(eioRequest& req) {
+int GatewayClient::release(eioRequest& completedReq) {
+    for (auto& eiocb : completedReq.eiocbVec_) {
+        edgeQueue_->free(eiocb->buffer_);
+    }
     return 0;
 }
 
-int waitForResponse(eioRequest& req) {
+int GatewayClient::waitForResponse(eioRequest& completedReq) {
+
+    GatewayMsg responseMsg(1);
+    const auto ret = edgeQueue_->readResponse(responseMsg);
+    assert(ret == 0);
+
+    for (size_t idx = 0; idx < responseMsg.numElems(); idx ++) {
+        eiocb* iocb = new eiocb;;
+        completedReq.retvalVec_.push_back(responseMsg.retvalVec_[idx]);
+        iocb->filename_ = responseMsg.filenameVec_[idx];
+        iocb->size_ = responseMsg.sizeVec_[idx];
+        iocb->offset_ = responseMsg.offsetVec_[idx];
+        iocb->buffer_ = responseMsg.rawbufVec_[idx];
+        completedReq.eiocbVec_.push_back(iocb);
+    }
     return 0;
 }
 
