@@ -234,17 +234,17 @@ void RunContext::doRandomRead(GatewayClient* gc) {
 
   while (!isFinished()) {
 
-    eioRequest submitReq;
+    EdgeIORequest submitReq;
     submitReq.asdIdx_ = 0;
     // send read msg 
     // a batch may contains read offset for different files
     for (size_t batchIdx = 0; batchIdx < config.maxOutstandingIO; batchIdx ++) {
-      eiocb *iocb = new eiocb;
+      EdgeIOCB *iocb = new EdgeIOCB;
       const uint32_t fileNumber = filenumGen(seedGen);
       iocb->filename_ = fileMgr.getFilename(fileNumber);
       iocb->offset_ = blockGenerator(seedGen) * config.blockSize;
       iocb->size_ = config.blockSize;
-      submitReq.eiocbVec_.push_back(std::unique_ptr<eiocb>(iocb));
+      submitReq.eiocbVec_.push_back(std::unique_ptr<EdgeIOCB>(iocb));
     }
 
     Timer latencyTimer(true); // one timer for all batch
@@ -254,7 +254,7 @@ void RunContext::doRandomRead(GatewayClient* gc) {
   
     for (size_t batchIdx = 0; batchIdx < config.maxOutstandingIO; batchIdx ++) {
       // get read response
-      eioRequest completedReq;
+      EdgeIORequest completedReq;
       ret = gc->waitForResponse(completedReq);
       assert(ret == 0);
 

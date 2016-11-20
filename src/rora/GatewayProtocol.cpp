@@ -31,7 +31,7 @@ GatewayMsg::~GatewayMsg() {
 
 GatewayMsg createReadRequest(
     EdgeQueue* edgePtr,
-    const eioRequest& req) {
+    const EdgeIORequest& req) {
 
   GatewayMsg gmsg(req.size());
 
