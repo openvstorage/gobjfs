@@ -56,6 +56,10 @@ int32_t CpuStats::getFromKernel(bool isProcess) {
   voluntaryCtxSwitch_ = usageInfo.ru_nvcsw;
   involuntaryCtxSwitch_ = usageInfo.ru_nivcsw;
 
+  float totalCpuTime = userTimeMicrosec_ + systemTimeMicrosec_;
+  // calc percentage cpu utilization
+  cpuUtil_ = (totalCpuTime * 100) / wallTimeMicrosec_;
+
   return err;
 }
 
@@ -100,6 +104,7 @@ std::string CpuStats::ToString() const {
   s << "{\"user_time(us)\":" << userTimeMicrosec_
     << ",\"system_time(us)\":" << systemTimeMicrosec_
     << ",\"wall_time(us)\":" << wallTimeMicrosec_
+    << ",\"cpu util(perc)\":" << cpuUtil_
     << ",\"vol ctx switch\":" << voluntaryCtxSwitch_
     << ",\"invol ctx switch\":" << involuntaryCtxSwitch_ << "}";
 
