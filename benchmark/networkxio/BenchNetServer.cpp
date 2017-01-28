@@ -22,6 +22,8 @@ but WITHOUT ANY WARRANTY of any kind.
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <signal.h> // SIGUSR1
+#include <sys/signalfd.h> // SIGUSR1
 #include <unistd.h>
 
 #include <gobjfs_log.h>
@@ -38,6 +40,7 @@ but WITHOUT ANY WARRANTY of any kind.
 
 #include <gobjfs_client.h>
 #include <networkxio/NetworkXioServer.h>
+#include <util/CpuStats.h>
 
 #include <boost/program_options.hpp>
 #include <boost/log/trivial.hpp>
@@ -126,6 +129,39 @@ Config config;
 
 static std::string configFileName = "bench_net_server.conf";
 
+using gobjfs::os::CpuStats;
+sigset_t signal_set;
+
+static void PrintStatsFunction()
+{
+    CpuStats prevStats;
+    bool prevStatsInitialized = false;
+    CpuStats curStats;
+
+    int sfd = signalfd(-1, &signal_set, 0);
+    if (sfd < 0) {
+        LOG(FATAL) << "failed";
+    }
+
+    while (1) {
+
+        struct signalfd_siginfo si;
+        ssize_t res = read(sfd, &si, sizeof(si));
+        if (res != sizeof(si)) {
+            LOG(FATAL) << "failed";
+        }
+
+        curStats.getProcessStats();
+    
+        if (prevStatsInitialized) {
+            CpuStats diff = curStats - prevStats;
+            LOG(INFO) << "interval metrics=" << diff.ToString();
+        }
+        prevStats = curStats;
+        prevStatsInitialized = true;
+    }
+}
+
 int main(int argc, char *argv[]) {
 
   // google::InitGoogleLogging(argv[0]); TODO logging
@@ -163,6 +199,18 @@ int main(int argc, char *argv[]) {
   config.readConfig(configFileName);
 
   FileTranslatorFunc fileTranslatorFunc{nullptr};
+
+  // Using SIGUSR1 to print CpuStats within an interval for purpose of benchmark
+  // First block the signal in all threads
+  // Then use signalfd to poll synchronously in one thread
+  sigemptyset(&signal_set);
+  sigaddset(&signal_set, SIGUSR1);
+  int sigerr = sigprocmask(SIG_BLOCK, &signal_set, NULL);
+  if (sigerr != 0) {
+      LOG(ERROR) << "sigprocmask failed errno=%d" << errno;
+  }
+
+  auto fut = std::async(std::launch::async, PrintStatsFunction);
 
   std::promise<void> pr;
 
