@@ -479,11 +479,16 @@ int main(int argc, char *argv[]) {
     auto f = std::async(std::launch::async, std::bind(&ThreadCtx::doRandomRead, ctx));
 
     futVec.emplace_back(std::move(f));
+    ctxVec.push_back(ctx);
   }
 
   if (config.runTimeSec) {
     // wait till benchmark runs for N seconds
-    sleep(config.runTimeSec);
+    int sleepTime = config.runTimeSec/10;
+    for (int idx = 0; idx < 10; idx ++) {
+      sleep(sleepTime);
+      LOG(INFO) << " work done percent=" << ((idx + 1) * 10);
+    }
     for (auto ctx : ctxVec) {
       ctx->mustExit = true;
     }
