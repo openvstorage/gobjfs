@@ -14,19 +14,24 @@
 # sudo update-alternatives --config gcc
 # sudo update-alternatives --config g++
 
-sudo apt-get install -y cmake git xfsprogs sysstat gdb
+sudo apt-get install -y cmake git xfsprogs sysstat gdb g++
+
+# ifconfig, ethtool, lshw missing on packet net machines
+sudo apt-get install pciutils iproute2 lshw ethtool 
+
 
 ###############################################
 # The rest is for any machine
 
 # Packages to install
 
-# XIO used by networkxio
-wget http://apt.openvstorage.org/pool/main/a/accelio/libxio0_1.7-1_amd64.deb
-sudo dpkg -i libxio0_1.7-1_amd64.deb
+# XIO packages
+sudo apt-get install libnuma1
+wget http://apt.openvstorage.org/pool/main/a/accelio/libxio0_1.7-2ovs3_amd64.deb
+sudo dpkg -i libxio0_1.7-2ovs3_amd64.deb
 
-wget http://apt.openvstorage.org/pool/main/a/accelio/libxio-dev_1.7-1_amd64.deb
-sudo dpkg -i libxio-dev_1.7-1_amd64.deb
+wget http://apt.openvstorage.org/pool/main/a/accelio/libxio-dev_1.7-2ovs3_amd64.deb
+sudo dpkg -i libxio-dev_1.7-2ovs3_amd64.deb
 
 # not using glog anymore, and its dependent unwind lib
 # sudo apt-get install libunwind8-dev
