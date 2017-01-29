@@ -56,10 +56,6 @@ int32_t CpuStats::getFromKernel(bool isProcess) {
   voluntaryCtxSwitch_ = usageInfo.ru_nvcsw;
   involuntaryCtxSwitch_ = usageInfo.ru_nivcsw;
 
-  float totalCpuTime = userTimeMicrosec_ + systemTimeMicrosec_;
-  // calc percentage cpu utilization
-  cpuUtil_ = (totalCpuTime * 100) / wallTimeMicrosec_;
-
   return err;
 }
 
