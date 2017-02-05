@@ -43,7 +43,7 @@ struct Config {
   uint32_t runTimeSec = 1;
   bool doMemCheck = false;
   uint32_t shortenFileSize = 0;
-  std::vector<std::string> dirPrefix;
+  std::vector<std::string> dirPrefixVec;
   std::vector<std::string> ipAddressVec;
   std::vector<std::string> transportVec;
   std::vector<int> portVec;
@@ -63,7 +63,7 @@ struct Config {
         ("run_time_sec", value<uint32_t>(&runTimeSec)->required(), "number of secs to run")
         ("do_mem_check", value<bool>(&doMemCheck)->required(), "compare read buffer")
         ("shorten_file_size", value<uint32_t>(&shortenFileSize), "shorten the size by this much to test nonaliged reads")
-        ("mountpoint", value<std::vector<std::string>>(&dirPrefix)->required()->multitoken(), "ssd mount point")
+        ("mountpoint", value<std::vector<std::string>>(&dirPrefixVec)->required()->multitoken(), "ssd mount point")
         ("ipaddress", value<std::vector<std::string>>(&ipAddressVec)->required(), "ip address")
         ("port", value<std::vector<int>>(&portVec)->required(), "port on which asd server running")
         ("transport", value<std::vector<std::string>>(&transportVec)->required(), "tcp or rdma")
@@ -132,9 +132,9 @@ struct FileManager {
     return "/bench" + std::to_string(fileNum) + ".data";
   }
   
-  std::string getFilename(uint64_t fileNum) {
-    static const auto numDir = config.dirPrefix.size();
-    return config.dirPrefix[fileNum % numDir] + buildFileName(fileNum);
+  std::string getFilename(size_t dirNum, size_t fileNum) {
+    static const auto numDir = config.dirPrefixVec.size();
+    return config.dirPrefixVec[dirNum % numDir] + buildFileName(fileNum);
   }
 };
 
@@ -225,6 +225,10 @@ struct RunContext {
 void RunContext::doRandomRead(GatewayClient* gc) {
 
   std::mt19937 seedGen(getpid() + gobjfs::os::GetCpuCore());
+  std::uniform_int_distribution<decltype(config.ipAddressVec.size())> asdGen(
+      0, config.ipAddressVec.size() - 1);
+  std::uniform_int_distribution<decltype(config.dirPrefixVec.size())> dirGen(
+      0, config.dirPrefixVec.size() - 1);
   std::uniform_int_distribution<decltype(config.maxFiles)> filenumGen(
       0, config.maxFiles - 1);
   std::uniform_int_distribution<decltype(config.maxBlocks)> blockGenerator(
@@ -234,14 +238,17 @@ void RunContext::doRandomRead(GatewayClient* gc) {
 
   while (!isFinished()) {
 
+    // NB The way this code is written, every ASD must have same number of
+    // directories.  Can remove that limitation later.
     EdgeIORequest submitReq;
-    submitReq.asdIdx_ = 0;
+    submitReq.asdIdx_ = asdGen(seedGen);
     // send read msg 
     // a batch may contains read offset for different files
     for (size_t batchIdx = 0; batchIdx < config.maxOutstandingIO; batchIdx ++) {
       EdgeIOCB *iocb = new EdgeIOCB;
-      const uint32_t fileNumber = filenumGen(seedGen);
-      iocb->filename_ = fileMgr.getFilename(fileNumber);
+      const size_t dirNumber = dirGen(seedGen);
+      const size_t fileNumber = filenumGen(seedGen);
+      iocb->filename_ = fileMgr.getFilename(dirNumber, fileNumber);
       iocb->offset_ = blockGenerator(seedGen) * config.blockSize;
       iocb->size_ = config.blockSize;
       submitReq.eiocbVec_.push_back(std::unique_ptr<EdgeIOCB>(iocb));
