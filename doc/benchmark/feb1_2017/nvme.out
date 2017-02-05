@@ -1,0 +1,50 @@
+
+# git clone  https://github.com/linux-nvme/nvme-cli
+
+NVME Identify Controller:
+vid     : 0x144d
+ssvid   : 0x144d
+sn      : S2EVNAAH300137      
+mn      : SAMSUNG MZWLK1T6HCHP-00003              
+fr      : KPYA3B3Q
+rab     : 8
+ieee    : 002538
+cmic    : 0
+mdts    : 5
+cntlid  : 0
+ver     : 0
+rtd3r   : 0
+rtd3e   : 0
+oaes    : 0
+oacs    : 0x6
+acl     : 7
+aerl    : 15
+frmw    : 0x2
+lpa     : 0
+elpe    : 255
+npss    : 0
+avscc   : 0x1
+apsta   : 0
+wctemp  : 0
+cctemp  : 0
+mtfa    : 0
+hmpre   : 0
+hmmin   : 0
+tnvmcap : 0
+unvmcap : 0
+rpmbs   : 0
+sqes    : 0x66
+cqes    : 0x44
+nn      : 1
+oncs    : 0x4
+fuses   : 0
+fna     : 0x6
+vwc     : 0
+awun    : 65535
+awupf   : 0
+nvscc   : 1
+acwu    : 0
+sgls    : 0
+subnqn  : 
+ps    0 : mp:25.00W operational enlat:100 exlat:100 rrt:0 rrl:0
+          rwt:0 rwl:0 idle_power:- active_power:-

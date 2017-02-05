@@ -1,0 +1,57 @@
+  *-network
+       description: Ethernet interface
+       product: MT27500 Family [ConnectX-3]
+       vendor: Mellanox Technologies
+       physical id: 0
+       bus info: pci@0000:01:00.0
+       logical name: eth1
+       version: 00
+       serial: e4:1d:2d:54:25:86
+       width: 64 bits
+       clock: 33MHz
+       capabilities: bus_master cap_list rom ethernet physical fibre
+       configuration: autonegotiation=off broadcast=yes driver=mlx4_en driverversion=3.4-1.0.0 (25 Sep 2016) duplex=full firmware=2.36.5150 latency=0 link=yes multicast=yes slave=yes
+       resources: irq:32 memory:c7a00000-c7afffff memory:c4000000-c47fffff memory:c7900000-c79fffff
+  *-storage
+       description: Non-Volatile memory controller
+       product: NVMe SSD Controller 172X
+       vendor: Samsung Electronics Co Ltd
+       physical id: 0
+       bus info: pci@0000:04:00.0
+       version: 01
+       width: 64 bits
+       clock: 33MHz
+       capabilities: storage nvm_express bus_master cap_list rom
+       configuration: driver=nvme latency=0
+       resources: irq:30 memory:c5010000-c5013fff memory:c5000000-c500ffff
+  *-storage:0
+       description: SATA controller
+       product: C610/X99 series chipset sSATA Controller [AHCI mode]
+       vendor: Intel Corporation
+       physical id: 11.4
+       bus info: pci@0000:00:11.4
+       version: 05
+       width: 32 bits
+       clock: 66MHz
+       capabilities: storage ahci_1.0 bus_master cap_list
+       configuration: driver=ahci latency=0
+       resources: irq:31 ioport:7110(size=8) ioport:7100(size=4) ioport:70f0(size=8) ioport:70e0(size=4) ioport:7020(size=32) memory:c7b18000-c7b187ff
+  *-storage:1
+       description: SATA controller
+       product: C610/X99 series chipset 6-Port SATA Controller [AHCI mode]
+       vendor: Intel Corporation
+       physical id: 1f.2
+       bus info: pci@0000:00:1f.2
+       version: 05
+       width: 32 bits
+       clock: 66MHz
+       capabilities: storage ahci_1.0 bus_master cap_list
+       configuration: driver=ahci latency=0
+       resources: irq:33 ioport:7070(size=8) ioport:7060(size=4) ioport:7050(size=8) ioport:7040(size=4) ioport:7000(size=32) memory:c7b12000-c7b127ff
+  *-network
+       description: Ethernet interface
+       physical id: 1
+       logical name: bond0
+       serial: e4:1d:2d:54:25:86
+       capabilities: ethernet physical
+       configuration: autonegotiation=off broadcast=yes driver=bonding driverversion=3.7.1 duplex=full firmware=2 ip=147.75.97.69 link=yes master=yes multicast=yes
